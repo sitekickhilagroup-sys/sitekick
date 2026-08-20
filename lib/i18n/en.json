@@ -161,5 +161,8 @@
   "users.last_seen": "Last sign-in",
   "users.never": "never",
   "users.temp_pass": "Temp password for",
-  "users.copy": "Copy"
+  "users.copy": "Copy",
+  "actions.dismiss": "Not relevant — remove",
+  "actions.edit_waiting": "Change who this waits on",
+  "actions.from_source": "From"
 }

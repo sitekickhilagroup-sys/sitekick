@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { createTask, setTaskStatus } from '@/app/actions/tasks';
+import { WaitingEditor } from './waiting-editor';
 import type { Task } from '@/lib/types';
 
 export interface TaskLabels {
@@ -9,6 +10,7 @@ export interface TaskLabels {
   colDue: string; colStage: string; expand: string; collapse: string; addTask: string;
   formTitle: string; formName: string; formDesc: string; formOwner: string; formDue: string;
   save: string; cancel: string; unplanned: string; markDone: string; project: string;
+  dismiss: string; editWaiting: string;
 }
 
 interface Props {
@@ -117,16 +119,27 @@ export function TasksSection({ tasks, projects, labels }: Props) {
                 <td className="max-w-[260px] px-3 py-2 text-xs text-ink2">{t.description ?? t.source ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{t.project_id ? names.get(t.project_id) : 'All'}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{t.owner ?? ''}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{t.waiting_for ?? ''}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-xs">
+                  <WaitingEditor taskId={t.id} value={t.waiting_for} label={labels.colWaiting} editTitle={labels.editWaiting} />
+                </td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{t.due ?? ''}</td>
                 <td className="px-3 py-2 text-end">
-                  <button
-                    type="button"
-                    onClick={() => start(async () => { await setTaskStatus(t.id, 'done'); })}
-                    className="rounded-full border border-sage-line px-2 py-0.5 text-[11px] text-sage hover:bg-sage-soft"
-                  >
-                    ✓ {labels.markDone}
-                  </button>
+                  <span className="inline-flex gap-1">
+                    <button
+                      type="button" title={labels.markDone}
+                      onClick={() => start(async () => { await setTaskStatus(t.id, 'done'); })}
+                      className="rounded-full border border-sage-line px-2 py-0.5 text-[11px] text-sage hover:bg-sage-soft"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      type="button" title={labels.dismiss}
+                      onClick={() => start(async () => { await setTaskStatus(t.id, 'dropped'); })}
+                      className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink3 hover:bg-inset"
+                    >
+                      ✕
+                    </button>
+                  </span>
                 </td>
               </tr>
             ))}

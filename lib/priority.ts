@@ -88,6 +88,8 @@ export function topActions(
         title: t.title,
         why,
         score,
+        source: t.source,
+        waiting_for: t.waiting_for,
       };
     });
 
@@ -100,6 +102,8 @@ export function topActions(
       title: b.what,
       why: `stuck ${b.days_stuck}d · blocked by ${b.blocked_by.slice(0, 60)}`,
       score: scoreBlocker(b),
+      source: null,
+      waiting_for: b.blocked_by,
     }));
 
   return [...taskActions, ...blockerActions]

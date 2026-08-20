@@ -205,4 +205,6 @@ export interface Action {
   title: string;
   why: string;
   score: number;
+  source: string | null;
+  waiting_for: string | null;
 }

@@ -50,6 +50,13 @@ export default async function OverviewPage() {
           title={t('overview.top_actions')}
           subtitle={t('overview.top_actions_sub')}
           empty={t('overview.no_actions')}
+          rowLabels={{
+            markDone: t('tasks.mark_done'),
+            dismiss: t('actions.dismiss'),
+            waiting: t('tasks.waiting'),
+            editWaiting: t('actions.edit_waiting'),
+            fromSource: t('actions.from_source'),
+          }}
         />
         <WhatsStuck
           blockers={data.blockers}
@@ -95,6 +102,8 @@ export default async function OverviewPage() {
           unplanned: t('tasks.unplanned'),
           markDone: t('tasks.mark_done'),
           project: t('common.project'),
+          dismiss: t('actions.dismiss'),
+          editWaiting: t('actions.edit_waiting'),
         }}
       />
 

@@ -34,11 +34,21 @@ export async function createTask(formData: FormData) {
   return { ok: true };
 }
 
-export async function setTaskStatus(taskId: string, status: 'open' | 'done') {
+export async function setTaskStatus(taskId: string, status: 'open' | 'done' | 'dropped') {
   await assertUser();
   const admin = supabaseAdmin();
   await admin.from('tasks').update({
     status,
+    last_touched: new Date().toISOString().slice(0, 10),
+  }).eq('id', taskId);
+  revalidatePath('/');
+}
+
+export async function updateTaskWaiting(taskId: string, waitingFor: string) {
+  await assertUser();
+  const admin = supabaseAdmin();
+  await admin.from('tasks').update({
+    waiting_for: waitingFor.trim() || null,
     last_touched: new Date().toISOString().slice(0, 10),
   }).eq('id', taskId);
   revalidatePath('/');

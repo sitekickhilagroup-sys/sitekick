@@ -161,5 +161,8 @@
   "users.last_seen": "כניסה אחרונה",
   "users.never": "אף פעם",
   "users.temp_pass": "סיסמה זמנית עבור",
-  "users.copy": "העתקה"
+  "users.copy": "העתקה",
+  "actions.dismiss": "לא רלוונטי — הסרה",
+  "actions.edit_waiting": "שינוי על מי מחכים",
+  "actions.from_source": "מקור"
 }
