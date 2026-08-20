@@ -1,5 +1,5 @@
 {
-  "regions": ["hnd1"],
+  "regions": ["sfo1"],
   "crons": [
     { "path": "/api/cron/digest", "schedule": "0 14 * * *" },
     { "path": "/api/cron/zimas-sync", "schedule": "0 9 * * 1" }
