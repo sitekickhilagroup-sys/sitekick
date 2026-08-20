@@ -1,5 +1,6 @@
 import { supabaseServer } from './supabase/server.ts';
 import { followUpAlerts, topActions } from './priority.ts';
+import { laToday } from './date.ts';
 import type {
   Action, Blocker, Decision, Invoice, Project, ProjectEvent, ProjectStage,
   StageRequirement, SubstageCatalogRow, Task,
@@ -18,7 +19,7 @@ export interface OverviewData {
   actions: Action[];
   followUps: Task[];
   substages: Record<string, string[]>;
-  openMoney: { project: string; open_usd: number }[];
+  openMoney: { project: string | null; open_usd: number }[];
   rowanQueue: { count: number; total_usd: number };
   today: string;
 }
@@ -31,10 +32,12 @@ export async function getOverviewData(): Promise<OverviewData> {
       supabase.from('project_stages').select('*').order('position'),
       supabase.from('stage_requirements').select('*').order('position'),
       supabase.from('project_events').select('*').order('created_at'),
-      supabase.from('tasks').select('*').order('created_at'),
+      // Only open tasks are ever rendered/scored — don't ship done/dropped history.
+      supabase.from('tasks').select('*').eq('status', 'open').order('created_at'),
       supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
       supabase.from('decisions').select('*').order('created_at', { ascending: false }).limit(30),
-      supabase.from('invoices').select('*'),
+      // Overview only charts open money + the Rowan queue.
+      supabase.from('invoices').select('project_id,status,amount_usd').in('status', ['received', 'for_rowan_approval', 'approved']),
       supabase.from('substage_catalog').select('*').order('position'),
     ]);
 
@@ -45,7 +48,7 @@ export async function getOverviewData(): Promise<OverviewData> {
   const tasks = (tasksQ.data ?? []) as Task[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const decisions = (decisionsQ.data ?? []) as Decision[];
-  const invoices = (invoicesQ.data ?? []) as Invoice[];
+  const invoices = (invoicesQ.data ?? []) as Pick<Invoice, 'project_id' | 'status' | 'amount_usd'>[];
   const catalog = (catalogQ.data ?? []) as SubstageCatalogRow[];
 
   const reqsByStage = new Map<string, StageRequirement[]>();
@@ -70,19 +73,20 @@ export async function getOverviewData(): Promise<OverviewData> {
     stagesByProject.set(s.project_id, list);
   }
   const names = new Map(projects.map((p) => [p.id, p.name]));
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
+  const today = laToday();
 
   const openTasks = tasks.filter((t) => t.status === 'open');
   const actions = topActions(openTasks, blockers, stagesByProject, names, { today, limit: 8 });
   const followUps = followUpAlerts(openTasks, today);
 
   const openStatuses = new Set(['received', 'for_rowan_approval', 'approved']);
-  const moneyByProject = new Map<string, number>();
+  // null project key = "everything / no specific project" — translated at render.
+  const moneyByProject = new Map<string | null, number>();
   let rowanCount = 0;
   let rowanTotal = 0;
   for (const inv of invoices) {
     if (openStatuses.has(inv.status)) {
-      const name = inv.project_id ? (names.get(inv.project_id) ?? '?') : 'All';
+      const name = inv.project_id ? (names.get(inv.project_id) ?? '?') : null;
       moneyByProject.set(name, (moneyByProject.get(name) ?? 0) + Number(inv.amount_usd));
     }
     if (inv.status === 'for_rowan_approval') {

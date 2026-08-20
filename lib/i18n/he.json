@@ -164,5 +164,10 @@
   "users.copy": "העתקה",
   "actions.dismiss": "לא רלוונטי — הסרה",
   "actions.edit_waiting": "שינוי על מי מחכים",
-  "actions.from_source": "מקור"
+  "actions.from_source": "מקור",
+  "tasks.empty": "אין משימות פתוחות — הוסיפו משימה או העלו קובץ מעקב",
+  "common.error_save": "השמירה נכשלה — נסו שוב",
+  "nav.skip": "דילוג לתוכן",
+  "actions.why_critical": "קריטי",
+  "actions.why_due": "יעד"
 }

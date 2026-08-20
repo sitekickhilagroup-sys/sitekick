@@ -12,7 +12,9 @@ export function isConfigured(): boolean {
 }
 
 async function accessToken(): Promise<string> {
-  const pk = await importPKCS8(process.env.GOOGLE_SA_KEY!.replace(/\n/g, '\n'), 'RS256');
+  // Env stores the PEM with literal "\n" sequences (see docs/ENV-SETUP.md) —
+  // convert them to real newlines before parsing.
+  const pk = await importPKCS8(process.env.GOOGLE_SA_KEY!.replace(/\\n/g, '\n'), 'RS256');
   const now = Math.floor(Date.now() / 1000);
   const jwt = await new SignJWT({ scope: 'https://www.googleapis.com/auth/spreadsheets.readonly' })
     .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
@@ -35,7 +37,7 @@ async function accessToken(): Promise<string> {
 
 async function readRange(token: string, sheetId: string, range: string): Promise<string[][]> {
   const res = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}`,
     { headers: { authorization: `Bearer ${token}` } },
   );
   if (!res.ok) throw new Error(`sheets read ${sheetId}: ${res.status}`);

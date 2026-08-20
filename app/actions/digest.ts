@@ -2,14 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { supabaseServer } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth';
+import { laToday } from '@/lib/date';
 import { buildDigest } from '@/agents/daily-digest';
 
 export async function generateDigest() {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('unauthorized');
-  const laDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
-  await buildDigest(supabaseAdmin(), laDate);
+  await requireUser();
+  await buildDigest(supabaseAdmin(), laToday());
   revalidatePath('/digest');
 }

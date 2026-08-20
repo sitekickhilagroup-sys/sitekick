@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { laToday } from '../date.ts';
 
 // ZIMAS / LA City Planning case status (client item 11).
 // Best effort: the PDIS case-info endpoint serves JSON for a case number.
@@ -42,7 +43,7 @@ export async function run(admin: SupabaseClient): Promise<{ processed: number; r
       await admin.from('project_events').insert({
         project_id: p.id, kind: 'history',
         step: `ZIMAS status: ${result.status}`,
-        event_date: new Date().toISOString().slice(0, 10),
+        event_date: laToday(),
         src: 'zimas',
       });
       if (holdWords.test(result.status)) {

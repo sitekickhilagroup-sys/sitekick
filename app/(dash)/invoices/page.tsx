@@ -40,7 +40,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
 
   const rows = invoices.filter((inv) => {
     if (inv.tab !== tab) return false;
-    const projLabel = inv.project_id ? (pName.get(inv.project_id) ?? '') : 'All';
+    const projLabel = inv.project_id ? (pName.get(inv.project_id) ?? '') : t('common.all');
     if (fProject && projLabel !== fProject) return false;
     if (fEntity && inv.entity !== fEntity) return false;
     if (fVendor && (inv.vendor_id ? vName.get(inv.vendor_id) : '') !== fVendor) return false;
@@ -96,7 +96,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
 
       <FilterBar
         options={{
-          projects: [...projects.map((p) => p.name), 'All'].sort(),
+          projects: [...projects.map((p) => p.name), t('common.all')].sort(),
           entities: [...new Set(invoices.map((i) => i.entity).filter((e): e is string => !!e))].sort(),
           vendors: vendors.map((v) => v.name).sort(),
           statuses: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
@@ -134,7 +134,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             {rows.map((inv) => (
               <tr key={inv.id}>
                 <td className="px-3 py-2 text-ink">{inv.vendor_id ? vName.get(inv.vendor_id) : ''}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.project_id ? pName.get(inv.project_id) : 'All'}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.project_id ? pName.get(inv.project_id) : t('common.all')}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.entity ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{inv.number ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-end font-mono text-ink">{money(Number(inv.amount_usd))}</td>

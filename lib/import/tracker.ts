@@ -76,7 +76,8 @@ export async function applyTaskRows(
       await admin.from('tasks').update({
         description: row.description ?? match.description,
         owner: row.owner ?? match.owner,
-        waiting_for: row.waiting_for,
+        // Blank tracker cell must not wipe a waiting-for set via the UI/emails.
+        waiting_for: row.waiting_for ?? match.waiting_for,
         due: row.due ?? match.due,
         follow_up_date: row.follow_up ?? match.follow_up_date,
         priority: row.priority,

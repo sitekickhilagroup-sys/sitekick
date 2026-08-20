@@ -1,3 +1,4 @@
+import 'server-only';
 import * as XLSX from 'xlsx';
 
 // Excel tracker importers, built against Hilla's real files.

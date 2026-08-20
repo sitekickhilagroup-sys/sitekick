@@ -76,17 +76,16 @@ export function topActions(
         today: opts.today,
         currentStageKey: t.project_id ? currentByProject.get(t.project_id) : null,
       });
-      const why = [
-        t.priority === 'critical' ? 'critical' : null,
-        t.due ? `due ${t.due}` : null,
-        t.waiting_for ? `waiting: ${t.waiting_for}` : null,
-      ].filter(Boolean).join(' · ');
       return {
         kind: 'task' as const,
         id: t.id,
-        project: (t.project_id ? projectNames.get(t.project_id) : null) ?? 'All',
+        project: (t.project_id ? projectNames.get(t.project_id) : null) ?? null,
         title: t.title,
-        why,
+        why: {
+          critical: t.priority === 'critical' || undefined,
+          due: t.due,
+          waiting: t.waiting_for,
+        },
         score,
         source: t.source,
         waiting_for: t.waiting_for,
@@ -98,9 +97,9 @@ export function topActions(
     .map((b) => ({
       kind: 'blocker' as const,
       id: b.id,
-      project: projectNames.get(b.project_id) ?? '',
+      project: projectNames.get(b.project_id) ?? null,
       title: b.what,
-      why: `stuck ${b.days_stuck}d · blocked by ${b.blocked_by.slice(0, 60)}`,
+      why: { stuck_days: b.days_stuck, blocked_by: b.blocked_by.slice(0, 60) },
       score: scoreBlocker(b),
       source: null,
       waiting_for: b.blocked_by,

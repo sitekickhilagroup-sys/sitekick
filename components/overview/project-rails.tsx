@@ -97,9 +97,15 @@ export function ProjectRails({ projects, substages, title, labels }: Props) {
                         <button
                           type="button"
                           onClick={() => {
+                            // Second click on the open stage closes the pane (client ask).
+                            if (isOpen && sel) {
+                              setOpenRails((m) => ({ ...m, [p.id]: false }));
+                              return;
+                            }
                             setSelectedStage((m) => ({ ...m, [p.id]: s.stage_key }));
                             setOpenRails((m) => ({ ...m, [p.id]: true }));
                           }}
+                          aria-expanded={isOpen && sel}
                           className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition-transform active:scale-[0.97] ${cls} ${sel ? 'ring-2 ring-mist ring-offset-1 ring-offset-card' : ''}`}
                         >
                           {s.label}

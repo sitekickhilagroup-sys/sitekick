@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { supabaseServer } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth';
 import { ingestDocument, processDocument } from '@/lib/ingest';
 import { docxToText } from '@/lib/docx';
 import { parseWorkbook } from '@/lib/parse/xlsx';
@@ -8,6 +8,7 @@ import { parseEml } from '@/lib/parse/eml';
 import { parseEmailsJsonl, dumpEmailToRaw } from '@/lib/parse/emails-jsonl';
 import { applyInvoiceRows, applyTaskRows } from '@/lib/import/tracker';
 import type { Project, Task } from '@/lib/types';
+import { laToday } from '@/lib/date';
 
 export const maxDuration = 300;
 
@@ -18,16 +19,23 @@ export const maxDuration = 300;
 //   .xlsx / .xls    -> tracker importers (invoices / tasks) or CSV-text -> comms agent
 //   .jsonl          -> email dump: store all, agent-process the newest few
 //   .csv            -> text -> comms agent
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // zip-based formats can inflate — cap the input
+
 export async function POST(req: NextRequest) {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  try {
+    await requireUser();
+  } catch {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
 
   const form = await req.formData();
   const file = form.get('file');
   const projectHint = (form.get('project') as string | null) || null;
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'file missing' }, { status: 400 });
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: 'file too large (max 20MB)' }, { status: 413 });
   }
 
   const admin = supabaseAdmin();
@@ -68,7 +76,7 @@ export async function POST(req: NextRequest) {
       }
       if (parsed.kind === 'tasks') {
         const { data: openTasks } = await admin.from('tasks').select('*').eq('status', 'open');
-        const today = new Date().toISOString().slice(0, 10);
+        const today = laToday();
         const result = await applyTaskRows(admin, documentId, parsed.rows, projectList, (openTasks ?? []) as Task[], today);
         await admin.from('documents').update({ processed_at: new Date().toISOString() }).eq('id', documentId);
         return NextResponse.json({ ok: true, type: 'task_tracker', ...result, rows: parsed.rows.length });

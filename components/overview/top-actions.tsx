@@ -6,7 +6,11 @@ interface Props {
   title: string;
   subtitle: string;
   empty: string;
-  rowLabels: { markDone: string; dismiss: string; waiting: string; editWaiting: string; fromSource: string };
+  rowLabels: {
+    markDone: string; dismiss: string; waiting: string; editWaiting: string;
+    fromSource: string; cancel: string; errorSave: string; all: string;
+    whyCritical: string; whyDue: string; stuckDays: string; blockedBy: string;
+  };
 }
 
 // Hero section: the client asked for this to be the biggest thing on the page.

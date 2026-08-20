@@ -10,7 +10,7 @@ export interface TaskLabels {
   colDue: string; colStage: string; expand: string; collapse: string; addTask: string;
   formTitle: string; formName: string; formDesc: string; formOwner: string; formDue: string;
   save: string; cancel: string; unplanned: string; markDone: string; project: string;
-  dismiss: string; editWaiting: string;
+  dismiss: string; editWaiting: string; all: string; empty: string; errorSave: string;
 }
 
 interface Props {
@@ -25,19 +25,29 @@ const PREVIEW = 6;
 export function TasksSection({ tasks, projects, labels }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const names = new Map(projects.map((p) => [p.id, p.name]));
   const open = tasks.filter((t) => t.status === 'open');
   const shown = expanded ? open : open.slice(0, PREVIEW);
 
+  const setStatus = (id: string, status: 'done' | 'dropped') => start(async () => {
+    setRowError(null);
+    const res = await setTaskStatus(id, status);
+    if (res?.error) setRowError(labels.errorSave);
+  });
+
   return (
     <section aria-labelledby="tasks-h">
       <div className="flex items-center justify-between gap-3">
         <h2 id="tasks-h" className="font-serif text-2xl text-ink">{labels.title}</h2>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {rowError && <span role="alert" className="rounded-full bg-coral-soft px-2 py-0.5 text-[11px] text-coral">{rowError}</span>}
           <button
             type="button"
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => { setShowForm((v) => !v); setFormError(null); }}
+            aria-expanded={showForm}
             className="rounded-full border border-sage-line bg-sage-soft px-3 py-1 text-xs text-sage transition-transform active:scale-[0.97]"
           >
             + {labels.addTask}
@@ -59,7 +69,9 @@ export function TasksSection({ tasks, projects, labels }: Props) {
         <form
           className="mt-3 grid gap-2 rounded-(--radius-card) border border-line bg-card p-4 shadow-card sm:grid-cols-2"
           action={(fd) => start(async () => {
-            await createTask(fd);
+            setFormError(null);
+            const res = await createTask(fd);
+            if (res?.error) { setFormError(labels.errorSave); return; }
             setShowForm(false);
           })}
         >
@@ -85,13 +97,14 @@ export function TasksSection({ tasks, projects, labels }: Props) {
             <label htmlFor="nt-due" className="block text-xs text-ink2">{labels.formDue}</label>
             <input id="nt-due" name="due" type="date" className="w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink" />
           </div>
-          <div className="flex gap-2 sm:col-span-2">
+          <div className="flex items-center gap-2 sm:col-span-2">
             <button type="submit" disabled={pending} className="rounded-lg bg-sage px-4 py-1.5 text-sm text-white disabled:opacity-60">
               {labels.save}
             </button>
             <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-line px-4 py-1.5 text-sm text-ink2">
               {labels.cancel}
             </button>
+            {formError && <span role="alert" className="text-xs text-coral">{formError}</span>}
           </div>
         </form>
       )}
@@ -110,6 +123,11 @@ export function TasksSection({ tasks, projects, labels }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-line2">
+            {shown.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-ink3">{labels.empty}</td>
+              </tr>
+            )}
             {shown.map((t) => (
               <tr key={t.id} className={t.priority === 'critical' ? 'bg-coral-soft/40' : ''}>
                 <td className="max-w-[260px] px-3 py-2 text-ink">
@@ -117,27 +135,34 @@ export function TasksSection({ tasks, projects, labels }: Props) {
                   {!t.planned && <span className="ms-1 rounded bg-apricot-soft px-1 text-[10px] text-apricot">{labels.unplanned}</span>}
                 </td>
                 <td className="max-w-[260px] px-3 py-2 text-xs text-ink2">{t.description ?? t.source ?? ''}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{t.project_id ? names.get(t.project_id) : 'All'}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{t.project_id ? names.get(t.project_id) ?? labels.all : labels.all}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{t.owner ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs">
-                  <WaitingEditor taskId={t.id} value={t.waiting_for} label={labels.colWaiting} editTitle={labels.editWaiting} />
+                  <WaitingEditor
+                    taskId={t.id}
+                    value={t.waiting_for}
+                    label={labels.colWaiting}
+                    editTitle={labels.editWaiting}
+                    cancelLabel={labels.cancel}
+                    errorLabel={labels.errorSave}
+                  />
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{t.due ?? ''}</td>
                 <td className="px-3 py-2 text-end">
                   <span className="inline-flex gap-1">
                     <button
-                      type="button" title={labels.markDone}
-                      onClick={() => start(async () => { await setTaskStatus(t.id, 'done'); })}
-                      className="rounded-full border border-sage-line px-2 py-0.5 text-[11px] text-sage hover:bg-sage-soft"
+                      type="button" disabled={pending} title={labels.markDone} aria-label={labels.markDone}
+                      onClick={() => setStatus(t.id, 'done')}
+                      className="min-h-7 min-w-7 rounded-full border border-sage-line px-2 py-0.5 text-[11px] text-sage hover:bg-sage-soft disabled:opacity-50"
                     >
-                      ✓
+                      <span aria-hidden="true">✓</span>
                     </button>
                     <button
-                      type="button" title={labels.dismiss}
-                      onClick={() => start(async () => { await setTaskStatus(t.id, 'dropped'); })}
-                      className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink3 hover:bg-inset"
+                      type="button" disabled={pending} title={labels.dismiss} aria-label={labels.dismiss}
+                      onClick={() => setStatus(t.id, 'dropped')}
+                      className="min-h-7 min-w-7 rounded-full border border-line px-2 py-0.5 text-[11px] text-ink3 hover:bg-inset disabled:opacity-50"
                     >
-                      ✕
+                      <span aria-hidden="true">✕</span>
                     </button>
                   </span>
                 </td>

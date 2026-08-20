@@ -3,6 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { runStructured } from '../lib/claude.ts';
 import type { Project, Vendor } from '../lib/types.ts';
 import { InvoiceParseSchema, type InvoiceParse } from './schemas.ts';
+import { laToday } from '../lib/date.ts';
 
 const SYSTEM = `You parse construction/consulting invoices for Hilla Group (LA real-estate developer).
 Extract the vendor, project, invoice number, amount in USD, and dates.
@@ -63,7 +64,7 @@ export async function applyInvoiceParse(
     number: parse.number,
     amount_usd: parse.amount_usd,
     invoice_date: parse.invoice_date ?? null,
-    received_date: parse.received_date ?? new Date().toISOString().slice(0, 10),
+    received_date: parse.received_date ?? laToday(),
     status: 'received',
     tab: 'invoices',
   }, { onConflict: 'vendor_id,number' }).select('id').single();

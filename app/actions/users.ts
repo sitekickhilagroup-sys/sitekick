@@ -2,13 +2,26 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { supabaseServer } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth';
 import { randomBytes } from 'node:crypto';
 
-async function assertUser() {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('unauthorized');
+// User management is admin-only once ADMIN_EMAILS is set (comma-separated).
+// Unset = POC fallback: every signed-in user may manage users — set it in
+// Vercel env before giving logins to anyone outside the founding team.
+function isAdminEmail(email: string | null): boolean {
+  const raw = process.env.ADMIN_EMAILS;
+  if (!raw) return true;
+  if (!email) return false;
+  return raw
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(email.toLowerCase());
+}
+
+async function requireAdmin() {
+  const user = await requireUser();
+  if (!isAdminEmail(user.email)) throw new Error('forbidden');
   return user;
 }
 
@@ -20,7 +33,7 @@ export interface AppUser {
 }
 
 export async function listUsers(): Promise<AppUser[]> {
-  await assertUser();
+  await requireAdmin();
   const admin = supabaseAdmin();
   const { data } = await admin.auth.admin.listUsers({ perPage: 100 });
   return (data?.users ?? []).map((u) => ({
@@ -33,7 +46,7 @@ export async function listUsers(): Promise<AppUser[]> {
 
 // Creates a user with a generated temp password, returned ONCE for handoff.
 export async function createAppUser(formData: FormData): Promise<{ error?: string; email?: string; password?: string }> {
-  await assertUser();
+  await requireAdmin();
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: 'invalid email' };
   const password = 'Sk-' + randomBytes(9).toString('base64url');
@@ -45,7 +58,7 @@ export async function createAppUser(formData: FormData): Promise<{ error?: strin
 }
 
 export async function deleteAppUser(userId: string): Promise<{ error?: string }> {
-  const me = await assertUser();
+  const me = await requireAdmin();
   if (me.id === userId) return { error: 'cannot delete yourself' };
   const admin = supabaseAdmin();
   const { error } = await admin.auth.admin.deleteUser(userId);

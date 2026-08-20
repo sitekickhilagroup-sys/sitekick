@@ -164,5 +164,10 @@
   "users.copy": "Copy",
   "actions.dismiss": "Not relevant — remove",
   "actions.edit_waiting": "Change who this waits on",
-  "actions.from_source": "From"
+  "actions.from_source": "From",
+  "tasks.empty": "No open tasks — add one or upload a tracker",
+  "common.error_save": "Couldn't save — try again",
+  "nav.skip": "Skip to content",
+  "actions.why_critical": "critical",
+  "actions.why_due": "due"
 }

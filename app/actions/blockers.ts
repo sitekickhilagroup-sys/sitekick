@@ -2,12 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { supabaseServer } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth';
 
 export async function releaseBlocker(blockerId: string) {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('unauthorized');
-  await supabaseAdmin().from('blockers').update({ status: 'released' }).eq('id', blockerId);
+  await requireUser();
+  const { error } = await supabaseAdmin().from('blockers').update({ status: 'released' }).eq('id', blockerId);
+  if (error) return { error: error.message };
   revalidatePath('/');
+  return { ok: true };
 }

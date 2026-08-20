@@ -198,12 +198,22 @@ export interface SettingRow {
 }
 
 // Priority engine output (lib/priority.ts)
+// Locale-neutral "why this ranks here" parts — the UI translates at render
+// time (the priority engine has no access to the viewer's locale).
+export interface ActionWhy {
+  critical?: boolean;
+  due?: string | null;
+  waiting?: string | null;
+  stuck_days?: number;
+  blocked_by?: string | null;
+}
+
 export interface Action {
   kind: 'task' | 'blocker';
   id: string;
-  project: string;
+  project: string | null;
   title: string;
-  why: string;
+  why: ActionWhy;
   score: number;
   source: string | null;
   waiting_for: string | null;

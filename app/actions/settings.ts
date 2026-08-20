@@ -2,19 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { supabaseServer } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth';
 import { parseRecordImport, applyImport } from '@/lib/import/requirements';
 import * as zimas from '@/lib/sync/zimas';
 
-async function assertUser() {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('unauthorized');
-}
-
 // Item: requirement lists load from file, never hardcoded. Same code path as seed.
 export async function importRequirements(formData: FormData) {
-  await assertUser();
+  await requireUser();
   const projectName = String(formData.get('project') ?? '').trim();
   const raw = String(formData.get('json') ?? '');
   if (!projectName || !raw) return { error: 'missing fields' };
@@ -35,7 +29,7 @@ export async function importRequirements(formData: FormData) {
 }
 
 export async function saveStageOverride(formData: FormData) {
-  await assertUser();
+  await requireUser();
   const admin = supabaseAdmin();
   const projectId = String(formData.get('project_id') ?? '');
   const stageKey = String(formData.get('stage_key') ?? '');
@@ -55,7 +49,7 @@ export async function saveStageOverride(formData: FormData) {
 }
 
 export async function saveSheetIds(formData: FormData) {
-  await assertUser();
+  await requireUser();
   const admin = supabaseAdmin();
   const value = {
     gantt: { id: String(formData.get('gantt_id') ?? '').trim(), range: String(formData.get('gantt_range') ?? 'A1:E200').trim() },
@@ -67,7 +61,7 @@ export async function saveSheetIds(formData: FormData) {
 }
 
 export async function runZimasNow() {
-  await assertUser();
+  await requireUser();
   const result = await zimas.run(supabaseAdmin());
   revalidatePath('/settings');
   revalidatePath('/');

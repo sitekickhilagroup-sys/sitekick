@@ -10,7 +10,8 @@ Status legend: ✅ already set in `.env.local` · ⬜ pending (optional adapters
 | SUPABASE_TOKEN | ✅ | scripts/Management API only (not the app) |
 | ANTHROPIC_API_KEY | ✅ | all agents |
 | INGEST_SECRET | ✅ | /api/ingest-email guard |
-| CRON_SECRET | ✅ | cron guards |
+| CRON_SECRET | ✅ | cron guards — **required in production** (endpoints return 503 without it) |
+| ADMIN_EMAILS | ⬜ | comma-separated admin emails; once set, only these can manage users in Settings. Unset = every signed-in user can (POC only — set before onboarding externals) |
 | NEXT_PUBLIC_APP_URL | ✅ (localhost) | links; set prod URL in Vercel |
 | GMAIL_* (4) | ⬜ | Gmail inbox poll |
 | MSGRAPH_* (4) | ⬜ | Outlook/M365 inbox poll |

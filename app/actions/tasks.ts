@@ -2,17 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { supabaseServer } from '@/lib/supabase/server';
-
-async function assertUser() {
-  const supabase = await supabaseServer();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('unauthorized');
-  return user;
-}
+import { requireUser } from '@/lib/auth';
+import { laToday } from '@/lib/date';
 
 export async function createTask(formData: FormData) {
-  await assertUser();
+  await requireUser();
   const admin = supabaseAdmin();
   const projectId = String(formData.get('project_id') ?? '');
   const title = String(formData.get('title') ?? '').trim();
@@ -35,21 +29,25 @@ export async function createTask(formData: FormData) {
 }
 
 export async function setTaskStatus(taskId: string, status: 'open' | 'done' | 'dropped') {
-  await assertUser();
+  await requireUser();
   const admin = supabaseAdmin();
-  await admin.from('tasks').update({
+  const { error } = await admin.from('tasks').update({
     status,
-    last_touched: new Date().toISOString().slice(0, 10),
+    last_touched: laToday(),
   }).eq('id', taskId);
+  if (error) return { error: error.message };
   revalidatePath('/');
+  return { ok: true };
 }
 
 export async function updateTaskWaiting(taskId: string, waitingFor: string) {
-  await assertUser();
+  await requireUser();
   const admin = supabaseAdmin();
-  await admin.from('tasks').update({
+  const { error } = await admin.from('tasks').update({
     waiting_for: waitingFor.trim() || null,
-    last_touched: new Date().toISOString().slice(0, 10),
+    last_touched: laToday(),
   }).eq('id', taskId);
+  if (error) return { error: error.message };
   revalidatePath('/');
+  return { ok: true };
 }

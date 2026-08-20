@@ -35,13 +35,17 @@ export async function proxy(request: NextRequest) {
     },
   );
 
+  // /api/* routes carry their own auth (cron/ingest secrets) — skip the
+  // session work entirely for them.
+  const { pathname } = request.nextUrl;
+  if (pathname.startsWith('/api')) return response;
+
   // getClaims verifies the JWT locally (JWKS cached) — no per-request
   // network hop to Supabase Auth like getUser().
   const { data: claims } = await supabase.auth.getClaims();
   const user = claims?.claims ?? null;
 
-  const { pathname } = request.nextUrl;
-  const isPublic = pathname.startsWith('/login') || pathname.startsWith('/api');
+  const isPublic = pathname.startsWith('/login');
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';

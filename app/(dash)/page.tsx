@@ -56,6 +56,13 @@ export default async function OverviewPage() {
             waiting: t('tasks.waiting'),
             editWaiting: t('actions.edit_waiting'),
             fromSource: t('actions.from_source'),
+            cancel: t('common.cancel'),
+            errorSave: t('common.error_save'),
+            all: t('common.all'),
+            whyCritical: t('actions.why_critical'),
+            whyDue: t('actions.why_due'),
+            stuckDays: t('overview.stuck_days'),
+            blockedBy: t('overview.blocked_by'),
           }}
         />
         <WhatsStuck
@@ -104,6 +111,9 @@ export default async function OverviewPage() {
           project: t('common.project'),
           dismiss: t('actions.dismiss'),
           editWaiting: t('actions.edit_waiting'),
+          all: t('common.all'),
+          empty: t('tasks.empty'),
+          errorSave: t('common.error_save'),
         }}
       />
 
@@ -121,6 +131,7 @@ export default async function OverviewPage() {
         title={t('overview.compare')}
         moneyLabel={t('overview.open_money')}
         loadLabel={t('overview.task_load')}
+        allLabel={t('common.all')}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
+import { requireUser } from '@/lib/auth';
 import { ImportForm } from './import-form';
 import { OverrideForm, type OverrideProject } from './override-form';
 import { SheetsForm } from './sheets-form';
@@ -25,8 +26,9 @@ export default async function SettingsPage() {
   const locale = (store.get(LOCALE_COOKIE)?.value === 'he' ? 'he' : 'en') as Locale;
   const t = getT(locale);
   const supabase = await supabaseServer();
-  const { data: { user: me } } = await supabase.auth.getUser();
-  const users = await listUsers();
+  const me = await requireUser();
+  // Non-admins (ADMIN_EMAILS set, not listed) just don't see the users card.
+  const users = await listUsers().catch(() => null);
   const [projectsQ, stagesQ, sheetQ] = await Promise.all([
     supabase.from('projects').select('*').order('name'),
     supabase.from('project_stages').select('*').order('position'),
@@ -98,11 +100,11 @@ export default async function SettingsPage() {
         </ul>
       </Card>
 
-      <Card title={t('settings.users')}>
+      {users && <Card title={t('settings.users')}>
         <p className="mb-3 text-xs text-ink3">{t('settings.users_help')}</p>
         <UsersCard
           users={users}
-          meId={me?.id ?? ''}
+          meId={me.id}
           labels={{
             email: t('users.email'),
             add: t('users.add'),
@@ -114,7 +116,7 @@ export default async function SettingsPage() {
             copy: t('users.copy'),
           }}
         />
-      </Card>
+      </Card>}
 
       <Card title={t('settings.zimas')}>
         <ZimasButton label={t('settings.zimas_run')} />

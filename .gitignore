@@ -40,4 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.deploy.tmp
+# never commit ad-hoc temp/secret scratch files
+*.tmp

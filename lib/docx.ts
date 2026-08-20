@@ -1,3 +1,4 @@
+import 'server-only';
 import mammoth from 'mammoth';
 
 export async function docxToText(buffer: Buffer): Promise<string> {
