@@ -59,7 +59,7 @@ export function Dropzone({ projects, labels }: { projects: string[]; labels: Lab
           : labels.drop}
       </button>
       <input
-        ref={input} type="file" accept=".pdf,.txt,.docx" className="hidden"
+        ref={input} type="file" accept=".pdf,.txt,.docx,.xlsx,.xls,.eml,.jsonl,.csv" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void send(f); e.target.value = ''; }}
       />
     </div>

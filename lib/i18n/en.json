@@ -120,7 +120,7 @@
   "directory.projects": "Projects",
   "directory.open_items": "{n} open",
   "upload.title": "Upload documents",
-  "upload.help": "PDF → invoice · TXT/DOCX → meeting transcript or email",
+  "upload.help": "PDF → invoice · XLSX → tracker import (invoices / tasks) · DOCX/TXT → meeting or email · EML → email · JSONL → email dump · CSV → text",
   "upload.drop": "Drop a file or click to choose",
   "upload.processing": "Processing…",
   "upload.done": "Processed",
@@ -150,5 +150,16 @@
   "login.submit": "Sign in",
   "login.error": "Sign-in failed. Check email and password.",
   "theme.toggle": "Toggle dark mode",
-  "lang.toggle": "עברית"
+  "lang.toggle": "עברית",
+  "nav.guide": "Guide",
+  "settings.users": "Users & access",
+  "settings.users_help": "Who can sign in to Sitekick. New users get a one-time temp password — send it to them, they should change it after first login.",
+  "users.email": "Email",
+  "users.add": "Add user",
+  "users.remove": "Remove",
+  "users.confirm_remove": "Remove access for",
+  "users.last_seen": "Last sign-in",
+  "users.never": "never",
+  "users.temp_pass": "Temp password for",
+  "users.copy": "Copy"
 }

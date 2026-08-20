@@ -19,6 +19,7 @@ export default async function DashLayout({ children }: { children: React.ReactNo
     { href: '/directory', label: t('nav.directory') },
     { href: '/upload', label: t('nav.upload') },
     { href: '/settings', label: t('nav.settings') },
+    { href: '/guide', label: t('nav.guide') },
   ];
 
   return (

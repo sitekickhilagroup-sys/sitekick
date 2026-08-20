@@ -120,7 +120,7 @@
   "directory.projects": "פרויקטים",
   "directory.open_items": "{n} פתוחות",
   "upload.title": "העלאת מסמכים",
-  "upload.help": "PDF ← חשבונית · TXT/DOCX ← תמלול פגישה או מייל",
+  "upload.help": "PDF ← חשבונית · XLSX ← ייבוא טרקר (חשבוניות / משימות) · DOCX/TXT ← פגישה או מייל · EML ← מייל · JSONL ← ארכיון מיילים · CSV ← טקסט",
   "upload.drop": "גררו קובץ או לחצו לבחירה",
   "upload.processing": "מעבד…",
   "upload.done": "עובד בהצלחה",
@@ -150,5 +150,16 @@
   "login.submit": "כניסה",
   "login.error": "הכניסה נכשלה. בדקו אימייל וסיסמה.",
   "theme.toggle": "מצב כהה",
-  "lang.toggle": "English"
+  "lang.toggle": "English",
+  "nav.guide": "מדריך",
+  "settings.users": "משתמשים והרשאות",
+  "settings.users_help": "מי יכול להתחבר ל-Sitekick. משתמש חדש מקבל סיסמה זמנית חד-פעמית — שלחו לו אותה, ומומלץ להחליף אחרי הכניסה הראשונה.",
+  "users.email": "אימייל",
+  "users.add": "הוספת משתמש",
+  "users.remove": "הסרה",
+  "users.confirm_remove": "להסיר גישה עבור",
+  "users.last_seen": "כניסה אחרונה",
+  "users.never": "אף פעם",
+  "users.temp_pass": "סיסמה זמנית עבור",
+  "users.copy": "העתקה"
 }
