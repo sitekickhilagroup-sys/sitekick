@@ -4,6 +4,7 @@ import { LOCALE_COOKIE, THEME_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { signOut } from '@/app/actions/auth';
+import { Logo } from '@/components/logo';
 
 export default async function DashLayout({ children }: { children: React.ReactNode }) {
   const store = await cookies();
@@ -26,7 +27,8 @@ export default async function DashLayout({ children }: { children: React.ReactNo
     <div className="min-h-dvh">
       <header className="sticky top-0 z-40 border-b border-line bg-bg/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-6 px-4">
-          <Link href="/" className="flex items-baseline gap-2">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Logo size={26} />
             <span className="font-serif text-lg font-semibold text-ink">Sitekick</span>
             <span className="hidden text-xs text-ink3 sm:inline">{t('app.tagline')}</span>
           </Link>
