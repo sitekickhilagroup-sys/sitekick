@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sitekick — מדריך חיבורים</title>
+<style>
+  :root{
+    --bg:#F5F4EF; --card:#FFFFFF; --line:#E4E1D8; --ink:#333D49; --ink2:#66707C; --ink3:#8E98A3;
+    --sage:#6FA287; --sage-soft:#E4EFE8; --apricot:#D99E63; --apricot-soft:#F7EBDC;
+    --mist:#8FAECB; --mist-soft:#E7EEF5; --coral-soft:#F6E5E1;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.7 "Segoe UI",system-ui,sans-serif;padding:40px 16px}
+  .page{max-width:760px;margin:0 auto}
+  h1{font-family:Georgia,serif;font-size:30px;margin-bottom:4px}
+  .sub{color:var(--ink3);margin-bottom:28px}
+  h2{font-size:19px;margin:0 0 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:18px;
+        box-shadow:0 1px 2px rgba(51,61,73,.05),0 10px 28px -18px rgba(51,61,73,.18)}
+  .tag{display:inline-block;background:var(--sage-soft);color:var(--sage);border-radius:99px;padding:2px 12px;
+       font-size:12px;font-weight:600;margin-bottom:8px}
+  .tag.b{background:var(--mist-soft);color:#4A80B8}
+  .tag.c{background:var(--apricot-soft);color:#B07A3C}
+  ol{padding-right:22px;margin:10px 0}
+  ol li{margin-bottom:7px}
+  .ret{background:var(--sage-soft);border-radius:10px;padding:12px 16px;margin-top:12px;font-size:14px}
+  .ret b{display:block;margin-bottom:4px}
+  code{background:#EDECE5;border-radius:5px;padding:1px 7px;font-family:Consolas,monospace;font-size:13px;direction:ltr;display:inline-block}
+  .note{background:var(--apricot-soft);border-radius:10px;padding:12px 16px;font-size:13.5px;color:var(--ink2);margin-top:10px}
+  .sec{background:var(--coral-soft);border-radius:10px;padding:12px 16px;font-size:13.5px;color:var(--ink2)}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+  th,td{border-bottom:1px solid var(--line);padding:8px 6px;text-align:right}
+  th{color:var(--ink3);font-weight:600;font-size:12.5px}
+  .time{color:var(--ink3);font-size:12.5px}
+  a{color:#4A80B8}
+  @media print{body{padding:0;background:#fff}.card{box-shadow:none;break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Sitekick — חיבור מקורות המידע</h1>
+<p class="sub">מדריך קצר למי שמנהל את המייל והקבצים · כל החיבורים בהרשאת <b>קריאה בלבד</b> · ניתן לביטול בכל רגע</p>
+
+<div class="card">
+  <h2>מה אנחנו מבקשים, בקצרה</h2>
+  <table>
+    <tr><th>חיבור</th><th>מי מבצע</th><th>זמן</th><th>חובה?</th></tr>
+    <tr><td><b>א · העברת מיילים</b></td><td>בעל/ת התיבה</td><td>2 דק'</td><td>מומלץ — הכי פשוט</td></tr>
+    <tr><td><b>ב · חיבור Gmail</b></td><td>בעל/ת התיבה (בגוגל)</td><td>15 דק'</td><td>אופציונלי</td></tr>
+    <tr><td><b>ג · חיבור Outlook / Microsoft 365</b></td><td>אדמין ה-Microsoft של הארגון</td><td>15 דק'</td><td>אופציונלי</td></tr>
+    <tr><td><b>ד · שיתוף Google Sheets</b></td><td>בעל/ת הקבצים (גאנט + תקציב)</td><td>3 דק'</td><td>מומלץ</td></tr>
+  </table>
+  <p class="note">מספיק אחד מהמסלולים א/ב/ג כדי שהמיילים יזרמו למערכת. סעיף ד עצמאי ונוגע רק לקבצי הגאנט והתקציב.</p>
+</div>
+
+<div class="card">
+  <span class="tag">מסלול א</span>
+  <h2>העברת מיילים אוטומטית (הכי מהיר, בלי הרשאות)</h2>
+  <p>מוסיפים כלל העברה בתיבת המייל, וכל מייל רלוונטי מגיע ל-Sitekick אוטומטית. עובד מ-Gmail ומ-Outlook כאחד.</p>
+  <ol>
+    <li>נשלח לכם כתובת ייעודית (לדוגמה <code>intake@sitekick...</code>) אחרי הקמת הניתוב.</li>
+    <li><b>ב-Gmail:</b> הגדרות ← ראה את כל ההגדרות ← Forwarding ← הוספת כתובת העברה ← אישור הקוד שיגיע.</li>
+    <li><b>ב-Outlook:</b> Settings ← Mail ← Forwarding ← הזנת הכתובת ← Save.</li>
+    <li>אפשר גם כלל חכם שמעביר רק מיילים מסוימים (לפי שולח או נושא) במקום הכול.</li>
+  </ol>
+  <div class="ret"><b>מה מחזירים אלינו:</b> רק אישור שהכלל הוגדר, ומאיזו תיבה.</div>
+</div>
+
+<div class="card">
+  <span class="tag b">מסלול ב</span>
+  <h2>חיבור ישיר ל-Gmail (אם התיבה על Google)</h2>
+  <p>יוצרים הרשאת קריאה-בלבד שמאפשרת ל-Sitekick לסרוק מיילים חדשים אחת ל-10 דקות.</p>
+  <ol>
+    <li>נכנסים ל-<a href="https://console.cloud.google.com">console.cloud.google.com</a> עם חשבון התיבה ← יוצרים Project חדש בשם <code>sitekick</code>.</li>
+    <li>APIs &amp; Services ← Library ← מחפשים <b>Gmail API</b> ← Enable.</li>
+    <li>APIs &amp; Services ← OAuth consent screen ← External ← מוסיפים את כתובת התיבה כ-<b>Test user</b>.</li>
+    <li>Credentials ← Create Credentials ← <b>OAuth client ID</b> ← סוג <b>Web application</b> ← ב-Redirect URIs מוסיפים <code>https://developers.google.com/oauthplayground</code> ← שומרים את ה-<b>Client ID</b> ואת ה-<b>Client secret</b>.</li>
+    <li>נכנסים ל-<a href="https://developers.google.com/oauthplayground">OAuth Playground</a> ← גלגל השיניים ← מסמנים "Use your own OAuth credentials" ← מדביקים את ה-ID וה-Secret.</li>
+    <li>בשדה הימני מדביקים את ההרשאה <code>https://www.googleapis.com/auth/gmail.readonly</code> ← Authorize ← מתחברים עם התיבה ← Exchange authorization code for tokens ← מעתיקים את ה-<b>Refresh token</b>.</li>
+  </ol>
+  <div class="ret"><b>מה מחזירים אלינו (4 ערכים):</b> Client ID · Client Secret · Refresh Token · כתובת התיבה.</div>
+</div>
+
+<div class="card">
+  <span class="tag c">מסלול ג</span>
+  <h2>חיבור Outlook / Microsoft 365 (דרוש אדמין)</h2>
+  <p>רישום אפליקציה בהרשאת קריאת-מייל בלבד. מבצע מי שמנהל את ה-Microsoft 365 של הארגון.</p>
+  <ol>
+    <li>נכנסים ל-<a href="https://entra.microsoft.com">entra.microsoft.com</a> ← Identity ← App registrations ← <b>New registration</b> ← שם: <code>sitekick-mail</code> ← Single tenant ← Register.</li>
+    <li>בעמוד ה-Overview מעתיקים: <b>Directory (tenant) ID</b> ו-<b>Application (client) ID</b>.</li>
+    <li>Certificates &amp; secrets ← <b>New client secret</b> ← מעתיקים מיד את ה-<b>Value</b> (מוצג פעם אחת).</li>
+    <li>API permissions ← Add a permission ← Microsoft Graph ← <b>Application permissions</b> ← מסמנים <code>Mail.Read</code> ← Add ← ולוחצים <b>Grant admin consent</b>.</li>
+  </ol>
+  <div class="ret"><b>מה מחזירים אלינו (4 ערכים):</b> Tenant ID · Client ID · Client Secret · כתובת התיבה לסריקה.</div>
+  <p class="note">ההרשאה <code>Mail.Read</code> ברמת אפליקציה חלה כברירת-מחדל על כל התיבות. אפשר (ומומלץ) לצמצם לתיבה אחת בלבד עם Application Access Policy — נשמח להעביר לאדמין את הפקודה המוכנה.</p>
+</div>
+
+<div class="card">
+  <span class="tag">מסלול ד</span>
+  <h2>שיתוף קבצי הגאנט והתקציב (Google Sheets)</h2>
+  <p>Sitekick קורא את הגיליונות ומעדכן לוחות זמנים ותקציב אוטומטית. צריך רק שיתוף לקריאה.</p>
+  <ol>
+    <li>אנחנו נשלח לכם כתובת מיוחדת של "חשבון שירות" (נראית כמו <code dir="ltr">sitekick-sheets@...iam.gserviceaccount.com</code>).</li>
+    <li>בכל אחד מהקבצים (גאנט + תקציב): Share ← מדביקים את הכתובת ← הרשאת <b>Viewer</b> ← Send.</li>
+    <li>שולחים לנו את הלינקים לשני הקבצים.</li>
+  </ol>
+  <div class="ret"><b>מה מחזירים אלינו:</b> אישור שיתוף + שני הלינקים לקבצים.</div>
+</div>
+
+<div class="card">
+  <h2>אבטחה — בשורה אחת לכל סעיף</h2>
+  <div class="sec">
+    · כל ההרשאות הן <b>קריאה בלבד</b> — המערכת לא שולחת, לא מוחקת ולא משנה שום דבר בתיבות או בקבצים.<br>
+    · כל חיבור ניתן לביטול בלחיצה אחת (הסרת הכלל / מחיקת ה-App / הסרת השיתוף).<br>
+    · את הערכים הסודיים (Secrets/Tokens) לא שולחים במייל גלוי — עדיף בהודעה חולפת (WhatsApp) או בשיחה, ואנחנו מזינים ומוחקים.
+  </div>
+</div>
+
+<p class="time">שאלות? דור אזורי · Sitekick · המדריך הטכני המלא (באנגלית, למפתחים): docs/ENV-SETUP.md</p>
+
+</div>
+</body>
+</html>
