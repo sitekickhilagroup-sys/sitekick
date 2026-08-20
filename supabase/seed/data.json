@@ -1,0 +1,7328 @@
+{
+ "projects": [
+  {
+   "name": "3375 Blair Dr",
+   "address": "3375 Blair Dr, Los Angeles, CA (APN 5579-011-015; Lot 140, Tract 7354)",
+   "llc": "3374 Blair LLC",
+   "stages": {
+    "done": [
+     "feasibility",
+     "soils_survey"
+    ],
+    "current": "entitlements",
+    "risk": "entitlements",
+    "slip": 1,
+    "confirmed": true,
+    "substage": "Case Filing",
+    "case": null,
+    "open_items": [
+     "Plan Check extension — outcome of the 08/18 call not recorded anywhere",
+     "Notarize DCPA + Planning application + Linkage Fee Affidavit — 08/20",
+     "File Plan Approval — 08/25"
+    ],
+    "closed_items": [
+     "Authority package sent to Abhi (08/14)"
+    ],
+    "substage_note": "Filing 08/25 · notarization 08/20 · extension outcome unknown",
+    "parked": [],
+    "next_steps": [
+     {
+      "n": 1,
+      "status": "done",
+      "what": "Plan Check extension granted through 09/01/2027",
+      "evidence": "Subject line 08/18 + Tony: 'Fantastic - thanks Eugene'"
+     },
+     {
+      "n": 2,
+      "status": "waiting",
+      "what": "DCPA notarization — Thursday 08/20, 12:00 PM",
+      "by": "Noa · Rafi",
+      "evidence": "Invite from Abhi 08/19. Jeff Love 08/17: only Rafael's signature needs notarizing."
+     },
+     {
+      "n": 3,
+      "status": "open",
+      "what": "Sign and notarize the Planning application and the Linkage Fee Affidavit",
+      "by": "Hilla Group",
+      "evidence": "Rowan recap 08/18 — listed separately from the DCPA",
+      "critical": true
+     },
+     {
+      "n": 4,
+      "status": "open",
+      "what": "File Plan Approval at the Figueroa counter",
+      "by": "Abhi Kalra",
+      "when": "25.08",
+      "critical": true,
+      "evidence": "Rowan recap 08/18: 'New planning submittal appt 08/25/26'"
+     },
+     {
+      "n": 5,
+      "status": "open",
+      "what": "Retain an architect / designer as soon as possible",
+      "by": "Rowan",
+      "evidence": "Rowan recap 08/18 — if the extension is denied, plans resubmit under the current code cycle"
+     },
+     {
+      "n": 6,
+      "status": "open",
+      "what": "Send P&G the bond details for the renewal decision",
+      "by": "Noa"
+     }
+    ],
+    "city_case": "ZA-2023-3802-ZAD",
+    "city_on_hold": false,
+    "city_flag": "City record still lists Adi Cohen as applicant, though he has had no role since June 2024. The authority documents and notarization are what fix this before the 08/25 filing.",
+    "history": [
+     {
+      "step": "ZAD Filed",
+      "when": "2023-06-06",
+      "src": "City record"
+     },
+     {
+      "step": "ZAD Hearing",
+      "when": "2024-03-27",
+      "src": "City record"
+     },
+     {
+      "step": "ZAD Determination — PARTIALLY APPROVED",
+      "when": "2024-10-25",
+      "src": "City record"
+     },
+     {
+      "step": "Appeal filed and DENIED",
+      "when": "2025-02-03",
+      "src": "City record"
+     }
+    ],
+    "forecast": [
+     {
+      "step": "Accepted For Review",
+      "when": "—",
+      "note": "depends on the hold clearing"
+     },
+     {
+      "step": "Neighborhood Outreach",
+      "when": "—",
+      "note": "radius mailing before hearing"
+     },
+     {
+      "step": "Hearing",
+      "when": "2027-02-01",
+      "source": "Gantt assumption"
+     },
+     {
+      "step": "Determination",
+      "when": "2027-09-01",
+      "source": "hearing + 212 days measured on Blair"
+     },
+     {
+      "step": "Appeal Period ends",
+      "when": "2027-09-19",
+      "source": "+18 days (Blair)"
+     },
+     {
+      "step": "In Effect",
+      "when": "2027-09-19",
+      "note": "assumes no appeal; Blair's appeal added 83 days"
+     }
+    ],
+    "record": {
+     "stage": "entitlements",
+     "note": "Second entitlement action — Plan Approval, after the 2023 ZAD",
+     "stages": {
+      "feasibility": {
+       "items": [
+        {
+         "r": "Site control",
+         "done": true,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Entity formed, EIN, bank account, Grant Deed",
+         "done": true,
+         "note": "",
+         "src": "Budget 1.01-1.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Title insurance",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "BOE 100-B filed (ownership change)",
+         "done": true,
+         "note": "",
+         "src": "County requirement",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Financing secured — term sheets",
+         "done": true,
+         "note": "",
+         "src": "Budget 5.x",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Initial pro-forma baselined",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Design architect engaged",
+         "done": true,
+         "note": "",
+         "src": "Budget 3.01",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Consultant team selected",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        }
+       ],
+       "done_n": 8,
+       "total": 8,
+       "unconfirmed": 0,
+       "ours_left": 0,
+       "city_left": 0,
+       "unknown_n": 0
+      },
+      "entitlements": {
+       "items": [
+        {
+         "r": "Application filed",
+         "done": true,
+         "note": "ZAD 06/2023 · Plan Approval filing 08/25/26",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "ZAD 06/2023 · Plan Approval filing 08/25/26"
+        },
+        {
+         "r": "Filing fee paid",
+         "done": true,
+         "note": "",
+         "src": "Budget 4.03 Conditional Use by ZA",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Photographs submitted",
+         "done": true,
+         "note": "06/06/2023",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "06/06/2023"
+        },
+        {
+         "r": "Project plans submitted",
+         "done": true,
+         "note": "06/06/2023",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "06/06/2023"
+        },
+        {
+         "r": "Tree report submitted",
+         "done": true,
+         "note": "06/06/2023",
+         "src": "City record — ZA-2023-3802-ZAD document set · Budget 3.23",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "06/06/2023"
+        },
+        {
+         "r": "Survey, topo and slope band analysis",
+         "done": true,
+         "note": "with the 2023 ZAD",
+         "src": "Budget 3.05, 3.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "with the 2023 ZAD"
+        },
+        {
+         "r": "Case assigned to a planner",
+         "done": true,
+         "note": "Joanna Marroquin",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "Joanna Marroquin"
+        },
+        {
+         "r": "Hold Letter items cleared",
+         "done": false,
+         "note": "Authority documents to be notarized 08/20",
+         "src": "City field: Case on Hold",
+         "basis": "ours",
+         "who": "us",
+         "state": "open",
+         "evidence": "Authority documents to be notarized 08/20"
+        },
+        {
+         "r": "Case accepted for review (deemed complete)",
+         "done": false,
+         "note": "after the 08/25 filing",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "open",
+         "evidence": "after the 08/25 filing"
+        },
+        {
+         "r": "Radius map and neighbour notices mailed",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.31",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Public hearing held",
+         "done": true,
+         "note": "03/27/2024",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "03/27/2024"
+        },
+        {
+         "r": "Determination Letter issued",
+         "done": true,
+         "note": "Partially approved 10/25/2024",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "Partially approved 10/25/2024"
+        },
+        {
+         "r": "Notice of Exemption issued (CEQA)",
+         "done": true,
+         "note": "10/25/2024",
+         "src": "City record — ZA-2023-3802-ZAD document set — environmental clearance",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "10/25/2024"
+        },
+        {
+         "r": "Elevations, floor plan and landscape plan approved",
+         "done": true,
+         "note": "signed 02/05/2026",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "signed 02/05/2026"
+        },
+        {
+         "r": "Appeal period elapsed",
+         "done": true,
+         "note": "appeal denied 02/03/2025",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "appeal denied 02/03/2025"
+        },
+        {
+         "r": "Case conditions issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Entitlement in effect",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        }
+       ],
+       "done_n": 12,
+       "total": 17,
+       "unconfirmed": 0,
+       "ours_left": 2,
+       "city_left": 3,
+       "unknown_n": 3
+      },
+      "plan_check": {
+       "items": [
+        {
+         "r": "Construction documents submitted",
+         "done": true,
+         "note": "Permit application 20010-10000-03296 — long-standing",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "Permit application 20010-10000-03296 — long-standing"
+        },
+        {
+         "r": "Plan check fees paid — Building",
+         "done": true,
+         "note": "paid at original submittal",
+         "src": "Budget 4.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "paid at original submittal"
+        },
+        {
+         "r": "Plan check fees paid — Grading",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 4.05",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Plan check fees paid — Shoring",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 4.06",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Plan check fees paid — Pool",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 4.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Plan check fees paid — Retaining wall",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 4.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Application accepted (completeness review)",
+         "done": true,
+         "note": "application is live and extendable",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "application is live and extendable"
+        },
+        {
+         "r": "GPI report accepted",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Soils / geology report accepted",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "LADBS · Budget 3.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Soils approval letter issued",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Grading and retaining wall plan accepted",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 3.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Structural engineering cleared",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 3.10",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Shoring engineering cleared",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 3.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "MEPFP engineering cleared",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 3.19",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Title 24 energy compliance",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 3.30",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Fire Life Safety clearance",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 3.25 · Invoice tracker — vendors actually paid",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Dry utility clearance",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 3.26",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "LID covenant recorded",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Her projects — Alta Mesa",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Landscape plan cleared",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Budget 3.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Correction rounds cleared",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "All clearances signed",
+         "done": false,
+         "note": "status unknown — confirm with Crest",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        }
+       ],
+       "done_n": 3,
+       "total": 21,
+       "unconfirmed": 0,
+       "ours_left": 14,
+       "city_left": 4,
+       "active": true,
+       "note": "Blair has an active Plan Check. How far it progressed is not visible in our data — confirm the current correction and clearance status with Crest.",
+       "unknown_n": 18
+      },
+      "rti": {
+       "items": [
+        {
+         "r": "Every clearance signed off",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plans stamped Ready To Issue",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plan check still valid — not expired",
+         "done": false,
+         "note": "",
+         "src": "Blair: this is the live risk",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 0,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "permits": {
+       "items": [
+        {
+         "r": "Permit fees calculated",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "School fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Park / Quimby fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Affordable Housing Linkage Fee paid",
+         "done": false,
+         "note": "",
+         "src": "Budget · Blair affidavit",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Sewer capacity charge paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Building permit issued",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.13",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 7,
+       "unconfirmed": 3,
+       "ours_left": 6,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "b_permit": {
+       "items": [
+        {
+         "r": "B-Permit requirement determined",
+         "done": false,
+         "note": "",
+         "src": "San Marco — open question",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Civil engineering for B-Permit",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.13",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "BOE plan approval",
+         "done": false,
+         "note": "",
+         "src": "Blair — BOE Written Determination",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 0,
+       "ours_left": 3,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "haul_route": {
+       "items": [
+        {
+         "r": "Export quantity determined",
+         "done": false,
+         "note": "",
+         "src": "Gantt — San Marco 'maybe'",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route application filed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route hearing held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Haul route approved",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 4,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "grading": {
+       "items": [
+        {
+         "r": "Pre-construction meeting held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Geotech site inspections scheduled",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.09",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Shoring installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.02",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Excavation and export complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 3,
+       "ours_left": 4,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "foundation": {
+       "items": [
+        {
+         "r": "Caissons / footings installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.03",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rebar inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Foundation signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "framing": {
+       "items": [
+        {
+         "r": "Rough frame complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Framing inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 2,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "inspections": {
+       "items": [
+        {
+         "r": "Testing and special inspections",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.21",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rough inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Final inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "delivery": {
+       "items": [
+        {
+         "r": "Certificate of Occupancy issued",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Punch list closed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Project delivered",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 1,
+       "unknown_n": 0
+      }
+     },
+     "done_n": 12,
+     "total": 17,
+     "also_active": [
+      "plan_check"
+     ]
+    }
+   }
+  },
+  {
+   "name": "2650 Rinconia",
+   "address": "2650 N Rinconia Dr, Los Angeles, CA 90068",
+   "llc": "2650 Rinconia LLC",
+   "stages": {
+    "done": [
+     "feasibility",
+     "entitlements",
+     "soils_survey"
+    ],
+    "current": "plan_check",
+    "risk": "plan_check",
+    "slip": 9,
+    "confirmed": true,
+    "substage": "Corrections",
+    "case": "eplanLA #308694",
+    "open_items": [
+     "LADBS returned the soils report — addendum required",
+     "Grading and retaining wall plan — proposal not yet awarded",
+     "Response to 100-B — third and final request"
+    ],
+    "closed_items": [
+     "GPI and soils report resubmitted (08/14)",
+     "Payment to Amin received (08/18)"
+    ],
+    "substage_note": null,
+    "parked": [],
+    "next_steps": [
+     {
+      "n": 1,
+      "status": "done",
+      "what": "Plans submitted to Plan Check; GPI and soils report filed",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 2,
+      "status": "waiting",
+      "what": "Intake may request the soils approval letter, or accept as is",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 3,
+      "status": "open",
+      "what": "LADBS returned the soils report — Bob to review and resubmit an addendum",
+      "by": "Rowan → Bob",
+      "evidence": "Rowan to Bob 08/18",
+      "critical": true
+     },
+     {
+      "n": 4,
+      "status": "open",
+      "what": "Retain an engineer in the next couple of weeks",
+      "by": "Rowan",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 5,
+      "status": "open",
+      "what": "Retain an interior designer in the next couple of weeks",
+      "by": "Rowan",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 6,
+      "status": "open",
+      "what": "Response to 100-B — Rafi to answer Rowan's questions",
+      "by": "Rafi",
+      "critical": true,
+      "evidence": "Third and final request"
+     }
+    ],
+    "city_case": "eplanLA #308694 (and #314514)",
+    "city_on_hold": null,
+    "city_flag": "No discretionary planning case — this is a direct Plan Check. eplanLA requires a login, so it was not checked externally. Serena holds access.",
+    "history": [
+     {
+      "step": "Submitted to Plan Check",
+      "when": "2026-08-14",
+      "src": "eplanLA"
+     },
+     {
+      "step": "GPI + soils report filed",
+      "when": "2026-08-14",
+      "src": "Email — Serena"
+     }
+    ],
+    "forecast": [
+     {
+      "step": "All Clearances Signed",
+      "when": "—"
+     },
+     {
+      "step": "RTI",
+      "when": "—"
+     },
+     {
+      "step": "Permits — fees + bonds",
+      "when": "—",
+      "note": "budget codes 4.11-4.13"
+     },
+     {
+      "step": "B Permit",
+      "when": "—"
+     },
+     {
+      "step": "Grading",
+      "when": "—"
+     }
+    ],
+    "record": {
+     "stage": "plan_check",
+     "note": "By-right — no discretionary case",
+     "stages": {
+      "feasibility": {
+       "items": [
+        {
+         "r": "Site control",
+         "done": true,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Entity formed, EIN, bank account, Grant Deed",
+         "done": true,
+         "note": "",
+         "src": "Budget 1.01-1.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Title insurance",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "BOE 100-B filed (ownership change)",
+         "done": true,
+         "note": "",
+         "src": "County requirement",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Financing secured — term sheets",
+         "done": true,
+         "note": "",
+         "src": "Budget 5.x",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Initial pro-forma baselined",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Design architect engaged",
+         "done": true,
+         "note": "",
+         "src": "Budget 3.01",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Consultant team selected",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        }
+       ],
+       "done_n": 8,
+       "total": 8,
+       "unconfirmed": 0,
+       "ours_left": 0,
+       "city_left": 0,
+       "unknown_n": 0
+      },
+      "entitlements": {
+       "items": [
+        {
+         "r": "Application filed",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Filing fee paid",
+         "done": true,
+         "note": "",
+         "src": "Budget 4.03 Conditional Use by ZA",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Photographs submitted",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Project plans submitted",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Tree report submitted",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set · Budget 3.23",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Survey, topo and slope band analysis",
+         "done": true,
+         "note": "",
+         "src": "Budget 3.05, 3.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Case assigned to a planner",
+         "done": true,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Hold Letter items cleared",
+         "done": true,
+         "note": "",
+         "src": "City field: Case on Hold",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Case accepted for review (deemed complete)",
+         "done": true,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Radius map and neighbour notices mailed",
+         "done": true,
+         "note": "",
+         "src": "Budget 3.31",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Public hearing held",
+         "done": true,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Determination Letter issued",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Notice of Exemption issued (CEQA)",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set — environmental clearance",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Elevations, floor plan and landscape plan approved",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Appeal period elapsed",
+         "done": true,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Case conditions issued",
+         "done": true,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Entitlement in effect",
+         "done": true,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "done_noev",
+         "evidence": ""
+        }
+       ],
+       "done_n": 17,
+       "total": 17,
+       "unconfirmed": 0,
+       "ours_left": 0,
+       "city_left": 0,
+       "unknown_n": 0
+      },
+      "plan_check": {
+       "items": [
+        {
+         "r": "Construction documents submitted",
+         "done": true,
+         "note": "08/14/2026 · eplanLA #308694",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "08/14/2026 · eplanLA #308694"
+        },
+        {
+         "r": "Plan check fees paid — Building",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Plan check fees paid — Grading",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.05",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Plan check fees paid — Shoring",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.06",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Plan check fees paid — Pool",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Plan check fees paid — Retaining wall",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Application accepted (completeness review)",
+         "done": false,
+         "note": "1-2 business days from 08/14",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "city",
+         "state": "open",
+         "evidence": "1-2 business days from 08/14"
+        },
+        {
+         "r": "GPI report accepted",
+         "done": true,
+         "note": "filed 08/14",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "filed 08/14"
+        },
+        {
+         "r": "Soils / geology report accepted",
+         "done": false,
+         "note": "returned by LADBS — addendum required",
+         "src": "LADBS · Budget 3.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "open",
+         "evidence": "returned by LADBS — addendum required"
+        },
+        {
+         "r": "Soils approval letter issued",
+         "done": false,
+         "note": "up to 3 weeks, or accepted as is",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "city",
+         "state": "open",
+         "evidence": "up to 3 weeks, or accepted as is"
+        },
+        {
+         "r": "Grading and retaining wall plan accepted",
+         "done": false,
+         "note": "required by the GPI · not commissioned",
+         "src": "Budget 3.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "open",
+         "evidence": "required by the GPI · not commissioned"
+        },
+        {
+         "r": "Structural engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.10",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Shoring engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "MEPFP engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.19",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Title 24 energy compliance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.30",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Fire Life Safety clearance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.25 · Invoice tracker — vendors actually paid",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Dry utility clearance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.26",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "LID covenant recorded",
+         "done": false,
+         "note": "",
+         "src": "Her projects — Alta Mesa",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Landscape plan cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Correction rounds cleared",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "All clearances signed",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        }
+       ],
+       "done_n": 2,
+       "total": 21,
+       "unconfirmed": 0,
+       "ours_left": 14,
+       "city_left": 5,
+       "unknown_n": 15
+      },
+      "rti": {
+       "items": [
+        {
+         "r": "Every clearance signed off",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plans stamped Ready To Issue",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plan check still valid — not expired",
+         "done": false,
+         "note": "",
+         "src": "Blair: this is the live risk",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 0,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "permits": {
+       "items": [
+        {
+         "r": "Permit fees calculated",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "School fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Park / Quimby fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Affordable Housing Linkage Fee paid",
+         "done": false,
+         "note": "",
+         "src": "Budget · Blair affidavit",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Sewer capacity charge paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Building permit issued",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.13",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 7,
+       "unconfirmed": 3,
+       "ours_left": 6,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "b_permit": {
+       "items": [
+        {
+         "r": "B-Permit requirement determined",
+         "done": false,
+         "note": "",
+         "src": "San Marco — open question",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Civil engineering for B-Permit",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.13",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "BOE plan approval",
+         "done": false,
+         "note": "",
+         "src": "Blair — BOE Written Determination",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 0,
+       "ours_left": 3,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "haul_route": {
+       "items": [
+        {
+         "r": "Export quantity determined",
+         "done": false,
+         "note": "",
+         "src": "Gantt — San Marco 'maybe'",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route application filed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route hearing held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Haul route approved",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 4,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "grading": {
+       "items": [
+        {
+         "r": "Pre-construction meeting held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Geotech site inspections scheduled",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.09",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Shoring installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.02",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Excavation and export complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 3,
+       "ours_left": 4,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "foundation": {
+       "items": [
+        {
+         "r": "Caissons / footings installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.03",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rebar inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Foundation signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "framing": {
+       "items": [
+        {
+         "r": "Rough frame complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Framing inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 2,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "inspections": {
+       "items": [
+        {
+         "r": "Testing and special inspections",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.21",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rough inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Final inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "delivery": {
+       "items": [
+        {
+         "r": "Certificate of Occupancy issued",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Punch list closed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Project delivered",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 1,
+       "unknown_n": 0
+      }
+     },
+     "done_n": 2,
+     "total": 21
+    }
+   }
+  },
+  {
+   "name": "3701 Alta Mesa",
+   "address": "3701 Alta Mesa Dr, Los Angeles, CA",
+   "llc": "3701 Alta Mesa LLC",
+   "stages": {
+    "done": [
+     "feasibility",
+     "soils_survey"
+    ],
+    "current": "entitlements",
+    "risk": "entitlements",
+    "slip": 19,
+    "confirmed": true,
+    "substage": "Neighborhood Outreach",
+    "case": null,
+    "open_items": [
+     "Pay Quality Mapping $923.42 — QMS holds the files until paid",
+     "Mail ZAD notices to neighbours before the hearing",
+     "LID Covenant — sign, notarize and record"
+    ],
+    "closed_items": [
+     "Planning case complete on our end (08/03)"
+    ],
+    "substage_note": "Mailing blocked on QMS payment",
+    "parked": [],
+    "next_steps": [
+     {
+      "n": 1,
+      "status": "waiting",
+      "what": "Deemed Complete letter expected from Planning this week",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 2,
+      "status": "waiting",
+      "what": "Crest has already requested a hearing date",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 3,
+      "status": "open",
+      "what": "Pay Quality Mapping $923.42 and mail notices to neighbours before the hearing",
+      "by": "Noa",
+      "evidence": "Abhi 08/17: QMS holds the files until paid",
+      "critical": true
+     },
+     {
+      "n": 4,
+      "status": "open",
+      "what": "Serena to meet the plan checker and resubmit plans",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 5,
+      "status": "open",
+      "what": "Sign and notarize the LID Covenant",
+      "by": "Hilla Group"
+     }
+    ],
+    "city_case": "ZA-2025-6962-CU1-HCA",
+    "city_on_hold": true,
+    "city_flag": "Gantt shows Neighborhood Outreach heading to a September hearing, but the City marks the case On Hold with no approved documents. Deemed Complete was expected end of July.",
+    "history": [
+     {
+      "step": "Filed",
+      "when": "2025-12-17",
+      "src": "City record"
+     },
+     {
+      "step": "Assigned to Planner — Abraham Lamontagne",
+      "when": "2025-12-22",
+      "src": "City record"
+     }
+    ],
+    "forecast": [
+     {
+      "step": "Accepted For Review",
+      "when": "—",
+      "note": "depends on the hold clearing"
+     },
+     {
+      "step": "Neighborhood Outreach",
+      "when": "—",
+      "note": "radius mailing before hearing"
+     },
+     {
+      "step": "Hearing",
+      "when": "2026-09-01",
+      "source": "Gantt assumption"
+     },
+     {
+      "step": "Determination",
+      "when": "2027-04-01",
+      "source": "hearing + 212 days measured on Blair"
+     },
+     {
+      "step": "Appeal Period ends",
+      "when": "2027-04-19",
+      "source": "+18 days (Blair)"
+     },
+     {
+      "step": "In Effect",
+      "when": "2027-04-19",
+      "note": "assumes no appeal; Blair's appeal added 83 days"
+     }
+    ],
+    "record": {
+     "stage": "entitlements",
+     "note": "ZAD — new SFD, garage over basement, pool",
+     "stages": {
+      "feasibility": {
+       "items": [
+        {
+         "r": "Site control",
+         "done": true,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Entity formed, EIN, bank account, Grant Deed",
+         "done": true,
+         "note": "",
+         "src": "Budget 1.01-1.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Title insurance",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "BOE 100-B filed (ownership change)",
+         "done": true,
+         "note": "",
+         "src": "County requirement",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Financing secured — term sheets",
+         "done": true,
+         "note": "",
+         "src": "Budget 5.x",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Initial pro-forma baselined",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Design architect engaged",
+         "done": true,
+         "note": "",
+         "src": "Budget 3.01",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Consultant team selected",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        }
+       ],
+       "done_n": 8,
+       "total": 8,
+       "unconfirmed": 0,
+       "ours_left": 0,
+       "city_left": 0,
+       "unknown_n": 0
+      },
+      "entitlements": {
+       "items": [
+        {
+         "r": "Application filed",
+         "done": true,
+         "note": "12/17/2025",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "12/17/2025"
+        },
+        {
+         "r": "Filing fee paid",
+         "done": true,
+         "note": "",
+         "src": "Budget 4.03 Conditional Use by ZA",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Photographs submitted",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Project plans submitted",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Tree report submitted",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set · Budget 3.23",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Survey, topo and slope band analysis",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.05, 3.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Case assigned to a planner",
+         "done": true,
+         "note": "Abraham Lamontagne · 12/22/2025",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "Abraham Lamontagne · 12/22/2025"
+        },
+        {
+         "r": "Hold Letter items cleared",
+         "done": true,
+         "note": "complete on our side 08/03",
+         "src": "City field: Case on Hold",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "complete on our side 08/03"
+        },
+        {
+         "r": "Case accepted for review (deemed complete)",
+         "done": false,
+         "note": "expected end of July, not issued",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "open",
+         "evidence": "expected end of July, not issued"
+        },
+        {
+         "r": "Radius map and neighbour notices mailed",
+         "done": false,
+         "note": "materials commissioned · mailing pending payment",
+         "src": "Budget 3.31",
+         "basis": "ours",
+         "who": "us",
+         "state": "open",
+         "evidence": "materials commissioned · mailing pending payment"
+        },
+        {
+         "r": "Public hearing held",
+         "done": false,
+         "note": "date requested by Crest",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "open",
+         "evidence": "date requested by Crest"
+        },
+        {
+         "r": "Determination Letter issued",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Notice of Exemption issued (CEQA)",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set — environmental clearance",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Elevations, floor plan and landscape plan approved",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Appeal period elapsed",
+         "done": false,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Case conditions issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Entitlement in effect",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        }
+       ],
+       "done_n": 6,
+       "total": 17,
+       "unconfirmed": 0,
+       "ours_left": 3,
+       "city_left": 8,
+       "unknown_n": 8
+      },
+      "plan_check": {
+       "items": [
+        {
+         "r": "Construction documents submitted",
+         "done": false,
+         "note": "",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Building",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Grading",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.05",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Shoring",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.06",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Pool",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Retaining wall",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Application accepted (completeness review)",
+         "done": false,
+         "note": "",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "GPI report accepted",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Soils / geology report accepted",
+         "done": false,
+         "note": "",
+         "src": "LADBS · Budget 3.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Soils approval letter issued",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Grading and retaining wall plan accepted",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Structural engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.10",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Shoring engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "MEPFP engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.19",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Title 24 energy compliance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.30",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Fire Life Safety clearance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.25 · Invoice tracker — vendors actually paid",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Dry utility clearance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.26",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "LID covenant recorded",
+         "done": false,
+         "note": "",
+         "src": "Her projects — Alta Mesa",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Landscape plan cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Correction rounds cleared",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "All clearances signed",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 21,
+       "unconfirmed": 0,
+       "ours_left": 16,
+       "city_left": 5,
+       "unknown_n": 0
+      },
+      "rti": {
+       "items": [
+        {
+         "r": "Every clearance signed off",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plans stamped Ready To Issue",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plan check still valid — not expired",
+         "done": false,
+         "note": "",
+         "src": "Blair: this is the live risk",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 0,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "permits": {
+       "items": [
+        {
+         "r": "Permit fees calculated",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "School fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Park / Quimby fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Affordable Housing Linkage Fee paid",
+         "done": false,
+         "note": "",
+         "src": "Budget · Blair affidavit",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Sewer capacity charge paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Building permit issued",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.13",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 7,
+       "unconfirmed": 3,
+       "ours_left": 6,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "b_permit": {
+       "items": [
+        {
+         "r": "B-Permit requirement determined",
+         "done": false,
+         "note": "",
+         "src": "San Marco — open question",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Civil engineering for B-Permit",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.13",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "BOE plan approval",
+         "done": false,
+         "note": "",
+         "src": "Blair — BOE Written Determination",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 0,
+       "ours_left": 3,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "haul_route": {
+       "items": [
+        {
+         "r": "Export quantity determined",
+         "done": false,
+         "note": "",
+         "src": "Gantt — San Marco 'maybe'",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route application filed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route hearing held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Haul route approved",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 4,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "grading": {
+       "items": [
+        {
+         "r": "Pre-construction meeting held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Geotech site inspections scheduled",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.09",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Shoring installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.02",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Excavation and export complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 3,
+       "ours_left": 4,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "foundation": {
+       "items": [
+        {
+         "r": "Caissons / footings installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.03",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rebar inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Foundation signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "framing": {
+       "items": [
+        {
+         "r": "Rough frame complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Framing inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 2,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "inspections": {
+       "items": [
+        {
+         "r": "Testing and special inspections",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.21",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rough inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Final inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "delivery": {
+       "items": [
+        {
+         "r": "Certificate of Occupancy issued",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Punch list closed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Project delivered",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 1,
+       "unknown_n": 0
+      }
+     },
+     "done_n": 6,
+     "total": 17
+    }
+   }
+  },
+  {
+   "name": "9268-9270 Flicker Way",
+   "address": "9268-9270 Flicker Way, Los Angeles, CA",
+   "llc": "9270 Flicker LLC",
+   "stages": {
+    "done": [],
+    "current": "feasibility",
+    "risk": null,
+    "slip": 0,
+    "confirmed": false,
+    "substage": "Consultant Selection",
+    "case": null,
+    "open_items": [
+     "Decide on Crest's permit-investigation scope — 10-15 hrs vs 5 quoted",
+     "Ron Rosenberg to finish reviewing Crest's proposal"
+    ],
+    "closed_items": [],
+    "substage_note": "Litigation running in parallel — Ron Rosenberg",
+    "parked": [],
+    "next_steps": [
+     {
+      "n": 1,
+      "status": "waiting",
+      "what": "Ron Rosenberg to finish reviewing Crest's proposal",
+      "by": "Ron",
+      "evidence": "Noa followed up 08/18"
+     },
+     {
+      "n": 2,
+      "status": "open",
+      "what": "Execute the proposal",
+      "by": "Refael",
+      "evidence": "Abhi 08/18: 'has this been executed?'"
+     },
+     {
+      "n": 3,
+      "status": "open",
+      "what": "Ongoing legal case management",
+      "by": "Noa"
+     }
+    ],
+    "history": [],
+    "forecast": [],
+    "record": {
+     "stage": "feasibility",
+     "note": "Litigation running alongside",
+     "stages": {
+      "feasibility": {
+       "items": [
+        {
+         "r": "Site control",
+         "done": true,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Entity formed, EIN, bank account, Grant Deed",
+         "done": true,
+         "note": "9270 Flicker LLC",
+         "src": "Budget 1.01-1.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "9270 Flicker LLC"
+        },
+        {
+         "r": "Title insurance",
+         "done": false,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "BOE 100-B filed (ownership change)",
+         "done": false,
+         "note": "",
+         "src": "County requirement",
+         "basis": "standard",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Financing secured — term sheets",
+         "done": false,
+         "note": "",
+         "src": "Budget 5.x",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Initial pro-forma baselined",
+         "done": false,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Design architect engaged",
+         "done": false,
+         "note": "Chilean architect — proposal request drafted",
+         "src": "Budget 3.01",
+         "basis": "ours",
+         "who": "us",
+         "state": "open",
+         "evidence": "Chilean architect — proposal request drafted"
+        },
+        {
+         "r": "Consultant team selected",
+         "done": false,
+         "note": "Crest scope under legal review",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "open",
+         "evidence": "Crest scope under legal review"
+        }
+       ],
+       "done_n": 2,
+       "total": 8,
+       "unconfirmed": 1,
+       "ours_left": 6,
+       "city_left": 0,
+       "unknown_n": 4
+      },
+      "entitlements": {
+       "items": [
+        {
+         "r": "Application filed",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Filing fee paid",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.03 Conditional Use by ZA",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Photographs submitted",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Project plans submitted",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Tree report submitted",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set · Budget 3.23",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Survey, topo and slope band analysis",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.05, 3.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Case assigned to a planner",
+         "done": false,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Hold Letter items cleared",
+         "done": false,
+         "note": "",
+         "src": "City field: Case on Hold",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Case accepted for review (deemed complete)",
+         "done": false,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Radius map and neighbour notices mailed",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.31",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Public hearing held",
+         "done": false,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Determination Letter issued",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Notice of Exemption issued (CEQA)",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set — environmental clearance",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Elevations, floor plan and landscape plan approved",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Appeal period elapsed",
+         "done": false,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Case conditions issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Entitlement in effect",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 17,
+       "unconfirmed": 0,
+       "ours_left": 8,
+       "city_left": 9,
+       "unknown_n": 0
+      },
+      "plan_check": {
+       "items": [
+        {
+         "r": "Construction documents submitted",
+         "done": false,
+         "note": "",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Building",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Grading",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.05",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Shoring",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.06",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Pool",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Retaining wall",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Application accepted (completeness review)",
+         "done": false,
+         "note": "",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "GPI report accepted",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Soils / geology report accepted",
+         "done": false,
+         "note": "",
+         "src": "LADBS · Budget 3.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Soils approval letter issued",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Grading and retaining wall plan accepted",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Structural engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.10",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Shoring engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "MEPFP engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.19",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Title 24 energy compliance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.30",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Fire Life Safety clearance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.25 · Invoice tracker — vendors actually paid",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Dry utility clearance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.26",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "LID covenant recorded",
+         "done": false,
+         "note": "",
+         "src": "Her projects — Alta Mesa",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Landscape plan cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Correction rounds cleared",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "All clearances signed",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 21,
+       "unconfirmed": 0,
+       "ours_left": 16,
+       "city_left": 5,
+       "unknown_n": 0
+      },
+      "rti": {
+       "items": [
+        {
+         "r": "Every clearance signed off",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plans stamped Ready To Issue",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plan check still valid — not expired",
+         "done": false,
+         "note": "",
+         "src": "Blair: this is the live risk",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 0,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "permits": {
+       "items": [
+        {
+         "r": "Permit fees calculated",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "School fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Park / Quimby fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Affordable Housing Linkage Fee paid",
+         "done": false,
+         "note": "",
+         "src": "Budget · Blair affidavit",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Sewer capacity charge paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Building permit issued",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.13",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 7,
+       "unconfirmed": 3,
+       "ours_left": 6,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "b_permit": {
+       "items": [
+        {
+         "r": "B-Permit requirement determined",
+         "done": false,
+         "note": "",
+         "src": "San Marco — open question",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Civil engineering for B-Permit",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.13",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "BOE plan approval",
+         "done": false,
+         "note": "",
+         "src": "Blair — BOE Written Determination",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 0,
+       "ours_left": 3,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "haul_route": {
+       "items": [
+        {
+         "r": "Export quantity determined",
+         "done": false,
+         "note": "",
+         "src": "Gantt — San Marco 'maybe'",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route application filed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route hearing held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Haul route approved",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 4,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "grading": {
+       "items": [
+        {
+         "r": "Pre-construction meeting held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Geotech site inspections scheduled",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.09",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Shoring installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.02",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Excavation and export complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 3,
+       "ours_left": 4,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "foundation": {
+       "items": [
+        {
+         "r": "Caissons / footings installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.03",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rebar inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Foundation signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "framing": {
+       "items": [
+        {
+         "r": "Rough frame complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Framing inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 2,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "inspections": {
+       "items": [
+        {
+         "r": "Testing and special inspections",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.21",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rough inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Final inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "delivery": {
+       "items": [
+        {
+         "r": "Certificate of Occupancy issued",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Punch list closed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Project delivered",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 1,
+       "unknown_n": 0
+      }
+     },
+     "done_n": 2,
+     "total": 8
+    }
+   }
+  },
+  {
+   "name": "2361-2367 San Marco",
+   "address": "2361-2367 San Marco Dr, Los Angeles, CA",
+   "llc": "Hilla Group LLC",
+   "stages": {
+    "done": [
+     "feasibility",
+     "soils_survey"
+    ],
+    "current": "entitlements",
+    "risk": "entitlements",
+    "slip": 72,
+    "confirmed": true,
+    "substage": "Hold Letter Corrections",
+    "case": "ZAD / CU1",
+    "open_items": [
+     "Mid-Cities will not sign the MSA — grading plan blocked",
+     "LADBS grading division denied the soils report — corrections with Grover-Hollingsworth",
+     "H/2 setbacks from rear retaining walls — confirm closed with Abhi",
+     "B-Permit needed? 5.5' dedication vs property line"
+    ],
+    "closed_items": [
+     "Yard Determination plotted on sheet A0.1 (07/23)",
+     "Slope band + topo included in plan set (07/23)",
+     "Second-floor canopy fixed (07/27)",
+     "15'-0\" rear slope setback confirmed (07/29)",
+     "Survey in CAD received from Amin (08/18)"
+    ],
+    "substage_note": null,
+    "parked": [],
+    "next_steps": [
+     {
+      "n": 1,
+      "status": "done",
+      "what": "Survey in CAD received from Amin",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 2,
+      "status": "open",
+      "what": "Mid-Cities will not sign the MSA — negotiate or approach other engineers, then Refael decides",
+      "by": "Rowan → Refael",
+      "evidence": "Rowan recap 08/18. The Hold Letter requires a grading plan; this is who prepares it.",
+      "critical": true
+     },
+     {
+      "n": 3,
+      "status": "open",
+      "what": "Soils report corrections with Grover-Hollingsworth",
+      "by": "Rowan → Grover",
+      "evidence": "LADBS grading division denial 08/17. Rowan: corrections also need the grading plan to finalize.",
+      "critical": true
+     },
+     {
+      "n": 4,
+      "status": "open",
+      "what": "Get an hours estimate from Grover before work starts",
+      "by": "Noa",
+      "evidence": "Noa 08/18 — they may bill hourly"
+     },
+     {
+      "n": 5,
+      "status": "waiting",
+      "what": "Serena obtaining structural engineering proposal",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 6,
+      "status": "open",
+      "what": "Confirm direction on renderings",
+      "by": "Hilla Group",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 7,
+      "status": "open",
+      "what": "Topo and landscape proposals to be reviewed and approved by Premise",
+      "evidence": "Rowan recap 08/18"
+     },
+     {
+      "n": 8,
+      "status": "open",
+      "what": "Decide whether a B-Permit is required — 5.5' dedication vs property line",
+      "by": "Abhi → Christine (City)",
+      "evidence": "Abhi to Christine 08/18"
+     }
+    ],
+    "city_case": "ZA-2026-1475-CU1-HCA",
+    "city_on_hold": true,
+    "city_flag": "City confirms On Hold — consistent with the Hold Letter. Filing date 03/25/26 matches the Gantt exactly.",
+    "history": [
+     {
+      "step": "Filed",
+      "when": "2026-03-25",
+      "src": "City record"
+     },
+     {
+      "step": "Assigned to Planner — Jamie Hwang",
+      "when": "2026-04-13",
+      "src": "City record"
+     }
+    ],
+    "forecast": [
+     {
+      "step": "Accepted For Review",
+      "when": "—",
+      "note": "depends on the hold clearing"
+     },
+     {
+      "step": "Neighborhood Outreach",
+      "when": "—",
+      "note": "radius mailing before hearing"
+     },
+     {
+      "step": "Hearing",
+      "when": "2026-12-01",
+      "source": "Gantt assumption"
+     },
+     {
+      "step": "Determination",
+      "when": "2027-07-01",
+      "source": "hearing + 212 days measured on Blair"
+     },
+     {
+      "step": "Appeal Period ends",
+      "when": "2027-07-19",
+      "source": "+18 days (Blair)"
+     },
+     {
+      "step": "In Effect",
+      "when": "2027-07-19",
+      "note": "assumes no appeal; Blair's appeal added 83 days"
+     }
+    ],
+    "record": {
+     "stage": "entitlements",
+     "note": "ZAD / CU1 — hillside, R1",
+     "stages": {
+      "feasibility": {
+       "items": [
+        {
+         "r": "Site control",
+         "done": true,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Entity formed, EIN, bank account, Grant Deed",
+         "done": true,
+         "note": "",
+         "src": "Budget 1.01-1.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Title insurance",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "BOE 100-B filed (ownership change)",
+         "done": true,
+         "note": "",
+         "src": "County requirement",
+         "basis": "standard",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Financing secured — term sheets",
+         "done": true,
+         "note": "",
+         "src": "Budget 5.x",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Initial pro-forma baselined",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Design architect engaged",
+         "done": true,
+         "note": "",
+         "src": "Budget 3.01",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Consultant team selected",
+         "done": true,
+         "note": "",
+         "src": "Budget cost codes",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        }
+       ],
+       "done_n": 8,
+       "total": 8,
+       "unconfirmed": 0,
+       "ours_left": 0,
+       "city_left": 0,
+       "unknown_n": 0
+      },
+      "entitlements": {
+       "items": [
+        {
+         "r": "Application filed",
+         "done": true,
+         "note": "03/25/2026",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "03/25/2026"
+        },
+        {
+         "r": "Filing fee paid",
+         "done": true,
+         "note": "",
+         "src": "Budget 4.03 Conditional Use by ZA",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Photographs submitted",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Project plans submitted",
+         "done": true,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "us",
+         "state": "done_noev",
+         "evidence": ""
+        },
+        {
+         "r": "Tree report submitted",
+         "done": false,
+         "note": "arborist not yet engaged — the new survey unblocks it",
+         "src": "City record — ZA-2023-3802-ZAD document set · Budget 3.23",
+         "basis": "ours",
+         "who": "us",
+         "state": "open",
+         "evidence": "arborist not yet engaged — the new survey unblocks it"
+        },
+        {
+         "r": "Survey, topo and slope band analysis",
+         "done": true,
+         "note": "updated survey received 08/18",
+         "src": "Budget 3.05, 3.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "done",
+         "evidence": "updated survey received 08/18"
+        },
+        {
+         "r": "Case assigned to a planner",
+         "done": true,
+         "note": "Jamie Hwang · 04/13/2026",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "done",
+         "evidence": "Jamie Hwang · 04/13/2026"
+        },
+        {
+         "r": "Hold Letter items cleared",
+         "done": false,
+         "note": "grading plan · corrected soils report · H/2 setback · tree report",
+         "src": "City field: Case on Hold",
+         "basis": "ours",
+         "who": "us",
+         "state": "open",
+         "evidence": "grading plan · corrected soils report · H/2 setback · tree report"
+        },
+        {
+         "r": "Case accepted for review (deemed complete)",
+         "done": false,
+         "note": "case is On Hold",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "open",
+         "evidence": "case is On Hold"
+        },
+        {
+         "r": "Radius map and neighbour notices mailed",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.31",
+         "basis": "ours",
+         "who": "us",
+         "state": "unknown"
+        },
+        {
+         "r": "Public hearing held",
+         "done": false,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Determination Letter issued",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Notice of Exemption issued (CEQA)",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set — environmental clearance",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Elevations, floor plan and landscape plan approved",
+         "done": false,
+         "note": "",
+         "src": "City record — ZA-2023-3802-ZAD document set",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Appeal period elapsed",
+         "done": false,
+         "note": "",
+         "src": "City field",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Case conditions issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        },
+        {
+         "r": "Entitlement in effect",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "unknown"
+        }
+       ],
+       "done_n": 5,
+       "total": 17,
+       "unconfirmed": 0,
+       "ours_left": 4,
+       "city_left": 8,
+       "unknown_n": 9
+      },
+      "plan_check": {
+       "items": [
+        {
+         "r": "Construction documents submitted",
+         "done": false,
+         "note": "",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Building",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Grading",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.05",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Shoring",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.06",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Pool",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.07",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Plan check fees paid — Retaining wall",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Application accepted (completeness review)",
+         "done": false,
+         "note": "",
+         "src": "eplanLA",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "GPI report accepted",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Soils / geology report accepted",
+         "done": false,
+         "note": "",
+         "src": "LADBS · Budget 3.08",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Soils approval letter issued",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Grading and retaining wall plan accepted",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Structural engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.10",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Shoring engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "MEPFP engineering cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.19",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Title 24 energy compliance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.30",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Fire Life Safety clearance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.25 · Invoice tracker — vendors actually paid",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Dry utility clearance",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.26",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "LID covenant recorded",
+         "done": false,
+         "note": "",
+         "src": "Her projects — Alta Mesa",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Landscape plan cleared",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.04",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Correction rounds cleared",
+         "done": false,
+         "note": "",
+         "src": "LADBS",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "All clearances signed",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 21,
+       "unconfirmed": 0,
+       "ours_left": 16,
+       "city_left": 5,
+       "unknown_n": 0
+      },
+      "rti": {
+       "items": [
+        {
+         "r": "Every clearance signed off",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plans stamped Ready To Issue",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Plan check still valid — not expired",
+         "done": false,
+         "note": "",
+         "src": "Blair: this is the live risk",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 0,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "permits": {
+       "items": [
+        {
+         "r": "Permit fees calculated",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.11",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "School fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Park / Quimby fees paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Affordable Housing Linkage Fee paid",
+         "done": false,
+         "note": "",
+         "src": "Budget · Blair affidavit",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Sewer capacity charge paid",
+         "done": false,
+         "note": "",
+         "src": "Standard LA",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Building permit issued",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.13",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 7,
+       "unconfirmed": 3,
+       "ours_left": 6,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "b_permit": {
+       "items": [
+        {
+         "r": "B-Permit requirement determined",
+         "done": false,
+         "note": "",
+         "src": "San Marco — open question",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Civil engineering for B-Permit",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.13",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "BOE plan approval",
+         "done": false,
+         "note": "",
+         "src": "Blair — BOE Written Determination",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit bond posted",
+         "done": false,
+         "note": "",
+         "src": "Budget 4.12",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "B-Permit issued",
+         "done": false,
+         "note": "",
+         "src": "Gantt",
+         "basis": "ours",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 0,
+       "ours_left": 3,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "haul_route": {
+       "items": [
+        {
+         "r": "Export quantity determined",
+         "done": false,
+         "note": "",
+         "src": "Gantt — San Marco 'maybe'",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route application filed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Haul route hearing held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Haul route approved",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 4,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "grading": {
+       "items": [
+        {
+         "r": "Pre-construction meeting held",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Geotech site inspections scheduled",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.09",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Shoring installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.02",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Excavation and export complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Grading signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 5,
+       "unconfirmed": 3,
+       "ours_left": 4,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "foundation": {
+       "items": [
+        {
+         "r": "Caissons / footings installed",
+         "done": false,
+         "note": "",
+         "src": "Budget 2.03",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rebar inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Foundation signed off",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "framing": {
+       "items": [
+        {
+         "r": "Rough frame complete",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Framing inspection passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 2,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 1,
+       "unknown_n": 0
+      },
+      "inspections": {
+       "items": [
+        {
+         "r": "Testing and special inspections",
+         "done": false,
+         "note": "",
+         "src": "Budget 3.21",
+         "basis": "ours",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Rough inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Final inspections passed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 2,
+       "ours_left": 1,
+       "city_left": 2,
+       "unknown_n": 0
+      },
+      "delivery": {
+       "items": [
+        {
+         "r": "Certificate of Occupancy issued",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "city",
+         "state": "future"
+        },
+        {
+         "r": "Punch list closed",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        },
+        {
+         "r": "Project delivered",
+         "done": false,
+         "note": "",
+         "src": "",
+         "basis": "standard",
+         "who": "us",
+         "state": "future"
+        }
+       ],
+       "done_n": 0,
+       "total": 3,
+       "unconfirmed": 3,
+       "ours_left": 2,
+       "city_left": 1,
+       "unknown_n": 0
+      }
+     },
+     "done_n": 5,
+     "total": 17
+    }
+   }
+  }
+ ],
+ "kpiSparks": {
+  "tasks": [
+   59,
+   59,
+   59,
+   59,
+   59,
+   59,
+   59
+  ],
+  "blockers": [
+   7,
+   7,
+   7,
+   7,
+   7,
+   7,
+   7
+  ],
+  "waiting": [
+   51,
+   51,
+   51,
+   51,
+   51,
+   51,
+   51
+  ],
+  "invoices": [
+   94,
+   94,
+   94,
+   94,
+   94,
+   94,
+   94
+  ]
+ },
+ "tasks": [
+  {
+   "id": "OT-01",
+   "project": "2361-2367 San Marco",
+   "title": "Retain Surveyor (Updated Survey / Topo + Joint Referral Form)",
+   "owner": "Noa",
+   "waiting_for": "Refael",
+   "due": null,
+   "stage": "entitlements",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Action Needed · open since 2026-05-18",
+   "priority": "critical",
+   "last_touched": "2026-08-09",
+   "planned": false
+  },
+  {
+   "id": "OT-02",
+   "project": "2361-2367 San Marco",
+   "title": "Retain Civil Engineer for Grading Plan & B Permit - 2 quotes was received",
+   "owner": "Rowan",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting · open since 2026-05-11",
+   "priority": "critical",
+   "last_touched": "2026-08-18",
+   "planned": true
+  },
+  {
+   "id": "OT-03",
+   "project": "2361-2367 San Marco",
+   "title": "Hold letter corrections",
+   "owner": "Noa",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting · open since 2026-05-13",
+   "priority": "critical",
+   "last_touched": "2026-07-27",
+   "planned": true
+  },
+  {
+   "id": "OT-04",
+   "project": "2361-2367 San Marco",
+   "title": "Retain Certified Arborist - Bardez Landscape (Arsen)",
+   "owner": "Noa",
+   "waiting_for": "Pending Topo Report First",
+   "due": null,
+   "stage": "entitlements",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Action Needed",
+   "priority": "high",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-05",
+   "project": "2361-2367 San Marco",
+   "title": "Retain Landscape Consultant",
+   "owner": "Noa",
+   "waiting_for": "Rowen - proposal was sent",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting",
+   "priority": "high",
+   "last_touched": "2026-07-27",
+   "planned": false
+  },
+  {
+   "id": "OT-06",
+   "project": "2361-2367 San Marco",
+   "title": "Confirm Hilla Group LLC authorization documents are available",
+   "owner": "Noa",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "entitlements",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · On Hold",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-07",
+   "project": "2361-2367 San Marco",
+   "title": "Form LLC for San Marco",
+   "owner": "Jeff",
+   "waiting_for": "Jeff Love",
+   "due": null,
+   "stage": "Entity",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting · open since 2026-07-16",
+   "priority": "normal",
+   "last_touched": "2026-08-02",
+   "planned": false
+  },
+  {
+   "id": "OT-08",
+   "project": "2361-2367 San Marco",
+   "title": "GPI report once we submit the plans - Need to be submited by Serena",
+   "owner": "—",
+   "waiting_for": "Serena",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · On Hold",
+   "priority": "normal",
+   "last_touched": "2026-07-27",
+   "planned": false
+  },
+  {
+   "id": "OT-09",
+   "project": "2361-2367 San Marco",
+   "title": "2 douments Arborist needs to fill and sign",
+   "owner": "Noa",
+   "waiting_for": "Pending Topo Report First",
+   "due": null,
+   "stage": "entitlements",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · On Hold",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-10",
+   "project": "2361-2367 San Marco",
+   "title": "New/Updated Renders",
+   "owner": "Noa",
+   "waiting_for": "Noa",
+   "due": null,
+   "stage": "entitlements",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Action Needed",
+   "priority": "normal",
+   "last_touched": "2026-07-26",
+   "planned": false
+  },
+  {
+   "id": "OT-11",
+   "project": "2650 Rinconia",
+   "title": "Response to 100-B for 2650 Rinconia LLC",
+   "owner": "Noa",
+   "waiting_for": "Rafi",
+   "due": null,
+   "stage": "Entity",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting · open since 2026-07-29",
+   "priority": "critical",
+   "last_touched": "2026-07-29",
+   "planned": false
+  },
+  {
+   "id": "OT-12",
+   "project": "2650 Rinconia",
+   "title": "Retain civil engneer",
+   "owner": "—",
+   "waiting_for": null,
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker",
+   "priority": "critical",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-13",
+   "project": "2650 Rinconia",
+   "title": "Arborist Proposal Request",
+   "owner": "Noa",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · On Hold",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-14",
+   "project": "2650 Rinconia",
+   "title": "Retain Landscape Consultant",
+   "owner": "—",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker",
+   "priority": "normal",
+   "last_touched": "2026-07-28",
+   "planned": false
+  },
+  {
+   "id": "OT-15",
+   "project": "2650 Rinconia",
+   "title": "Grading plan complete",
+   "owner": "Rowan",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · open since 2026-08-05",
+   "priority": "high",
+   "last_touched": "2026-08-05",
+   "planned": true
+  },
+  {
+   "id": "OT-16",
+   "project": "3375 Blair Dr",
+   "title": "Obtain Interior Design proposal - Carlos Peraita",
+   "owner": "Premise (Rowan)",
+   "waiting_for": "Jeff love",
+   "due": null,
+   "stage": "Design",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "critical",
+   "last_touched": "2026-08-09",
+   "planned": false
+  },
+  {
+   "id": "OT-17",
+   "project": "3375 Blair Dr",
+   "title": "BOE Written Determination -",
+   "owner": "Noa",
+   "waiting_for": null,
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting",
+   "priority": "critical",
+   "last_touched": "",
+   "planned": true
+  },
+  {
+   "id": "OT-18",
+   "project": "3375 Blair Dr",
+   "title": "Execute Linkage Fee Affidavit",
+   "owner": "Noa",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "permits",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting · open since 2026-07-15",
+   "priority": "critical",
+   "last_touched": "2026-08-02",
+   "planned": false
+  },
+  {
+   "id": "OT-19",
+   "project": "3375 Blair Dr",
+   "title": "Fill out the forms and send them back",
+   "owner": "Noa",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "Legal",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "high",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-20",
+   "project": "3375 Blair Dr",
+   "title": "Preapre for permit fees - ask raf how we should pay it",
+   "owner": "Refael",
+   "waiting_for": null,
+   "due": null,
+   "stage": "permits",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-21",
+   "project": "3375 Blair Dr",
+   "title": "Construction Financing - Loan Brokers Quotes / Term Sheets",
+   "owner": "Rowan",
+   "waiting_for": "Rowan - required-info list; then Noa & Mor to gather from Refael",
+   "due": null,
+   "stage": "Finance",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "critical",
+   "last_touched": "2026-07-29",
+   "planned": false
+  },
+  {
+   "id": "OT-22",
+   "project": "3375 Blair Dr",
+   "title": "Blair Budget Tracker - Locate Missing Critical Items",
+   "owner": "Noa",
+   "waiting_for": "Rowan - to mark the missing items",
+   "due": null,
+   "stage": "Finance",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "critical",
+   "last_touched": "2026-07-29",
+   "planned": false
+  },
+  {
+   "id": "OT-23",
+   "project": "3375 Blair Dr",
+   "title": "PC (Plan Check) Extension Approval",
+   "owner": "Crest (Abhi)",
+   "waiting_for": "City",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting · open since 2026-08-01",
+   "priority": "normal",
+   "last_touched": "2026-08-01",
+   "planned": true
+  },
+  {
+   "id": "OT-24",
+   "project": "3375 Blair Dr",
+   "title": "Request expedited Planning Case Filing Appointment",
+   "owner": "Crest (Abhi)",
+   "waiting_for": "City",
+   "due": null,
+   "stage": "entitlements",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting · open since 2026-08-01",
+   "priority": "normal",
+   "last_touched": "2026-08-01",
+   "planned": true
+  },
+  {
+   "id": "OT-25",
+   "project": "3375 Blair Dr",
+   "title": "Have Dennis Release the Project Plans",
+   "owner": "Refael",
+   "waiting_for": "Rafi",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting · open since 2026-06-28",
+   "priority": "normal",
+   "last_touched": "2026-07-30",
+   "planned": false
+  },
+  {
+   "id": "OT-26",
+   "project": "3701 Alta Mesa",
+   "title": "Pay Quality Mapping invoice - (ZAD Notifications)",
+   "owner": "Noa",
+   "waiting_for": "Noa",
+   "due": null,
+   "stage": "entitlements",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Action Needed",
+   "priority": "critical",
+   "last_touched": "2026-08-18",
+   "planned": false
+  },
+  {
+   "id": "OT-27",
+   "project": "3701 Alta Mesa",
+   "title": "Retain all consultants for Plan Check",
+   "owner": "Premise (Rowan)",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · On Hold",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": true
+  },
+  {
+   "id": "OT-28",
+   "project": "3701 Alta Mesa",
+   "title": "Retain Arborist - Tree Survey",
+   "owner": "Noa",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "entitlements",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-29",
+   "project": "3701 Alta Mesa",
+   "title": "Pool Permit - Push with City",
+   "owner": "Noa",
+   "waiting_for": null,
+   "due": null,
+   "stage": "permits",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-30",
+   "project": "3701 Alta Mesa",
+   "title": "Replace Gibbs with Serena in City's plans",
+   "owner": "Noa",
+   "waiting_for": null,
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-31",
+   "project": "3701 Alta Mesa",
+   "title": "Follow Up on Deemed Complete Status",
+   "owner": "—",
+   "waiting_for": "Abhi (City)",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "2026-07-26",
+   "planned": true
+  },
+  {
+   "id": "OT-32",
+   "project": "3701 Alta Mesa",
+   "title": "Notarize & Record LID Covenant",
+   "owner": "Serena",
+   "waiting_for": "Rafi",
+   "due": null,
+   "stage": "plan_check",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting · open since 2026-07-30",
+   "priority": "normal",
+   "last_touched": "2026-08-02",
+   "planned": false
+  },
+  {
+   "id": "OT-33",
+   "project": "9268-9270 Flicker Way",
+   "title": "Write email to Chilean architect - quote |Draft to Rafi",
+   "owner": "Noa",
+   "waiting_for": "Refael",
+   "due": null,
+   "stage": "feasibility",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · On Hold",
+   "priority": "critical",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-34",
+   "project": "All",
+   "title": "Lot Brush Clearences company quotes",
+   "owner": "Noa",
+   "waiting_for": "Rafi",
+   "due": null,
+   "stage": "Property",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "critical",
+   "last_touched": "2026-08-02",
+   "planned": false
+  },
+  {
+   "id": "OT-35",
+   "project": "All",
+   "title": "Update Corporate Mailing Address Across All Company Records",
+   "owner": "Noa",
+   "waiting_for": "Power of Attorney",
+   "due": null,
+   "stage": "Entity",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "critical",
+   "last_touched": "",
+   "planned": true
+  },
+  {
+   "id": "OT-36",
+   "project": "All",
+   "title": "Crest incoives",
+   "owner": "Noa",
+   "waiting_for": "Rafi",
+   "due": null,
+   "stage": "Accounting",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "critical",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-37",
+   "project": "All",
+   "title": "Business Bank Accounts - Credit Cards",
+   "owner": "Noa",
+   "waiting_for": "Rafi",
+   "due": null,
+   "stage": "Entity",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting · open since 2026-07-22",
+   "priority": "critical",
+   "last_touched": "2026-07-27",
+   "planned": false
+  },
+  {
+   "id": "OT-38",
+   "project": "All",
+   "title": "Organize project folders — all projects",
+   "owner": "Noa",
+   "waiting_for": null,
+   "due": null,
+   "stage": "Ops",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Action Needed",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-39",
+   "project": "All",
+   "title": "Projects status report from Rowan",
+   "owner": "Noa",
+   "waiting_for": "Rowan",
+   "due": null,
+   "stage": "Ops",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-40",
+   "project": "All",
+   "title": "GiBBS Invoices",
+   "owner": "Noa",
+   "waiting_for": "Jeff Love",
+   "due": null,
+   "stage": "Accounting",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "2026-07-27",
+   "planned": false
+  },
+  {
+   "id": "OT-41",
+   "project": "All",
+   "title": "Rowan's Agreement",
+   "owner": "Noa",
+   "waiting_for": "Refael",
+   "due": null,
+   "stage": "Legal",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-42",
+   "project": "All",
+   "title": "Power of Attorney and Signing Authority",
+   "owner": "Noa",
+   "waiting_for": "Jeff Love",
+   "due": null,
+   "stage": "Legal",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "2026-06-08",
+   "planned": false
+  },
+  {
+   "id": "OT-43",
+   "project": "All",
+   "title": "Noa's agreement",
+   "owner": "Noa",
+   "waiting_for": "Jeff Love",
+   "due": null,
+   "stage": "Legal",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "2026-06-08",
+   "planned": false
+  },
+  {
+   "id": "OT-44",
+   "project": "All",
+   "title": "(All 4 Active Projects) Shoval Haziza - Contractor Bids",
+   "owner": "Shoval",
+   "waiting_for": "Shoval",
+   "due": null,
+   "stage": "feasibility",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": false,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-45",
+   "project": "All",
+   "title": "Project Schedules - Align Timelines for All Active Projects",
+   "owner": "Rowan",
+   "waiting_for": "Rowan - coordinating with Serena",
+   "due": null,
+   "stage": "Ops",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "2026-07-27",
+   "planned": false
+  },
+  {
+   "id": "OT-46",
+   "project": "All",
+   "title": "Hilla Group Financials for Loans",
+   "owner": "Rowan",
+   "waiting_for": "Rafi",
+   "due": null,
+   "stage": "Finance",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting · open since 2026-07-30",
+   "priority": "normal",
+   "last_touched": "2026-07-30",
+   "planned": false
+  },
+  {
+   "id": "OT-47",
+   "project": "All",
+   "title": "Aug invoices",
+   "owner": "Noa",
+   "waiting_for": "Yaniv/Rowan",
+   "due": null,
+   "stage": "Accounting",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Action Needed · open since 2026-08-02",
+   "priority": "normal",
+   "last_touched": "2026-08-02",
+   "planned": false
+  },
+  {
+   "id": "OT-48",
+   "project": "All",
+   "title": "Noa's CAR",
+   "owner": "Noa",
+   "waiting_for": "Rafi",
+   "due": null,
+   "stage": "Ops",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": false
+  },
+  {
+   "id": "OT-49",
+   "project": "All",
+   "title": "Serena - projects if er have any outstanding items and pending invoices",
+   "owner": "—",
+   "waiting_for": null,
+   "due": null,
+   "stage": "Accounting",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "2026-08-09",
+   "planned": false
+  },
+  {
+   "id": "OT-50",
+   "project": "All",
+   "title": "Artes Design build - Legal Case Management",
+   "owner": "Noa",
+   "waiting_for": "Ron",
+   "due": "2027-06-14",
+   "stage": "Legal",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "normal",
+   "last_touched": "",
+   "planned": true
+  },
+  {
+   "id": "OT-51",
+   "project": "9268-9270 Flicker Way",
+   "title": "Review New Lawsuit – Flicker LLC / Hilla Group / Refael",
+   "owner": "Noa",
+   "waiting_for": "Ron",
+   "due": "2026-08-03",
+   "stage": "Legal",
+   "stage_guess": false,
+   "stage_matched": "map",
+   "admin": true,
+   "source": "Operations Tracker · Waiting",
+   "priority": "high",
+   "last_touched": "2026-08-10",
+   "planned": true
+  },
+  {
+   "id": "EM-01",
+   "project": "3375 Blair Dr",
+   "title": "Attend the Plan Approval filing appointment at the City Planning Figueroa counter",
+   "owner": "Abhi Kalra (Crest)",
+   "waiting_for": null,
+   "due": "2026-08-25",
+   "stage": "entitlements",
+   "source": "Planning Figueroa Counter confirmation (Aug 14) · not in tracker",
+   "priority": "high",
+   "last_touched": "2026-08-14",
+   "planned": true
+  },
+  {
+   "id": "EM-02",
+   "project": "3375 Blair Dr",
+   "title": "Send P&G Brokerage the bond details so the renewal decision can be made",
+   "owner": "Noa",
+   "waiting_for": "Rowan - confirmation of what the bond covers",
+   "due": null,
+   "stage": "permits",
+   "source": "Email 'Blair bond renewal' (Aug 12) · not in tracker",
+   "priority": "high",
+   "last_touched": "2026-08-12",
+   "planned": false
+  },
+  {
+   "id": "EM-03",
+   "project": "2650 Rinconia",
+   "title": "Obtain the soil approval letter from LADBS",
+   "owner": "Serena Feit (ReDefined)",
+   "waiting_for": "LADBS review of the resubmitted soil report (~3 weeks)",
+   "due": null,
+   "stage": "plan_check",
+   "source": "Email 'Rinconia Plan Submittal' (Aug 12)  · correction on submittal #308694 · not in tracker",
+   "priority": "high",
+   "last_touched": "2026-08-12",
+   "planned": true
+  },
+  {
+   "id": "EM-04",
+   "project": "2650 Rinconia",
+   "title": "Track the completeness review of resubmitted application Ref. #308694",
+   "owner": "Serena Feit (ReDefined)",
+   "waiting_for": "LADBS completeness review (1-2 business days)",
+   "due": null,
+   "stage": "plan_check",
+   "source": "eplanLA notification forwarded Aug 14 · not in tracker",
+   "priority": "normal",
+   "last_touched": "2026-08-14",
+   "planned": true
+  },
+  {
+   "id": "EM-05",
+   "project": "3701 Alta Mesa",
+   "title": "Get the LID document notarized and recorded so ReDefined can upload it for the LID clearance",
+   "owner": "Rowan Kelshaw",
+   "waiting_for": "Rowan - signing authority",
+   "due": null,
+   "stage": "plan_check",
+   "source": "Email 'Alta Mesa LID' (Jul 30, followed up Aug 12) · not in tracker",
+   "priority": "high",
+   "last_touched": "2026-08-12",
+   "planned": false
+  },
+  {
+   "id": "EM-06",
+   "project": "9268-9270 Flicker Way",
+   "title": "Decide on Crest's revised permit-investigation scope (10-15 hours vs the 5 hours quoted verbally)",
+   "owner": "Noa",
+   "waiting_for": "Refael / Rowan approval",
+   "due": null,
+   "stage": "feasibility",
+   "source": "Email from Abhi Kalra (Aug 10) · not in tracker",
+   "priority": "high",
+   "last_touched": "2026-08-10",
+   "planned": false
+  },
+  {
+   "id": "EM-07",
+   "project": "All",
+   "title": "Restructure the invoice tracker to separate contracted professional fees from reimbursements",
+   "owner": "Noa",
+   "waiting_for": "Alignment meeting with Rowan",
+   "due": null,
+   "stage": "feasibility",
+   "source": "Email 'Invoice Tracker - Catagory' (Aug 13) · not in tracker",
+   "priority": "high",
+   "last_touched": "2026-08-13",
+   "planned": false
+  },
+  {
+   "id": "EM-08",
+   "project": "All",
+   "title": "Follow up on the $43,314.04 transfer to the US entities",
+   "owner": "Noa",
+   "waiting_for": "Reut Hiki - transfer confirmation",
+   "due": null,
+   "stage": "feasibility",
+   "source": "Email 'Transferring Payments | LA | 8/12/26' (Aug 13) · not in tracker",
+   "priority": "high",
+   "last_touched": "2026-08-13",
+   "planned": false
+  }
+ ],
+ "blockers": [
+  {
+   "project": "2361-2367 San Marco",
+   "what": "ZAD/CU1 case is On Hold at the City. The Hold Letter cannot be cleared because the grading plan has no engineer: Mid-Cities will not sign the MSA provided.",
+   "blocked_by": "Mid-Cities refusing the MSA — Rowan negotiating or approaching other engineers, then Refael decides",
+   "days_at_risk": 72,
+   "days_stuck": 9,
+   "downstream": [
+    "entitlements",
+    "plan_check",
+    "permits"
+   ],
+   "suggested": "Get Refael a decision this week: accept Mid-Cities' terms, or award another civil engineer. The soils report corrections also need the grading plan to finalize, so one refusal is holding two tracks.",
+   "draft": "Refael — Mid-Cities will not sign the MSA as drafted, and they are the engineer we planned to use for the San Marco grading plan. Two things are waiting on this: the Hold Letter requires the grading plan, and the LADBS soils corrections cannot be finalized without it. Rowan can either negotiate their terms or award another engineer. Can we get your decision this week so the case stops sitting On Hold?"
+  },
+  {
+   "project": "2361-2367 San Marco",
+   "what": "LADBS grading division denied the soils/geology report. Corrections must go back through the engineer who prepared it.",
+   "blocked_by": "Grover-Hollingsworth — scope and hours not yet agreed",
+   "days_at_risk": 2,
+   "days_stuck": 2,
+   "downstream": [
+    "entitlements",
+    "plan_check"
+   ],
+   "suggested": "Get an hours estimate from Grover before they start, since they may bill hourly, then release them to respond to the denial.",
+   "draft": "Rowan — before Grover-Hollingsworth start on the soils corrections, can we get an estimate of hours? They may bill hourly and we want the number agreed up front. Once that is settled they can respond to the grading division's denial letter from 08/17."
+  },
+  {
+   "project": "3701 Alta Mesa",
+   "what": "ZAD case is On Hold and the hearing cannot be scheduled until neighbour notices are mailed. Quality Mapping will not release the mailing files until their invoices are paid.",
+   "blocked_by": "Unpaid Quality Mapping invoices — $627.00 and $296.42",
+   "days_at_risk": 2,
+   "days_stuck": 2,
+   "downstream": [
+    "entitlements",
+    "plan_check"
+   ],
+   "suggested": "Pay $923.42 this week and return the signed proposal, so QMS release the files and Crest can send the mailing package to Planning ahead of the hearing.",
+   "draft": "Rowan — the two Quality Mapping invoices for Alta Mesa total $923.42. QMS will not release the mailing files until they are paid, and Planning need the mailing package before a hearing date can be set. Deemed Complete is expected this week, so this is the only thing standing between us and a hearing date. Can we release payment today?"
+  },
+  {
+   "project": "3701 Alta Mesa",
+   "what": "Deemed Complete letter was expected end of July and has still not been issued. City record shows no approved documents.",
+   "blocked_by": "City Planning — Abraham Lamontagne",
+   "days_at_risk": 19,
+   "days_stuck": 9,
+   "downstream": [
+    "entitlements"
+   ],
+   "suggested": "Nothing outstanding on our side — the case is complete per the 08/03 meeting. Crest to keep pressing Planning for the letter.",
+   "draft": "Abhi — the Deemed Complete letter for 3701 Alta Mesa was expected by end of July and the case still shows On Hold with no approved documents on the City record. Our side is complete. Can you press Abraham Lamontagne for the letter this week so the hearing date you requested can be confirmed?"
+  },
+  {
+   "project": "2650 Rinconia",
+   "what": "LADBS returned the soils report and requires an addendum before the Plan Check submittal can proceed.",
+   "blocked_by": "Bob — addendum not yet reviewed or resubmitted",
+   "days_at_risk": 2,
+   "days_stuck": 2,
+   "downstream": [
+    "plan_check",
+    "rti"
+   ],
+   "suggested": "Get the addendum back from Bob this week, and in parallel award the grading and retaining wall plan so the two do not run sequentially.",
+   "draft": "Rowan — LADBS have returned the Rinconia soils report asking for an addendum. Can we get Bob's turnaround on that this week? Separately, the grading and retaining wall plan proposal is still not awarded — running these in parallel saves us a cycle."
+  },
+  {
+   "project": "2650 Rinconia",
+   "what": "Response to BOE 100-B is now on its third and final request from the County.",
+   "blocked_by": "Refael — has not answered Rowan's questions",
+   "days_at_risk": 9,
+   "days_stuck": 9,
+   "downstream": [
+    "plan_check"
+   ],
+   "suggested": "Rowan says he only needs Rafi to answer a few questions to close this out. Get those answers today.",
+   "draft": "Rafi — the 100-B response for 2650 Rinconia LLC is now marked third and final request. Rowan has said he only needs your answers to a few questions to close it. Can we get fifteen minutes today? Jeff is also checking with Kyle on his side."
+  },
+  {
+   "project": "3375 Blair Dr",
+   "what": "Plan Check extension outcome is unknown. A call with Planning took place 08/18 and no email records what was decided.",
+   "blocked_by": "Awaiting word from Tony Russo / Abhi on the 08/18 call with Eugene Barbeau",
+   "days_at_risk": 1,
+   "days_stuck": 1,
+   "downstream": [
+    "entitlements"
+   ],
+   "suggested": "Ask Tony directly what Eugene decided. If denied, the plans resubmit as a new Plan Check under the current code cycle — which is why Rowan wants an architect retained now.",
+   "draft": "Tony — what came out of the call with Eugene on the 18th regarding the Plan Check extension? We have the Plan Approval filing on the 25th and need to know whether we are also preparing for a new Plan Check submittal under the current code cycle. If that is the direction, we want to retain the architect this week rather than after."
+  }
+ ],
+ "invoices": [
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "86706",
+   "amount": 268,
+   "due": "2025-11-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "87716",
+   "amount": 5152.5,
+   "due": "2025-12-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "A.G.I Geotechnical",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "401869",
+   "amount": 5950,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Thang le& Associates",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "—",
+   "amount": 5250,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "88483",
+   "amount": 2799.5,
+   "due": "2026-01-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "88488",
+   "amount": 536,
+   "due": "2026-01-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Rosenberg&Koffman",
+   "project": "All",
+   "llc": "Hilla Group LLC",
+   "number": "65578",
+   "amount": 4071.87,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "89535",
+   "amount": 4871.5,
+   "due": "2026-02-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "89524",
+   "amount": 1072,
+   "due": "2026-02-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "P&G Insurance ",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "260420",
+   "amount": 63,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "England Ecology ",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "504",
+   "amount": 1875,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "England Ecology ",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "505",
+   "amount": 1875,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "89619",
+   "amount": 5000,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Grover-Hollingsworth",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "N/A",
+   "amount": 3200,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "89758",
+   "amount": 581.98,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "89967",
+   "amount": 741,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "90304",
+   "amount": 301.5,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "89618",
+   "amount": 226.5,
+   "due": "2026-03-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "91102",
+   "amount": 2432,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "91062",
+   "amount": 604.5,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "91297",
+   "amount": 1379,
+   "due": "2026-04-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "FKGB Accounting",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "9056",
+   "amount": 549.04,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "FKGB Accounting",
+   "project": "9268-9270 Flicker Way",
+   "llc": "9270 Flicker LLC",
+   "number": "9057",
+   "amount": 549.04,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "FKGB Accounting",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "9055",
+   "amount": 549.04,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "City of Los Angeles - Fire Department",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "BF260012763",
+   "amount": 93,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "City of Los Angeles - Fire Department",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "BF260012764",
+   "amount": 93,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "92303",
+   "amount": 1732.5,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "91628",
+   "amount": 107.94,
+   "due": "2026-05-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "91815",
+   "amount": 7550.5,
+   "due": "2026-05-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "92226",
+   "amount": 4981.5,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "GIBBS GIDEN",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "341582",
+   "amount": 202.5,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "GIBBS GIDEN",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "341583",
+   "amount": 3920,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "93071",
+   "amount": 1985.5,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "93064",
+   "amount": 4473.5,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "92459",
+   "amount": 309.54,
+   "due": "2026-06-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "92673",
+   "amount": 1159,
+   "due": "2026-06-15",
+   "approval": 2,
+   "status": "appr"
+  },
+  {
+   "vendor": "Grover-Hollingsworth",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "56548",
+   "amount": 5000,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "1",
+   "amount": 750,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "1",
+   "amount": 500,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "1",
+   "amount": 500,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "9268-9270 Flicker Way",
+   "llc": "9270 Flicker LLC",
+   "number": "1",
+   "amount": 250,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "1",
+   "amount": 4250,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "AGE CONSULTATION ",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "25-RED-04",
+   "amount": 250,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "AGE CONSULTATION ",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "26-RED-11",
+   "amount": 250,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "A.G.I Geotechnical",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "35965",
+   "amount": 3656,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Amazon ",
+   "project": "All",
+   "llc": "Hilla Group LLC",
+   "number": "113-6697214-6764214",
+   "amount": 377.72,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Anthropic, PBC",
+   "project": "All",
+   "llc": "Hilla Group LLC",
+   "number": "PCLCCNWN-0001",
+   "amount": 100,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "GIBBS GIDEN",
+   "project": "All",
+   "llc": "Hilla Group LLC",
+   "number": "341584",
+   "amount": 3640,
+   "due": "2026-07-08",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "GIBBS GIDEN",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "341585",
+   "amount": 135,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "94122",
+   "amount": 8678,
+   "due": "2026-07-15",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "94117",
+   "amount": 7075.5,
+   "due": "2026-07-15",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "94070",
+   "amount": 4076,
+   "due": "2026-07-18",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "20260620_BLAIR_01",
+   "amount": 6000,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "20260620_RINCONIA_01",
+   "amount": 6000,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "20260620_3701ALTAMESA_01",
+   "amount": 6000,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "20260620_SANMARCO_01",
+   "amount": 6000,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "All",
+   "llc": "Hilla Group LLC",
+   "number": "1",
+   "amount": 7000,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "7",
+   "amount": 951,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "8",
+   "amount": 951,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "9",
+   "amount": 679,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "Crescent Dr",
+   "llc": "Hella-Effective LLC",
+   "number": "10",
+   "amount": 181.3,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "Crescent Dr",
+   "llc": "Hella-Effective LLC",
+   "number": "10",
+   "amount": 181.3,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "Crescent Dr",
+   "llc": "Hella-Effective LLC",
+   "number": "10",
+   "amount": 181.3,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "6",
+   "amount": 3125,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "LADBS",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "2909695",
+   "amount": 1390,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Anthropic, PBC",
+   "project": "All",
+   "llc": "Hilla Group LLC",
+   "number": "PCLCCNWN-0002",
+   "amount": 100,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "94238",
+   "amount": 261.41,
+   "due": "2026-08-15",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "94660",
+   "amount": 2032.5,
+   "due": "2026-08-15",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "94655",
+   "amount": 2510.5,
+   "due": "2026-08-15",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "LADBS",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "IN2916650",
+   "amount": 0,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "N/A",
+   "amount": 242.13,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "AVALON LANDSCAPE INC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "3931",
+   "amount": 1200,
+   "due": "2026-08-28",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "AVALON LANDSCAPE INC",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "4932",
+   "amount": 1200,
+   "due": "2026-08-28",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "AVALON LANDSCAPE INC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "4933",
+   "amount": 450,
+   "due": "2026-08-28",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "AVALON LANDSCAPE INC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "4934",
+   "amount": 1100,
+   "due": "2026-08-28",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "AVALON LANDSCAPE INC",
+   "project": "3941 Alta Mesa",
+   "llc": "Hilla Group LLC",
+   "number": "4935",
+   "amount": 900,
+   "due": "2026-08-28",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "AVALON LANDSCAPE INC",
+   "project": "Crescent Dr",
+   "llc": "Hella-Effective LLC",
+   "number": "4936",
+   "amount": 2400,
+   "due": "2026-08-28",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "AVALON LANDSCAPE INC",
+   "project": "Crescent Dr",
+   "llc": "Viewpoint Estates LLC",
+   "number": "4937",
+   "amount": 1900,
+   "due": "2026-08-28",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "AVALON LANDSCAPE INC",
+   "project": "9268-9270 Flicker Way",
+   "llc": "9270 Flicker LLC",
+   "number": "4938",
+   "amount": 5200,
+   "due": "2026-08-28",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "12",
+   "amount": 1042,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "13",
+   "amount": 868,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "14",
+   "amount": 868,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "SNO Solutions INC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "11",
+   "amount": 3472,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Crest Real Estate LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "94249",
+   "amount": 232.37,
+   "due": "2026-08-30",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "B.A.S.F Drafting Services",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "6898",
+   "amount": 500,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "B.A.S.F Drafting Services",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "6897",
+   "amount": 500,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "Anthropic, PBC",
+   "project": "All",
+   "llc": "Hilla Group LLC",
+   "number": "PCLCCNWN-0003",
+   "amount": 100,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "INV-HILLA-AM002",
+   "amount": 2000,
+   "due": "2026-09-12",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "Quality Mapping Service",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "26-141",
+   "amount": 627,
+   "due": "2026-09-16",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "Quality Mapping Service",
+   "project": "3701 Alta Mesa",
+   "llc": "3701 Alta Mesa LLC",
+   "number": "26-141M",
+   "amount": 296.42,
+   "due": "2026-09-16",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "EZRT CORP",
+   "project": "All",
+   "llc": "Hilla Group LLC",
+   "number": "9DANMFZG-0001",
+   "amount": 305.33,
+   "due": null,
+   "approval": 3,
+   "status": "paid"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "2650 Rinconia",
+   "llc": "2650 Rinconia LLC",
+   "number": "INV-HILLA-RIN002",
+   "amount": 2000,
+   "due": "2026-09-12",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "3375 Blair Dr",
+   "llc": "3374 Blair LLC",
+   "number": "INV-HILLA-BLAIR002",
+   "amount": 2000,
+   "due": "2026-09-12",
+   "approval": 1,
+   "status": "pend"
+  },
+  {
+   "vendor": "PREMISE LLC",
+   "project": "2361-2367 San Marco",
+   "llc": "Hilla Group LLC",
+   "number": "INV-HILLA-SM002",
+   "amount": 2000,
+   "due": "2026-09-12",
+   "approval": 1,
+   "status": "pend"
+  }
+ ],
+ "digest": [
+  {
+   "t": "Retain Surveyor (Updated Survey / Topo + Joint Referral Form)",
+   "why": "2361-2367 San Marco · entitlements · waiting: Refael"
+  },
+  {
+   "t": "Retain Civil Engineer for Grading Plan & B Permit - 2 quotes was received",
+   "why": "2361-2367 San Marco · plan_check · waiting: Rowan"
+  },
+  {
+   "t": "Hold letter corrections",
+   "why": "2361-2367 San Marco · plan_check · waiting: Rowan"
+  },
+  {
+   "t": "Response to 100-B for 2650 Rinconia LLC",
+   "why": "2650 Rinconia · Entity · waiting: Rafi"
+  },
+  {
+   "t": "Retain civil engneer",
+   "why": "2650 Rinconia · plan_check"
+  }
+ ],
+ "decisions": [
+  {
+   "t": "Cancelled the existing Bureau of Engineering appointment so the Plan Approval filing could be booked - confirmed for Tuesday Aug 25, 2026 at 10:00 AM at the City Planning Figueroa counter, with Abhi Kalra attending",
+   "why": "3375 Blair Dr · Abhi Kalra"
+  },
+  {
+   "t": "Carlos Peraita's interior design agreement was signed via DocuSign, with two added terms: no use of the Hilla Group name, logo or project name in public-facing materials without written approval, and confirmation that supplemental changes are not expected to exceed 30 hours",
+   "why": "3375 Blair Dr · Rowan Kelshaw"
+  },
+  {
+   "t": "Submit the extension to Planning for review before updating the plans to current code; if the extension fails, resubmit to Plan Check while the Plan Approval is processed",
+   "why": "3375 Blair Dr · Tony Russo"
+  },
+  {
+   "t": "Commission a grading plan rather than continue arguing the requirement with the plan checker - the GPI confirms it is required in a special grading zone",
+   "why": "2650 Rinconia · Rowan Kelshaw"
+  },
+  {
+   "t": "The invoice tracker will separate contracted professional fees from reimbursements (e.g. the $242.13 Rinconia LLC paid Premise LLC is a reimbursement, not a fee)",
+   "why": "All · Rowan Kelshaw"
+  }
+ ],
+ "bids": [],
+ "directory": [
+  {
+   "name": "PREMISE",
+   "role": "Owners Rep/PM",
+   "projects": "3701 Alta Mesa, San Marco",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Rowan Kelshaw · Partner · rowan@bypremise.com · 301-682-1602",
+   "open": 10,
+   "hue": "#6FA287"
+  },
+  {
+   "name": "Crest Real Estate",
+   "role": "Permit Consultant",
+   "projects": "3701 Alta Mesa, San Marco",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Abhi Kalra · Project Manager · abhi@crestrealestate.com · 310-666-9597",
+   "open": 5,
+   "hue": "#D99E63"
+  },
+  {
+   "name": "Gibs Gidden",
+   "role": "Attorney/Land Use Consultant",
+   "projects": "Blair",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Jeff Love · 513-978-6184",
+   "open": 4,
+   "hue": "#4A80B8"
+  },
+  {
+   "name": "ReDefined Consulting",
+   "role": "Architect of Record",
+   "projects": "3701 Alta Mesa, Rinconia, San Marco",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Serena Feit · Founder · serena@redefinedconsulting.com · 310-780-1146",
+   "open": 4,
+   "hue": "#C97D6F"
+  },
+  {
+   "name": "Bardez Landscape Services",
+   "role": "Arborist",
+   "projects": "Blair, Rinconia, San Marco",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Arsen Margossian · arsenm@pacbell.net · 818-669-6469",
+   "open": 3,
+   "hue": "#6FA287"
+  },
+  {
+   "name": "Avalon Landscaping",
+   "role": "Bruch Clearance",
+   "projects": "3701 Alta Mesa, 3941 Alta Mesa, Crescent, Flicker, Rinconia, San Marco",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Veronica · lcadiz@avalonlandscaping.com",
+   "open": 1,
+   "hue": "#D99E63"
+  },
+  {
+   "name": "B.A.S.F Drafting",
+   "role": "Surveyor",
+   "projects": "Rinconia, San Marco",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Amin Basfar · amin.basf@gmail.com",
+   "open": 1,
+   "hue": "#4A80B8"
+  },
+  {
+   "name": "GIBBS Architects",
+   "role": "Architect of Record",
+   "projects": "Blair",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Kurt Gibbs · Owner · kurt@gibbs1934.com · 310-488-3500",
+   "open": 1,
+   "hue": "#C97D6F"
+  },
+  {
+   "name": "Hôf",
+   "role": "Landscape Architect",
+   "projects": "3701 Alta Mesa",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Shams Khoram · info@hofplanning.com · 951-961-4003",
+   "open": 1,
+   "hue": "#6FA287"
+  },
+  {
+   "name": "A.G.I. Geotechnical",
+   "role": "Geo Engineer",
+   "projects": "San Marco",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Ernest J. Bovenizer · ernest@hillsideinspections.com · 949-226-2604",
+   "open": 0,
+   "hue": "#D99E63"
+  },
+  {
+   "name": "C.L. Geosolutions",
+   "role": "Geo Engineer",
+   "projects": "3701 Alta Mesa, Blair",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Ande · info@clgeosolutions.com / cygeotech@sbcglobal.net · 818-341-1899",
+   "open": 0,
+   "hue": "#4A80B8"
+  },
+  {
+   "name": "Chaya Orloff",
+   "role": "Interior Designer",
+   "projects": "Blair",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Chaya Orloff · Chayaorloff@gmail.com · 732-267-2866",
+   "open": 0,
+   "hue": "#C97D6F"
+  },
+  {
+   "name": "Civil Engineering Services",
+   "role": "Civil Engineer",
+   "projects": "Crescent, Flicker",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Frank · info@greystone.com · 310-405-2341",
+   "open": 0,
+   "hue": "#6FA287"
+  },
+  {
+   "name": "COMPANY",
+   "role": "Consultant",
+   "projects": "3701 Alta Mesa, 3941 Alta Mesa, Blair, Crescent, Flicker, Rinconia, San Marco",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "CONTACT · TITLE · EMAIL · TEL",
+   "open": 0,
+   "hue": "#D99E63"
+  },
+  {
+   "name": "Dennis Banks Consulting",
+   "role": "Permit Expeditor",
+   "projects": "Blair",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Dennis Banks/Sonia Rivas · Dennisbanks98@gmail.com/Sonia@lmera.com · 323-445-7506",
+   "open": 0,
+   "hue": "#4A80B8"
+  },
+  {
+   "name": "England Ecology",
+   "role": "Biologist",
+   "projects": "3701 Alta Mesa, San Marco",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Marcus England · Principal · marcus@mcengland.com · 213-304-1826",
+   "open": 0,
+   "hue": "#C97D6F"
+  },
+  {
+   "name": "GM & MK",
+   "role": "Civil Engineer",
+   "projects": "Blair",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "George Malkov · gpmarkov@gmail.com · 818-486-2581",
+   "open": 0,
+   "hue": "#6FA287"
+  },
+  {
+   "name": "Green Republic",
+   "role": "Landscape Architect",
+   "projects": "Crescent",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Motti Buskila · Mottib@greenrepubliclandscapes.com · 818-288-8060",
+   "open": 0,
+   "hue": "#D99E63"
+  },
+  {
+   "name": "Green Republic Lendscape",
+   "role": "Landscape Architect",
+   "projects": "3941 Alta Mesa",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Motti Buskila · Mottib@greenrepubliclandscapes.com · 818-288-8060",
+   "open": 0,
+   "hue": "#4A80B8"
+  },
+  {
+   "name": "Grover Hollingsworth",
+   "role": "Geo Engineer",
+   "projects": "Rinconia",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Greg Byrne · gbyrne@ghageo.com · 818-427-4114",
+   "open": 0,
+   "hue": "#C97D6F"
+  },
+  {
+   "name": "Hilla Group",
+   "role": "Ownership",
+   "projects": "3701 Alta Mesa, San Marco",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Noa Meir · Admin Ops Manager · 213-697-8788",
+   "open": 0,
+   "hue": "#6FA287"
+  },
+  {
+   "name": "Irvine Geotechnical",
+   "role": "Geo Engineer",
+   "projects": "Crescent",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Jon A Irvine · jirvine@irvinegeotech.com · 626-844-6641",
+   "open": 0,
+   "hue": "#D99E63"
+  },
+  {
+   "name": "Ivy Green Construction",
+   "role": "Structural Engineer",
+   "projects": "3941 Alta Mesa, Crescent",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Byron Valencia · contact@ivygreenconstruction.com · 818-488-6168",
+   "open": 0,
+   "hue": "#4A80B8"
+  },
+  {
+   "name": "JK & Associates",
+   "role": "Surveyor",
+   "projects": "3701 Alta Mesa, Blair",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Anita Karam · jkassoc@earthlink.net · 818-507-9881",
+   "open": 0,
+   "hue": "#C97D6F"
+  },
+  {
+   "name": "JTD Architects",
+   "role": "Design Architect",
+   "projects": "3941 Alta Mesa, Crescent, Flicker",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Janek Dombrowa · jtdombrowa@gmail.com · 310-428-1581/213-740-2723",
+   "open": 0,
+   "hue": "#6FA287"
+  },
+  {
+   "name": "Lena",
+   "role": "Design Architect",
+   "projects": "Rinconia, San Marco",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Lena",
+   "open": 0,
+   "hue": "#D99E63"
+  },
+  {
+   "name": "MI Design & Eng",
+   "role": "Civil Engineer",
+   "projects": "3701 Alta Mesa",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Sami Maalouf · sami@midesigncorp.com · 818-40-4485",
+   "open": 0,
+   "hue": "#4A80B8"
+  },
+  {
+   "name": "Pacific Engineering (MEP)",
+   "role": "Mechanical Engineer",
+   "projects": "Flicker",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Mel Fajardo · mfajardo@pacificeng.net · 818-612-3671",
+   "open": 0,
+   "hue": "#C97D6F"
+  },
+  {
+   "name": "Payan Surveying, Inc",
+   "role": "Surveyor",
+   "projects": "3941 Alta Mesa",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Maria Payan · maria@payansurveying.com · 951-356-6456",
+   "open": 0,
+   "hue": "#6FA287"
+  },
+  {
+   "name": "SM ENG",
+   "role": "Structural Engineer",
+   "projects": "Blair",
+   "status": [
+    "Listed",
+    "pend"
+   ],
+   "contact": "Sami Maalouf · Owner · sami@midesigncorp.com · 818-402-4485",
+   "open": 0,
+   "hue": "#D99E63"
+  },
+  {
+   "name": "Thang Le & Associates",
+   "role": "Structural Engineer",
+   "projects": "3701 Alta Mesa, Rinconia, San Marco",
+   "status": [
+    "Engaged",
+    "done"
+   ],
+   "contact": "Thang Le · Principal · thang@thanglese.com · 626-731-1539",
+   "open": 0,
+   "hue": "#4A80B8"
+  }
+ ]
+}

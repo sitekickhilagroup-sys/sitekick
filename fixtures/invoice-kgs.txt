@@ -1,0 +1,23 @@
+INVOICE
+
+KGS Structural Engineers, Inc.
+5850 W Olympic Blvd, Suite 200, Los Angeles, CA 90036
+Invoice #: 2026-0847
+Date: Aug 11, 2026
+Terms: Net 30 (due Sep 10, 2026)
+
+Bill To:
+San Marco Development LLC
+Project: 4732 San Marco Dr, Los Angeles CA - SFD New Construction
+
+Description                                          Amount
+----------------------------------------------------------
+Structural design revisions per plan check
+corrections (S-2.0, S-2.1, S-4.0)                  $3,400.00
+Site visit + shear wall schedule update              $950.00
+Coordination w/ geotechnical engineer                $500.00
+----------------------------------------------------------
+TOTAL DUE                                          $4,850.00
+
+Remit to: accounting@kgsstructural.com
+Budget line: Construction - Consultants (Structural)

@@ -1,0 +1,5 @@
+{
+  "entitlements": ["Filed", "Assigned to Planner", "On Hold / Corrections", "Accepted For Review", "Neighborhood Outreach", "Hearing", "Determination", "Appeal Period", "In Effect"],
+  "plan_check": ["Submitted", "Completeness Review", "Intake Requirements", "Corrections", "Consultant Clearances", "All Clearances Signed"],
+  "permits": ["Fees Calculated", "Bonds Posted", "Permit Issued"]
+}

@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/* Sitekick v3 design system — client-approved pastel (linen/sage/apricot).
+   Light default, dark via [data-theme="dark"]. WCAG AA checked in POC round. */
+
+:root {
+  --bg: #F5F4EF; --card: #FFFFFF; --card2: #F2F1EB; --inset: #EDECE5;
+  --line: #E4E1D8; --line2: #ECEAE2;
+  --ink: #333D49; --ink2: #66707C; --ink3: #8E98A3;
+  --sage: #6FA287; --sage-soft: #E4EFE8; --sage-line: #C4DBCD;
+  --mist: #8FAECB; --mist-soft: #E7EEF5;
+  --apricot: #D99E63; --apricot-soft: #F7EBDC;
+  --coral: #C97D6F; --coral-soft: #F6E5E1;
+  --moss: #66A37E; --moss-soft: #E3F0E7;
+  --chart1: #4A80B8; --chart2: #C96F62;
+  --glow: rgba(217, 158, 99, .28);
+  --shadow-soft: 0 1px 2px rgba(51,61,73,.05), 0 10px 28px -18px rgba(51,61,73,.18);
+}
+
+[data-theme="dark"] {
+  --bg: #1A212B; --card: #232C38; --card2: #28323F; --inset: #1F2833;
+  --line: #37424F; --line2: #2C3743;
+  --ink: #E6EAEE; --ink2: #A6B0BB; --ink3: #79848F;
+  --sage: #8FBFA0; --sage-soft: #2B3B33; --sage-line: #3E5748;
+  --mist: #93B4D6; --mist-soft: #28374A;
+  --apricot: #E0AC74; --apricot-soft: #40342A;
+  --coral: #D98F80; --coral-soft: #42302D;
+  --moss: #7DBB93; --moss-soft: #293E31;
+  --chart1: #4C84C4; --chart2: #C9654E;
+  --glow: rgba(224, 172, 116, .22);
+  --shadow-soft: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -18px rgba(0,0,0,.5);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card2: var(--card2);
+  --color-inset: var(--inset);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-ink: var(--ink);
+  --color-ink2: var(--ink2);
+  --color-ink3: var(--ink3);
+  --color-sage: var(--sage);
+  --color-sage-soft: var(--sage-soft);
+  --color-sage-line: var(--sage-line);
+  --color-mist: var(--mist);
+  --color-mist-soft: var(--mist-soft);
+  --color-apricot: var(--apricot);
+  --color-apricot-soft: var(--apricot-soft);
+  --color-coral: var(--coral);
+  --color-coral-soft: var(--coral-soft);
+  --color-moss: var(--moss);
+  --color-moss-soft: var(--moss-soft);
+  --color-chart1: var(--chart1);
+  --color-chart2: var(--chart2);
+  --font-serif: Georgia, "Palatino Linotype", serif;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --radius-card: 14px;
+  --radius-chip: 9px;
+  --shadow-card: var(--shadow-soft);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  line-height: 1.6;
+  min-height: 100dvh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--mist);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Stage rail ties + stones share geometry with the client-approved demo */
+.stone-tie { height: 2px; width: 14px; background: var(--line); flex: none; }
+.stone-tie.done { background: var(--sage-line); }
