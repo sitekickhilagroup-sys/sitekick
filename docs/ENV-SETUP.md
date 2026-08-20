@@ -18,10 +18,10 @@ Status legend: ✅ already set in `.env.local` · ⬜ pending (optional adapters
 
 ## 1. Supabase (done — for reference)
 
-Dashboard → https://supabase.com/dashboard/project/guqfkjqhpffihjerasoe/settings/api-keys
+Dashboard → https://supabase.com/dashboard/project/lmygivkvggerpztacdjp/settings/api-keys
 - `anon` public key → NEXT_PUBLIC_SUPABASE_ANON_KEY
 - `service_role` key → SUPABASE_SERVICE_ROLE_KEY (server only, never expose)
-- URL is fixed: `https://guqfkjqhpffihjerasoe.supabase.co`
+- URL is fixed: `https://lmygivkvggerpztacdjp.supabase.co`
 - SUPABASE_TOKEN (`sb_...`): supabase.com → Account (avatar) → Access Tokens. Used only by local scripts.
 
 ## 2. Anthropic (done)

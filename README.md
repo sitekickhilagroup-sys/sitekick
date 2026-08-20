@@ -40,7 +40,7 @@ Adapters no-op safely until their env vars exist (Settings page shows status lig
 
 ## Database
 
-- Schema: `supabase/migrations/0001_init.sql` (applied to project `guqfkjqhpffihjerasoe`).
+- Schema: `supabase/migrations/0001_init.sql` (applied to project `lmygivkvggerpztacdjp`).
 - Seed: `node --experimental-strip-types scripts/seed.ts` (idempotent; `--dry-run` for counts).
 - Storage bucket `documents` (private) for uploaded PDFs.
 - Users: `node scripts/create-user.mjs someone@email.com` (prints temp password).

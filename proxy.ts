@@ -35,7 +35,10 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // getClaims verifies the JWT locally (JWKS cached) — no per-request
+  // network hop to Supabase Auth like getUser().
+  const { data: claims } = await supabase.auth.getClaims();
+  const user = claims?.claims ?? null;
 
   const { pathname } = request.nextUrl;
   const isPublic = pathname.startsWith('/login') || pathname.startsWith('/api');
