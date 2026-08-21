@@ -17,6 +17,7 @@ interface Labels {
   all: string;
   whyCritical: string;
   whyDue: string;
+  unlocksN: string; // "unlocks {n}"
   stuckDays: string; // "{n}d stuck"
   blockedBy: string;
 }
@@ -38,6 +39,7 @@ export function ActionRow({ action, index, labels }: { action: Action; index: nu
     action.why.critical ? labels.whyCritical : null,
     action.why.due ? `${labels.whyDue} ${action.why.due}` : null,
     action.why.waiting ? `${labels.waiting}: ${action.why.waiting}` : null,
+    action.why.unlocks ? labels.unlocksN.replace('{n}', String(action.why.unlocks)) : null,
     action.why.stuck_days != null ? labels.stuckDays.replace('{n}', String(action.why.stuck_days)) : null,
     action.why.blocked_by ? `${labels.blockedBy} ${action.why.blocked_by}` : null,
   ].filter(Boolean).join(' · ');

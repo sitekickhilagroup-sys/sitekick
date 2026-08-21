@@ -53,6 +53,13 @@ export const DeadlineUpdateSchema = z.object({
   evidence: z.string(),
 });
 
+export const RelationshipOutSchema = z.object({
+  from_match: z.string().min(1),
+  to_match: z.string().min(1),
+  type: z.enum(['blocks', 'supports', 'parallel', 'unrelated', 'needs_verification']),
+  reason: z.string().min(1),
+});
+
 export const ExtractResultSchema = z.object({
   project_name: z.string().nullable(),
   tasks: z.array(TaskOpSchema),
@@ -61,6 +68,7 @@ export const ExtractResultSchema = z.object({
   drafts: z.array(DraftOutSchema),
   vendor_hours: z.array(VendorHoursOutSchema),
   deadline_updates: z.array(DeadlineUpdateSchema),
+  relationships: z.array(RelationshipOutSchema),
 });
 
 export type ExtractResult = z.infer<typeof ExtractResultSchema>;
@@ -77,3 +85,14 @@ export const InvoiceParseSchema = z.object({
 });
 
 export type InvoiceParse = z.infer<typeof InvoiceParseSchema>;
+
+// infer-phase output contract (forced-tool JSON) — one pass of the iterative
+// phase-inference loop (agents/infer-phase.ts).
+export const PhaseInferenceSchema = z.object({
+  phase_key: z.enum(['planning', 'plan_check', 'bidding', 'financing', 'construction']),
+  confidence: z.number().min(0).max(1),
+  evidence: z.string().min(1),
+  reasoning: z.string().min(1),
+});
+
+export type PhaseInference = z.infer<typeof PhaseInferenceSchema>;

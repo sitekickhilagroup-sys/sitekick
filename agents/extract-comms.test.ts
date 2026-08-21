@@ -19,6 +19,7 @@ const canned = {
   drafts: [{ subject: 'MSA decision needed', body: 'Refael — decision needed this week.', re_blocker_index: 0 }],
   vendor_hours: [{ vendor_name: 'KGS Structural', hours: 12, rate: 180 }],
   deadline_updates: [],
+  relationships: [],
 };
 
 function fakeAnthropicWith(input: unknown): Anthropic {
@@ -72,7 +73,7 @@ describe('extractComms', () => {
 });
 
 describe('applyExtractResult', () => {
-  it('updates matched tasks, inserts new ones, links blocker drafts', async () => {
+  it('auto-creates unmatched tasks directly; routes matched tasks, blockers, decisions to agent_proposals', async () => {
     const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
     const admin = fakeAdmin(calls);
     const openTasks = [
@@ -83,18 +84,37 @@ describe('applyExtractResult', () => {
       openTasks,
       today: '2026-08-20',
     });
-    expect(summary.tasks_updated).toBe(1);
+    // Direct-write counters stay at 0 now — those writes flow through proposals instead.
+    expect(summary.tasks_updated).toBe(0);
+    expect(summary.blockers).toBe(0);
+    expect(summary.decisions).toBe(0);
+    // Only the genuinely-new, unmatched task auto-creates.
     expect(summary.tasks_created).toBe(1);
-    expect(summary.blockers).toBe(1);
     expect(summary.drafts).toBe(1);
     expect(summary.vendor_hours).toBe(1);
+    expect(summary.proposals).toBe(3);
+
     const taskUpdates = calls.filter((c) => c.table === 'tasks' && c.op === 'update');
-    expect(taskUpdates).toHaveLength(1);
+    expect(taskUpdates).toHaveLength(0);
     const taskInserts = calls.filter((c) => c.table === 'tasks' && c.op === 'insert');
     expect(taskInserts).toHaveLength(1);
+    expect((taskInserts[0].payload as { title: string }).title).toBe('Order soils report addendum');
+
+    const proposalInserts = calls.filter((c) => c.table === 'agent_proposals' && c.op === 'insert');
+    expect(proposalInserts).toHaveLength(3);
+    expect(proposalInserts.map((c) => (c.payload as { type: string }).type).sort())
+      .toEqual(['blocker_create', 'decision_create', 'task_update'].sort());
+    const taskUpdateProposal = proposalInserts.find((c) => (c.payload as { type: string }).type === 'task_update');
+    expect(taskUpdateProposal?.payload).toMatchObject({ target_task_id: 'task-1', confidence: 0.8, state: 'pending' });
+
+    // Blockers no longer insert directly (they're proposals now), so a draft's
+    // re_blocker_index can't resolve to a real row yet — it lands unlinked.
+    const draftInserts = calls.filter((c) => c.table === 'drafts' && c.op === 'insert');
+    expect(draftInserts).toHaveLength(1);
+    expect((draftInserts[0].payload as { blocker_id: string | null }).blocker_id).toBeNull();
   });
 
-  it('reconciles create into update when matcher finds same work', async () => {
+  it('reconciles create into a task_update proposal at 0.6 confidence when matcher finds same work, not a duplicate create', async () => {
     const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
     const admin = fakeAdmin(calls);
     const result = ExtractResultSchema.parse({
@@ -110,7 +130,14 @@ describe('applyExtractResult', () => {
       openTasks,
       today: '2026-08-20',
     });
-    expect(summary.tasks_updated).toBe(1);
     expect(summary.tasks_created).toBe(0);
+    expect(summary.tasks_updated).toBe(0);
+    expect(summary.proposals).toBe(1);
+
+    const taskWrites = calls.filter((c) => c.table === 'tasks');
+    expect(taskWrites).toHaveLength(0);
+    const proposalInserts = calls.filter((c) => c.table === 'agent_proposals' && c.op === 'insert');
+    expect(proposalInserts).toHaveLength(1);
+    expect(proposalInserts[0].payload).toMatchObject({ type: 'task_update', target_task_id: 'task-9', confidence: 0.6 });
   });
 });

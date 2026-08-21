@@ -2,13 +2,25 @@ import { supabaseServer } from './supabase/server.ts';
 import { followUpAlerts, topActions } from './priority.ts';
 import { laToday } from './date.ts';
 import type {
-  Action, Blocker, Decision, Invoice, Project, ProjectEvent, ProjectStage,
-  StageRequirement, SubstageCatalogRow, Task,
+  Action, Blocker, Decision, Invoice, Phase, Project, ProjectEvent, ProjectStage,
+  Relationship, StageRequirement, SubstageCatalogRow, Task, Workstream,
 } from './types.ts';
 
 export interface ProjectView extends Project {
   stages: (ProjectStage & { requirements: StageRequirement[] })[];
   events: ProjectEvent[];
+}
+
+// One portfolio card's worth of "where does this project stand" — Sprint C
+// Task 5. mainBlocker reuses the already-fetched blockers array (no extra
+// query/re-scoring); nextAction comes from an uncapped topActions() pass so
+// it isn't starved by the global top-8 cut used for `actions`/Top Actions.
+export interface PortfolioEntry {
+  project: Project;
+  currentPhaseLabel: string | null;
+  workstreams: Workstream[];
+  mainBlocker: Blocker | null;
+  nextAction: Action | null;
 }
 
 export interface OverviewData {
@@ -21,25 +33,38 @@ export interface OverviewData {
   substages: Record<string, string[]>;
   openMoney: { project: string | null; open_usd: number }[];
   rowanQueue: { count: number; total_usd: number };
+  pendingProposals: number;
+  portfolio: PortfolioEntry[];
   today: string;
 }
 
 export async function getOverviewData(): Promise<OverviewData> {
   const supabase = await supabaseServer();
-  const [projectsQ, stagesQ, reqsQ, eventsQ, tasksQ, blockersQ, decisionsQ, invoicesQ, catalogQ] =
-    await Promise.all([
-      supabase.from('projects').select('*').order('name'),
-      supabase.from('project_stages').select('*').order('position'),
-      supabase.from('stage_requirements').select('*').order('position'),
-      supabase.from('project_events').select('*').order('created_at'),
-      // Only open tasks are ever rendered/scored — don't ship done/dropped history.
-      supabase.from('tasks').select('*').eq('status', 'open').order('created_at'),
-      supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
-      supabase.from('decisions').select('*').order('created_at', { ascending: false }).limit(30),
-      // Overview only charts open money + the Rowan queue.
-      supabase.from('invoices').select('project_id,status,amount_usd').in('status', ['received', 'for_rowan_approval', 'approved']),
-      supabase.from('substage_catalog').select('*').order('position'),
-    ]);
+  const [
+    projectsQ, stagesQ, reqsQ, eventsQ, tasksQ, blockersQ, decisionsQ, invoicesQ, catalogQ, relationshipsQ,
+    phasesQ, workstreamsQ, pendingProposalsQ,
+  ] = await Promise.all([
+    supabase.from('projects').select('*').order('name'),
+    supabase.from('project_stages').select('*').order('position'),
+    supabase.from('stage_requirements').select('*').order('position'),
+    supabase.from('project_events').select('*').order('created_at'),
+    // Only open tasks are ever rendered/scored — don't ship done/dropped history.
+    supabase.from('tasks').select('*').eq('status', 'open').order('created_at'),
+    supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
+    supabase.from('decisions').select('*').order('created_at', { ascending: false }).limit(30),
+    // Overview only charts open money + the Rowan queue.
+    supabase.from('invoices').select('project_id,status,amount_usd').in('status', ['received', 'for_rowan_approval', 'approved']),
+    supabase.from('substage_catalog').select('*').order('position'),
+    // Feeds the priority engine's "unlocks" bonus — only blocking edges matter there.
+    supabase.from('relationships').select('*').eq('type', 'blocks'),
+    // Portfolio cards (Sprint C, Task 5): phase catalog for currentPhaseLabel
+    // + only the active parallel workstreams (done ones don't belong on a
+    // live status card).
+    supabase.from('phases').select('*'),
+    supabase.from('workstreams').select('*').eq('status', 'active').order('name'),
+    // Head count only — the inbox banner just needs "is there anything to review".
+    supabase.from('agent_proposals').select('id', { count: 'exact', head: true }).eq('state', 'pending'),
+  ]);
 
   const projects = (projectsQ.data ?? []) as Project[];
   const stages = (stagesQ.data ?? []) as ProjectStage[];
@@ -50,6 +75,10 @@ export async function getOverviewData(): Promise<OverviewData> {
   const decisions = (decisionsQ.data ?? []) as Decision[];
   const invoices = (invoicesQ.data ?? []) as Pick<Invoice, 'project_id' | 'status' | 'amount_usd'>[];
   const catalog = (catalogQ.data ?? []) as SubstageCatalogRow[];
+  const relationships = (relationshipsQ.data ?? []) as Relationship[];
+  const phases = (phasesQ.data ?? []) as Phase[];
+  const workstreams = (workstreamsQ.data ?? []) as Workstream[];
+  const pendingProposals = pendingProposalsQ.count ?? 0;
 
   const reqsByStage = new Map<string, StageRequirement[]>();
   for (const r of requirements) {
@@ -76,7 +105,14 @@ export async function getOverviewData(): Promise<OverviewData> {
   const today = laToday();
 
   const openTasks = tasks.filter((t) => t.status === 'open');
-  const actions = topActions(openTasks, blockers, stagesByProject, names, { today, limit: 8 });
+  const actions = topActions(openTasks, blockers, stagesByProject, names, { today, limit: 8 }, relationships);
+  // Portfolio's nextAction (below) needs each project's own best action, not
+  // just whichever ones survive the global top-8 cut used for `actions`/Top
+  // Actions — so it gets its own uncapped pass over the same inputs/scoring.
+  const allRanked = topActions(
+    openTasks, blockers, stagesByProject, names,
+    { today, limit: openTasks.length + blockers.length }, relationships,
+  );
   const followUps = followUpAlerts(openTasks, today);
 
   const openStatuses = new Set(['received', 'for_rowan_approval', 'approved']);
@@ -100,6 +136,28 @@ export async function getOverviewData(): Promise<OverviewData> {
     (substages[row.stage_key] ??= []).push(row.name);
   }
 
+  // Portfolio cards (Sprint C, Task 5) — mainBlocker reuses the already-
+  // fetched blockers array (no extra query/re-scoring); nextAction reuses
+  // allRanked (the uncapped pass above) so a project isn't starved just
+  // because it lost the global top-8 cut used for `actions`.
+  const phaseLabelByKey = new Map(phases.map((ph) => [ph.key, ph.label]));
+  const workstreamsByProject = new Map<string, Workstream[]>();
+  for (const w of workstreams) {
+    const list = workstreamsByProject.get(w.project_id) ?? [];
+    list.push(w);
+    workstreamsByProject.set(w.project_id, list);
+  }
+  const portfolio: PortfolioEntry[] = projects.map((p) => ({
+    project: p,
+    currentPhaseLabel: p.current_phase_key ? (phaseLabelByKey.get(p.current_phase_key) ?? null) : null,
+    workstreams: workstreamsByProject.get(p.id) ?? [],
+    // blockers is already active-only, sorted by days_stuck desc — first
+    // match per project is that project's max. allRanked is score-desc and
+    // uncapped — first match is that project's genuine top-ranked action.
+    mainBlocker: blockers.find((b) => b.project_id === p.id) ?? null,
+    nextAction: allRanked.find((a) => a.project === p.name) ?? null,
+  }));
+
   return {
     projects: projectViews,
     tasks,
@@ -112,6 +170,8 @@ export async function getOverviewData(): Promise<OverviewData> {
       .map(([project, open_usd]) => ({ project, open_usd }))
       .sort((a, b) => b.open_usd - a.open_usd),
     rowanQueue: { count: rowanCount, total_usd: rowanTotal },
+    pendingProposals,
+    portfolio,
     today,
   };
 }

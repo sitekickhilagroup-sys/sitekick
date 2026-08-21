@@ -6,6 +6,7 @@ import { docxToText } from '@/lib/docx';
 import { parseWorkbook } from '@/lib/parse/xlsx';
 import { parseEml } from '@/lib/parse/eml';
 import { parseEmailsJsonl, dumpEmailToRaw } from '@/lib/parse/emails-jsonl';
+import { extractEmailsFromArchive } from '@/lib/parse/archive';
 import { applyInvoiceRows, applyTaskRows } from '@/lib/import/tracker';
 import type { Project, Task } from '@/lib/types';
 import { laToday } from '@/lib/date';
@@ -14,10 +15,12 @@ export const maxDuration = 300;
 
 // Drop zone, manual-first POC:
 //   .pdf            -> invoice agent (native PDF)
+//   .mp4            -> weekly review recording: store + link only (no transcription yet)
 //   .txt / .docx    -> transcript/email -> comms agent
 //   .eml            -> parsed email -> comms agent
 //   .xlsx / .xls    -> tracker importers (invoices / tasks) or CSV-text -> comms agent
 //   .jsonl          -> email dump: store all, agent-process the newest few
+//   .zip / .olm     -> email archive (Outlook export): store all, agent-process the newest few
 //   .csv            -> text -> comms agent
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // zip-based formats can inflate — cap the input
 
@@ -57,6 +60,20 @@ export async function POST(req: NextRequest) {
         id: documentId, kind: 'invoice_pdf', pdf_base64: buffer.toString('base64'), project_hint: projectHint,
       });
       return NextResponse.json({ ok: true, type: 'invoice_pdf', documentId, summary });
+    }
+
+    if (name.endsWith('.mp4')) {
+      const path = `recordings/${Date.now()}-${file.name}`;
+      await admin.storage.from('documents').upload(path, buffer, {
+        contentType: 'video/mp4', upsert: false,
+      });
+      const { documentId, deduped } = await ingestDocument(admin, {
+        kind: 'transcript', source: 'upload', storage_path: path, external_id: dedupKey,
+      });
+      if (!documentId) return NextResponse.json({ ok: true, deduped: true });
+      if (deduped) return NextResponse.json({ ok: true, type: 'recording', documentId, deduped: true });
+      // Transcription is future work (mirrors client demo's design-only upload) — store + link only.
+      return NextResponse.json({ ok: true, type: 'recording', documentId });
     }
 
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
@@ -125,6 +142,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, type: 'email', documentId, summary });
     }
 
+    if (name.endsWith('.zip') || name.endsWith('.olm')) {
+      const emails = await extractEmailsFromArchive(buffer, name.endsWith('.olm') ? 'olm' : 'zip');
+      let stored = 0, deduped = 0, processed = 0;
+      const PROCESS_CAP = 10;
+      // newest first so the cap spends agent budget on recent mail (same as .jsonl branch)
+      const sorted = [...emails].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      for (let i = 0; i < sorted.length; i++) {
+        const email = sorted[i];
+        const { documentId, deduped: dup } = await ingestDocument(admin, {
+          kind: 'email', source: 'upload', external_id: email.external_id ?? `${dedupKey}:${i}`,
+          raw_text: email.raw,
+        });
+        if (dup) { deduped++; continue; }
+        stored++;
+        if (processed < PROCESS_CAP && documentId) {
+          try {
+            await processDocument(admin, { id: documentId, kind: 'email', raw_text: email.raw, project_hint: projectHint });
+            processed++;
+          } catch { /* keep storing even if one extraction fails */ }
+        }
+      }
+      return NextResponse.json({ ok: true, type: 'email_archive', stored, deduped, processed });
+    }
+
     // .txt / .docx / .csv -> transcript text
     let text: string;
     if (name.endsWith('.docx')) text = await docxToText(buffer);
@@ -132,7 +173,8 @@ export async function POST(req: NextRequest) {
     const { documentId, deduped } = await ingestDocument(admin, {
       kind: 'transcript', source: 'upload', raw_text: text, external_id: dedupKey,
     });
-    if (deduped || !documentId) return NextResponse.json({ ok: true, deduped: true });
+    if (!documentId) return NextResponse.json({ ok: true, deduped: true });
+    if (deduped) return NextResponse.json({ ok: true, type: 'transcript', documentId, deduped: true });
     const summary = await processDocument(admin, {
       id: documentId, kind: 'transcript', raw_text: text, project_hint: projectHint,
     });

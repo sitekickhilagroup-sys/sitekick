@@ -129,7 +129,7 @@ export function TasksSection({ tasks, projects, labels }: Props) {
               </tr>
             )}
             {shown.map((t) => (
-              <tr key={t.id} className={t.priority === 'critical' ? 'bg-coral-soft/40' : ''}>
+              <tr key={t.id} className={t.priority === 'critical' ? 'bg-apricot-soft/50' : ''}>
                 <td className="max-w-[260px] px-3 py-2 text-ink">
                   {t.title}
                   {!t.planned && <span className="ms-1 rounded bg-apricot-soft px-1 text-[10px] text-apricot">{labels.unplanned}</span>}

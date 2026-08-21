@@ -1,15 +1,19 @@
+import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { getOverviewData } from '@/lib/queries';
-import { TopActions } from '@/components/overview/top-actions';
 import { WhatsStuck } from '@/components/overview/whats-stuck';
 import { ProjectRails } from '@/components/overview/project-rails';
-import { TasksSection } from '@/components/overview/tasks-section';
 import { DecisionsWeek } from '@/components/overview/decisions-week';
 import { CompareCharts } from '@/components/overview/compare-charts';
+import { ProjectAccordion } from '@/components/portfolio/project-accordion';
 
 export const dynamic = 'force-dynamic';
 
+// Understand-only overview (BUILD_SPEC §2) — acting lives on /work now.
+// Order: plan banner -> inbox banner (when pending) -> portfolio map ->
+// WhatsStuck -> legacy ProjectRails (kept until Noa signs off the
+// accordions; removed at the Sprint D checkpoint) -> DecisionsWeek -> CompareCharts.
 export default async function OverviewPage() {
   const store = await cookies();
   const locale = (store.get(LOCALE_COOKIE)?.value === 'he' ? 'he' : 'en') as Locale;
@@ -42,79 +46,66 @@ export default async function OverviewPage() {
     collapse: t('common.collapse'),
   };
 
+  const portfolioLabels = {
+    onHold: t('rails.on_hold'),
+    onTrack: t('rails.on_track'),
+    next: t('portfolio.next'),
+    blocker: t('portfolio.blocker'),
+    investigate: t('portfolio.investigate'),
+    none: t('common.none'),
+    expand: t('common.expand'),
+    collapse: t('common.collapse'),
+  };
+
   return (
     <div className="space-y-10 pb-16">
-      <div className="grid gap-8 lg:grid-cols-[3fr_2fr]">
-        <TopActions
-          actions={data.actions}
-          title={t('overview.top_actions')}
-          subtitle={t('overview.top_actions_sub')}
-          empty={t('overview.no_actions')}
-          rowLabels={{
-            markDone: t('tasks.mark_done'),
-            dismiss: t('actions.dismiss'),
-            waiting: t('tasks.waiting'),
-            editWaiting: t('actions.edit_waiting'),
-            fromSource: t('actions.from_source'),
-            cancel: t('common.cancel'),
-            errorSave: t('common.error_save'),
-            all: t('common.all'),
-            whyCritical: t('actions.why_critical'),
-            whyDue: t('actions.why_due'),
-            stuckDays: t('overview.stuck_days'),
-            blockedBy: t('overview.blocked_by'),
-          }}
-        />
-        <WhatsStuck
-          blockers={data.blockers}
-          projectNames={projectNames}
-          title={t('overview.whats_stuck')}
-          labels={{
-            stuckDays: t('overview.stuck_days'),
-            blockedBy: t('overview.blocked_by'),
-            suggested: t('overview.suggested'),
-            empty: t('overview.no_actions'),
-          }}
-        />
-      </div>
+      <Link
+        href="/work"
+        className="block min-h-11 rounded-(--radius-card) border border-line bg-card p-4 shadow-card hover:opacity-90"
+      >
+        <p className="text-sm font-medium text-ink">{t('portfolio.open_plan')}</p>
+        <p className="mt-1 text-xs text-ink2">
+          {t('portfolio.open_plan_sub').replace('{n}', String(data.tasks.length))}
+        </p>
+      </Link>
+
+      {data.pendingProposals > 0 && (
+        <Link
+          href="/inbox"
+          className="block min-h-11 rounded-(--radius-card) border border-apricot/40 bg-apricot-soft p-4 text-apricot shadow-card hover:opacity-90"
+        >
+          <p className="text-sm font-medium">
+            {t('portfolio.review_pending').replace('{n}', String(data.pendingProposals))}
+          </p>
+        </Link>
+      )}
+
+      <section aria-labelledby="portfolio-h">
+        <h2 id="portfolio-h" className="font-serif text-2xl text-ink">{t('portfolio.map')}</h2>
+        <div className="mt-4 space-y-3">
+          {data.portfolio.map((entry, i) => (
+            <ProjectAccordion key={entry.project.id} entry={entry} defaultOpen={i === 0} labels={portfolioLabels} />
+          ))}
+        </div>
+      </section>
+
+      <WhatsStuck
+        blockers={data.blockers}
+        projectNames={projectNames}
+        title={t('overview.whats_stuck')}
+        labels={{
+          stuckDays: t('overview.stuck_days'),
+          blockedBy: t('overview.blocked_by'),
+          suggested: t('overview.suggested'),
+          empty: t('overview.no_actions'),
+        }}
+      />
 
       <ProjectRails
         projects={data.projects}
         substages={data.substages}
         title={t('overview.where_projects')}
         labels={railLabels}
-      />
-
-      <TasksSection
-        tasks={data.tasks}
-        projects={data.projects.map((p) => ({ id: p.id, name: p.name }))}
-        labels={{
-          title: t('overview.tasks'),
-          colTitle: t('tasks.title'),
-          colDesc: t('tasks.description'),
-          colOwner: t('tasks.owner'),
-          colWaiting: t('tasks.waiting'),
-          colDue: t('tasks.due'),
-          colStage: t('tasks.stage'),
-          expand: t('overview.tasks_expand'),
-          collapse: t('overview.tasks_collapse'),
-          addTask: t('overview.add_task'),
-          formTitle: t('tasks.form_title'),
-          formName: t('tasks.form_name'),
-          formDesc: t('tasks.form_desc'),
-          formOwner: t('tasks.form_owner'),
-          formDue: t('tasks.form_due'),
-          save: t('common.save'),
-          cancel: t('common.cancel'),
-          unplanned: t('tasks.unplanned'),
-          markDone: t('tasks.mark_done'),
-          project: t('common.project'),
-          dismiss: t('actions.dismiss'),
-          editWaiting: t('actions.edit_waiting'),
-          all: t('common.all'),
-          empty: t('tasks.empty'),
-          errorSave: t('common.error_save'),
-        }}
       />
 
       <DecisionsWeek

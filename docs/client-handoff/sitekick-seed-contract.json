@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "fixedPhases": ["Planning", "Plan Check", "Bidding", "Financing", "Construction"],
+  "projects": [
+    {"id":"blair","name":"3375 Blair Dr","caseNumber":"ZA-2023-3802-ZAD","primaryPhase":"Plan Check","parallelWorkstream":"Planning"},
+    {"id":"alta","name":"3701 Alta Mesa","caseNumber":"ZA-2025-6962-CU1-HCA","primaryPhase":"Planning","parallelWorkstream":"Plan Check"},
+    {"id":"san-marco","name":"2361-2367 San Marco","caseNumber":"ZA-2026-1475-CU1-HCA","primaryPhase":"Planning","parallelWorkstream":"Design / Engineering"},
+    {"id":"rinconia","name":"2650-2656 Rinconia","caseNumber":"ePlanLA #308694 / #314514","primaryPhase":"Plan Check","parallelWorkstream":"Design / Engineering"}
+  ],
+  "relationshipTypes": ["Blocks", "Supports", "Parallel", "Unrelated", "Needs verification"],
+  "actionStatuses": ["Upcoming", "In Progress", "With the City", "Blocked", "Verify", "Done", "Not applicable"],
+  "manualUpdates": ["Completed", "Sent email", "Waiting", "Delayed", "Scheduled", "Not applicable", "Add note"],
+  "viewContract": {
+    "Portfolio": "Understand",
+    "My Work": "Act",
+    "Project Process": "Investigate"
+  },
+  "nonNegotiables": [
+    "One canonical action record",
+    "Co-occurrence is not dependency",
+    "Manual override outranks agent inference",
+    "Conflicts create Verify",
+    "Unknown stays unknown",
+    "Every mutation is auditable"
+  ]
+}

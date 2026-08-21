@@ -4,6 +4,7 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { FilterBar } from '@/components/invoices/filter-bar';
 import { StatusChain } from '@/components/invoices/status-chain';
+import { LinkEditor } from '@/components/invoices/link-editor';
 import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -125,11 +126,12 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
               <th className="px-3 py-2 text-start font-medium">{t('common.status')}</th>
               <th className="px-3 py-2 text-start font-medium">{t('invoices.paid_date')}</th>
               <th className="px-3 py-2 text-start font-medium">{t('invoices.transfer')}</th>
+              <th className="px-3 py-2 text-start font-medium">{t('invoices.edit_links')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line2">
             {rows.length === 0 && (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-ink3">{t('invoices.empty')}</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-ink3">{t('invoices.empty')}</td></tr>
             )}
             {rows.map((inv) => (
               <tr key={inv.id}>
@@ -154,6 +156,32 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                       {t('invoices.transfer')}
                     </a>
                   ) : ''}
+                </td>
+                <td className="px-3 py-2 text-xs">
+                  <span className="flex flex-wrap items-center gap-2">
+                    {inv.invoice_url && (
+                      <a href={inv.invoice_url} target="_blank" rel="noreferrer" className="text-xs text-mist underline">
+                        {t('invoices.open_invoice')}
+                      </a>
+                    )}
+                    {inv.receipt_url && (
+                      <a href={inv.receipt_url} target="_blank" rel="noreferrer" className="text-xs text-mist underline">
+                        {t('invoices.open_receipt')}
+                      </a>
+                    )}
+                    <LinkEditor
+                      invoiceId={inv.id}
+                      invoiceUrl={inv.invoice_url}
+                      receiptUrl={inv.receipt_url}
+                      labels={{
+                        edit: t('invoices.edit_links'),
+                        invoice: t('invoices.open_invoice'),
+                        receipt: t('invoices.open_receipt'),
+                        cancel: t('common.cancel'),
+                        error: t('common.error_save'),
+                      }}
+                    />
+                  </span>
                 </td>
               </tr>
             ))}
