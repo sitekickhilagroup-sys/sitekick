@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { attachRecording, saveItemNote, saveReview, setItemSnapshot, setItemStatus, type SnapshotState } from '@/app/actions/weekly';
 import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
 
-interface Row { item: WeeklyReviewItem; title: string }
+interface Row { item: WeeklyReviewItem; title: string; owner?: string | null; due?: string | null }
 interface SubtopicGroup { name: string; items: Row[] }
 interface ProjectGroup { projectName: string; subtopics: SubtopicGroup[] }
 
@@ -14,20 +14,57 @@ interface Props {
   labels: Record<string, string>;
 }
 
+// Client-demo structure: mode toggle (Sunday draft = edit, Monday presentation
+// = clean read-only), 3-step explainer, save + upload cards, project -> sub-topic
+// groups, archive-semantics footer.
 export function ReviewBoard({ review, groups, labels }: Props) {
   const saved = review.status === 'saved';
+  const [present, setPresent] = useState(false);
+  const readOnly = saved || present;
   const allItems = groups.flatMap((g) => g.subtopics.flatMap((s) => s.items));
   const doneCount = allItems.filter((r) => r.item.status_snapshot === 'done').length;
 
+  const steps = [
+    { t: labels.step1t, d: labels.step1d },
+    { t: labels.step2t, d: labels.step2d },
+    { t: labels.step3t, d: labels.step3d },
+  ];
+
   return (
     <div className="mt-6 space-y-5">
-      {allItems.length > 0 && labels.progress && (
-        <p role="status" className="text-sm text-ink2">
-          {labels.progress
-            .replace('{done}', `⁨${doneCount}⁩`)
-            .replace('{total}', `⁨${allItems.length}⁩`)}
-        </p>
-      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex rounded-full bg-card2 p-0.5" role="group" aria-label={labels.modeDraft}>
+          <button type="button" onClick={() => setPresent(false)} aria-pressed={!present}
+            className={`min-h-11 cursor-pointer rounded-full px-3.5 py-1 text-xs sm:min-h-0 ${!present ? 'bg-ink text-bg' : 'text-ink2 hover:text-ink'}`}>
+            {labels.modeDraft}
+          </button>
+          <button type="button" onClick={() => setPresent(true)} aria-pressed={present}
+            className={`min-h-11 cursor-pointer rounded-full px-3.5 py-1 text-xs sm:min-h-0 ${present ? 'bg-ink text-bg' : 'text-ink2 hover:text-ink'}`}>
+            {labels.modePresent}
+          </button>
+        </div>
+        {allItems.length > 0 && labels.progress && (
+          <p role="status" className="text-sm text-ink2">
+            <span className="font-serif text-xl text-ink">{doneCount}</span>
+            <span className="text-ink3">/{allItems.length}</span>{' '}
+            {labels.progress.replace('{done}/{total} ', '')}
+          </p>
+        )}
+      </div>
+
+      <ol className="grid gap-2 sm:grid-cols-3">
+        {steps.map((s, i) => (
+          <li key={i} className="rounded-(--radius-card) border border-line bg-card p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">
+              <span className="me-1.5 font-mono">{i + 1}</span>{s.t}
+            </p>
+            <p className="mt-0.5 text-xs text-ink2">{s.d}</p>
+          </li>
+        ))}
+      </ol>
+
+      {!present && <ReviewControls review={review} labels={labels} />}
+
       {groups.length === 0 && labels.noItems && (
         <p className="rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{labels.noItems}</p>
       )}
@@ -37,10 +74,12 @@ export function ReviewBoard({ review, groups, labels }: Props) {
           <div className="divide-y divide-line2">
             {group.subtopics.map((sub) => (
               <div key={sub.name} className="px-4 py-3">
-                <h3 className="text-xs font-medium uppercase tracking-wide text-ink3">{sub.name}</h3>
-                <ul className="mt-2 space-y-2">
-                  {sub.items.map((row) => (
-                    <ReviewItemRow key={row.item.id} row={row} saved={saved} labels={labels} />
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">
+                  {labels.subTopic ? `${labels.subTopic} · ` : ''}{sub.name}
+                </p>
+                <ul className="mt-2 space-y-3">
+                  {sub.items.map((row, i) => (
+                    <ReviewItemRow key={row.item.id} row={row} index={i + 1} readOnly={readOnly} labels={labels} />
                   ))}
                 </ul>
               </div>
@@ -48,13 +87,18 @@ export function ReviewBoard({ review, groups, labels }: Props) {
           </div>
         </section>
       ))}
-      <ReviewFooter review={review} labels={labels} />
+
+      {labels.archiveNote && (
+        <p className="rounded-(--radius-card) border border-line2 bg-card2 p-4 text-xs leading-relaxed text-ink2">
+          {labels.archiveNote}
+        </p>
+      )}
     </div>
   );
 }
 
-function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; labels: Record<string, string> }) {
-  const { item, title } = row;
+function ReviewItemRow({ row, index, readOnly, labels }: { row: Row; index: number; readOnly: boolean; labels: Record<string, string> }) {
+  const { item, title, owner, due } = row;
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState(false);
 
@@ -86,8 +130,8 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
     if (res?.error) setFailed(true);
   });
 
-  // Client-demo meeting statuses — annotations only; the canonical task is
-  // untouched (Completed stays the task-mutating path via `act`).
+  // Meeting statuses — annotations only; the canonical task is untouched
+  // (Completed stays the task-mutating path via `act`).
   const snap = (state: SnapshotState) => start(async () => {
     setFailed(false);
     const res = await setItemSnapshot(item.id, state);
@@ -102,55 +146,74 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
   ];
 
   return (
-    <li className="flex flex-wrap items-center gap-2">
+    <li className="flex flex-wrap items-start gap-2">
       <span className="min-w-0 flex-1 basis-full sm:basis-auto">
         {item.carried_from && labels.itemKicker && (
-          <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.itemKicker}</span>
+          <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink3">
+            <span className="me-1.5 font-mono">{index}</span>{labels.itemKicker}
+          </span>
         )}
         <span className="block text-sm text-ink">{title}</span>
+        {(owner || due) && (
+          <span className="mt-0.5 block text-[11px] text-ink3">
+            {owner ? `${labels.ownerLabel}: ${owner}` : ''}
+            {owner && due ? ' · ' : ''}
+            {due ? <bdi>{due}</bdi> : null}
+          </span>
+        )}
       </span>
       <span role="status" className={`rounded-full px-2 py-0.5 text-[11px] ${statusClass}`}>{statusText}</span>
-      <input
-        defaultValue={item.weekly_note ?? ''}
-        onBlur={(e) => saveNote(e.target.value)}
-        disabled={pending || saved}
-        aria-label={labels.note}
-        placeholder={labels.note}
-        className="min-h-11 w-full flex-1 rounded-lg border border-line bg-card2 px-2.5 py-1.5 text-xs text-ink outline-none disabled:opacity-50 sm:min-h-0 sm:w-40"
-      />
-      {!saved && (
-        <span className="flex basis-full flex-wrap items-center gap-1.5">
-          <button type="button" disabled={pending} onClick={() => act('completed')}
-            className={`min-h-11 cursor-pointer rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50 sm:min-h-0 sm:py-1 ${
-              item.status_snapshot === 'done'
-                ? 'bg-sage text-white'
-                : 'border border-sage-line text-sage hover:bg-sage-soft'
-            }`}>
-            {labels.completed}
-          </button>
-          {snapButtons.map(({ state, label }) => (
-            <button key={state} type="button" disabled={pending} onClick={() => snap(state)}
-              aria-pressed={item.status_snapshot === state}
+
+      {readOnly ? (
+        item.weekly_note && (
+          <span className="basis-full rounded-lg bg-card2 px-2.5 py-1.5 text-xs text-ink2">{item.weekly_note}</span>
+        )
+      ) : (
+        <>
+          <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
+            <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.noteKicker}</span>
+            <input
+              defaultValue={item.weekly_note ?? ''}
+              onBlur={(e) => saveNote(e.target.value)}
+              disabled={pending}
+              aria-label={labels.noteKicker}
+              placeholder={labels.note}
+              className="mt-0.5 min-h-11 w-full rounded-lg border border-line bg-card2 px-2.5 py-1.5 text-xs text-ink outline-none disabled:opacity-50 sm:min-h-0"
+            />
+          </span>
+          <span className="flex basis-full flex-wrap items-center gap-1.5">
+            <button type="button" disabled={pending} onClick={() => act('completed')}
               className={`min-h-11 cursor-pointer rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50 sm:min-h-0 sm:py-1 ${
-                item.status_snapshot === state
-                  ? 'bg-ink text-bg'
-                  : 'border border-line text-ink2 hover:bg-card2'
+                item.status_snapshot === 'done'
+                  ? 'bg-sage text-white'
+                  : 'border border-sage-line text-sage hover:bg-sage-soft'
               }`}>
-              {label}
+              {labels.completed}
             </button>
-          ))}
-          <button type="button" disabled={pending} onClick={() => act('not_applicable')}
-            className="min-h-11 cursor-pointer rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink3 hover:bg-card2 disabled:opacity-50 sm:min-h-0 sm:py-1">
-            {labels.notApplicable}
-          </button>
-        </span>
+            {snapButtons.map(({ state, label }) => (
+              <button key={state} type="button" disabled={pending} onClick={() => snap(state)}
+                aria-pressed={item.status_snapshot === state}
+                className={`min-h-11 cursor-pointer rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50 sm:min-h-0 sm:py-1 ${
+                  item.status_snapshot === state
+                    ? 'bg-ink text-bg'
+                    : 'border border-line text-ink2 hover:bg-card2'
+                }`}>
+                {label}
+              </button>
+            ))}
+            <button type="button" disabled={pending} onClick={() => act('not_applicable')}
+              className="min-h-11 cursor-pointer rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink3 hover:bg-card2 disabled:opacity-50 sm:min-h-0 sm:py-1">
+              {labels.notApplicable}
+            </button>
+          </span>
+        </>
       )}
       {failed && <span role="alert" className="basis-full text-xs text-coral">{labels.error}</span>}
     </li>
   );
 }
 
-function ReviewFooter({ review, labels }: { review: WeeklyReview; labels: Record<string, string> }) {
+function ReviewControls({ review, labels }: { review: WeeklyReview; labels: Record<string, string> }) {
   const saved = review.status === 'saved';
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState(false);
@@ -181,29 +244,43 @@ function ReviewFooter({ review, labels }: { review: WeeklyReview; labels: Record
   });
 
   return (
-    <footer className="flex flex-wrap items-center gap-3 rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
-      <span className="font-mono text-xs text-ink3">{labels.meeting} · <bdi>{review.meeting_date}</bdi></span>
-      <button
-        type="button"
-        disabled={pending || saved}
-        onClick={save}
-        className="min-h-11 rounded-lg bg-sage px-4 py-2 text-sm text-white disabled:opacity-50 sm:min-h-0"
-      >
-        {saved ? labels.saved : labels.save}
-      </button>
-      <label className="min-h-11 inline-flex cursor-pointer items-center rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink2 hover:bg-card2 sm:min-h-0">
-        {labels.upload}
-        <input
-          type="file"
-          accept=".mp4,.txt,.docx"
-          aria-label={labels.upload}
-          disabled={pending}
-          className="sr-only"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
-        />
-      </label>
-      {uploaded && <span role="status" className="text-xs text-sage">{labels.uploaded}</span>}
-      {(failed || uploadFailed) && <span role="alert" className="text-xs text-coral">{labels.error}</span>}
-    </footer>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-sage">{labels.saveKicker}</p>
+        <p className="mt-0.5 text-xs text-ink2">{labels.saveSub}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={pending || saved}
+            onClick={save}
+            className="min-h-11 cursor-pointer rounded-lg bg-sage px-4 py-2 text-sm text-white disabled:opacity-50 sm:min-h-0"
+          >
+            {saved ? labels.saved : labels.save}
+          </button>
+          <span className="font-mono text-xs text-ink3">{labels.meeting} · <bdi>{review.meeting_date}</bdi></span>
+        </div>
+        {failed && <p role="alert" className="mt-2 text-xs text-coral">{labels.error}</p>}
+      </div>
+
+      <div className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-mist">{labels.uploadKicker}</p>
+        <p className="mt-0.5 text-xs text-ink2">{labels.uploadSub}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink2 hover:bg-card2 sm:min-h-0">
+            {labels.upload}
+            <input
+              type="file"
+              accept=".mp4,.txt,.docx"
+              aria-label={labels.upload}
+              disabled={pending}
+              className="sr-only"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
+            />
+          </label>
+          {uploaded && <span role="status" className="text-xs text-sage">{labels.uploaded}</span>}
+          {uploadFailed && <span role="alert" className="text-xs text-coral">{labels.error}</span>}
+        </div>
+      </div>
+    </div>
   );
 }

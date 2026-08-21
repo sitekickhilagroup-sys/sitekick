@@ -5,7 +5,7 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { laToday } from '@/lib/date';
 import { getProjectProcess } from '@/lib/process';
-import { PhaseColumn } from '@/components/process/phase-column';
+import { ProcessExplorer, type ExplorerPhase } from '@/components/process/process-explorer';
 import { PhaseSwitcher } from '@/components/process/phase-switcher';
 import { InferButton } from '@/components/process/infer-button';
 import { WorkRow } from '@/components/work/work-row';
@@ -174,21 +174,20 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
         </div>
       )}
 
-      <div>
-        <div className="grid gap-3 lg:grid-cols-5">
-          {phaseViews.map((view, idx) => (
-            <PhaseColumn
-              key={view.phase.key}
-              projectId={project.id}
-              view={view}
-              isCurrent={view.phase.key === project.current_phase_key}
-              stateLabel={phaseStateFor(view.phase.key, idx)}
-              unactivated={unactivatedByPhase.get(view.phase.key) ?? []}
-              labels={labels}
-            />
-          ))}
-        </div>
-      </div>
+      <ProcessExplorer
+        projectId={project.id}
+        labels={labels}
+        phases={phaseViews.map((view, idx): ExplorerPhase => ({
+          key: view.phase.key,
+          label: view.phase.label,
+          state: phaseStateFor(view.phase.key, idx),
+          isCurrent: view.phase.key === project.current_phase_key,
+          isParallel: parallelKeys.has(view.phase.key),
+          substages: view.substages,
+          unactivated: unactivatedByPhase.get(view.phase.key) ?? [],
+          workstreams: view.workstreams,
+        }))}
+      />
 
       <div>
         <p className="text-sm text-ink3">{t('process.connected')}</p>

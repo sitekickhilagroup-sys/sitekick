@@ -28,11 +28,11 @@ export function WaitingEditor({ taskId, value, label, editTitle, saveLabel, canc
         title={editTitle}
         aria-label={`${editTitle} — ${label}: ${value ?? '—'}`}
         onClick={() => { setDraft(value ?? ''); setFailed(false); setEditing(true); }}
-        className={`group inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors sm:min-h-7 ${
+        className={`group inline-flex min-h-11 max-w-full cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors sm:min-h-7 ${
           value ? 'bg-mist-soft text-ink2 hover:text-ink' : 'bg-inset text-ink3 hover:text-ink2'
         }`}
       >
-        {value ? `${label}: ${value}` : `${label}: —`}
+        <span className="min-w-0 truncate">{value ? `${label}: ${value}` : `${label}: —`}</span>
         <span aria-hidden="true" className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">✎</span>
       </button>
     );
