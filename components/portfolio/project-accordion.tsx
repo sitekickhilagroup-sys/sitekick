@@ -112,6 +112,9 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
 
       {open && (
         <div className="border-t border-line2 p-4 pt-3">
+          {project.summary && (
+            <p className="mb-3 max-w-2xl text-sm leading-relaxed text-ink2">{project.summary}</p>
+          )}
           {/* Numbered 01-05 phase rail — current phase in sage, phases lit by an
               active parallel workstream in mist, everything else quiet. */}
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.position}</p>
