@@ -52,6 +52,8 @@ export interface OverviewData {
   };
   /** Consultants tab (client demo): open items waiting on each vendor + their open money. */
   consultants: { name: string; discipline: string | null; waitingCount: number; openUsd: number }[];
+  /** Budget tab — derived from recorded invoices only (partial coverage, stated). */
+  budget: { project: string; paid: number; total: number }[];
   today: string;
 }
 
@@ -72,8 +74,9 @@ export async function getOverviewData(): Promise<OverviewData> {
     supabase.from('tasks').select('*').eq('status', 'open').order('created_at'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
     supabase.from('decisions').select('*').order('created_at', { ascending: false }).limit(30),
-    // Overview only charts open money + the Rowan queue.
-    supabase.from('invoices').select('project_id,status,amount_usd,vendor_id').in('status', ['received', 'for_rowan_approval', 'approved']),
+    // Open money + Rowan queue + the Budget intelligence tab (needs paid
+    // rows too) — all computed in memory from one fetch.
+    supabase.from('invoices').select('project_id,status,amount_usd,vendor_id'),
     supabase.from('substage_catalog').select('*').order('position'),
     // Feeds the priority engine's "unlocks" bonus — only blocking edges matter there.
     supabase.from('relationships').select('*').eq('type', 'blocks'),
@@ -140,6 +143,7 @@ export async function getOverviewData(): Promise<OverviewData> {
   const openStatuses = new Set(['received', 'for_rowan_approval', 'approved']);
   // null project key = "everything / no specific project" — translated at render.
   const moneyByProject = new Map<string | null, number>();
+  const budgetByProject = new Map<string, { paid: number; total: number }>();
   let rowanCount = 0;
   let rowanTotal = 0;
   for (const inv of invoices) {
@@ -151,7 +155,19 @@ export async function getOverviewData(): Promise<OverviewData> {
       rowanCount++;
       rowanTotal += Number(inv.amount_usd);
     }
+    // Budget tab: paid = cost to date; total = every recorded invoice.
+    // Coverage is partial by definition — invoices only, stated in the UI.
+    if (inv.project_id && inv.status !== 'on_hold') {
+      const name = names.get(inv.project_id) ?? '?';
+      const b = budgetByProject.get(name) ?? { paid: 0, total: 0 };
+      b.total += Number(inv.amount_usd);
+      if (inv.status === 'paid') b.paid += Number(inv.amount_usd);
+      budgetByProject.set(name, b);
+    }
   }
+  const budget = [...budgetByProject.entries()]
+    .map(([project, b]) => ({ project, ...b }))
+    .sort((a, b) => b.total - a.total);
 
   const substages: Record<string, string[]> = {};
   for (const row of catalog) {
@@ -212,7 +228,7 @@ export async function getOverviewData(): Promise<OverviewData> {
         (t) => t.waiting_for && v.name.toLowerCase().includes(t.waiting_for.toLowerCase()),
       ).length;
       const openUsd = invoices
-        .filter((inv) => inv.vendor_id === v.id)
+        .filter((inv) => inv.vendor_id === v.id && openStatuses.has(inv.status))
         .reduce((s, inv) => s + Number(inv.amount_usd), 0);
       return { name: v.name, discipline: v.discipline, waitingCount, openUsd };
     })
@@ -254,6 +270,7 @@ export async function getOverviewData(): Promise<OverviewData> {
     portfolio,
     insights,
     consultants,
+    budget,
     today,
   };
 }

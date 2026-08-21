@@ -23,17 +23,35 @@ interface Props {
   phaseLabel?: string | null;
   /** Legacy stage tag shown under the phase — her "sub-stage" line. */
   stageLabel?: string | null;
+  /** Project page link target for "Open project". */
+  projectHref?: string | null;
 }
 
 // Her My Work table row: What must move | Phase / sub-stage | Owner /
 // waiting on | Due | Status & update — with an explicit Details toggle.
 // Below lg everything stacks; the columns only exist on wide screens.
-export function WorkTableRow({ task, labels, relations, taskOptions, today, rank, whyNow, unlocks, phaseLabel, stageLabel }: Props) {
+export function WorkTableRow({ task, labels, relations, taskOptions, today, rank, whyNow, unlocks, phaseLabel, stageLabel, projectHref }: Props) {
   const [open, setOpen] = useState(false);
   const dueState = task.due && today
     ? task.due < today ? 'overdue' : task.due === today ? 'now' : 'future'
     : task.due ? 'future' : null;
   const blocking = task.priority === 'critical';
+
+  // Her task-context derivations — verified relationships only; anything
+  // unverified is presented as a suggestion, never as fact.
+  const verifiedRel = (relations ?? []).find((r) => r.rel.verified_by || r.rel.manual_override);
+  const relationText = verifiedRel
+    ? `${labels['rel.type.' + verifiedRel.rel.type] ?? verifiedRel.rel.type}: ${verifiedRel.rel.reason || verifiedRel.otherTitle}`
+    : labels.noRel;
+  const blocksTitle = (relations ?? []).find(
+    (r) => r.direction === 'from' && r.rel.type === 'blocks' && (r.rel.verified_by || r.rel.manual_override),
+  )?.otherTitle ?? null;
+  const confidence = verifiedRel
+    ? verifiedRel.rel.confidence >= 0.8 ? labels.confHigh : verifiedRel.rel.confidence >= 0.5 ? labels.confMed : labels.confLow
+    : labels.confLow;
+  const recommendation = task.waiting_for
+    ? (labels.recWaiting ?? '').replace('{who}', task.waiting_for)
+    : blocking ? labels.recBlocking : labels.recComplete;
 
   return (
     <li className="border-b border-line2 px-3 py-3 last:border-b-0">
@@ -103,21 +121,46 @@ export function WorkTableRow({ task, labels, relations, taskOptions, today, rank
       </div>
 
       {open && (
-        <div className="mt-2 space-y-1.5 border-t border-line2 pt-2 text-xs text-ink2">
-          {task.description && <p>{task.description}</p>}
-          {whyNow && (
-            <p>
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-apricot">{labels.whyNow}</span>
-              {whyNow}
-            </p>
+        <div className="mt-3 border-t border-line2 pt-3 text-xs text-ink2">
+          {task.description && <p className="mb-2">{task.description}</p>}
+          {/* Her .context-grid: EVIDENCE / RELATIONSHIP / RECOMMENDED NEXT MOVE. */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <section>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.evidence}</p>
+              <p className="mt-1">{task.source ?? labels.noEvidence}{whyNow ? ` · ${whyNow}` : ''}</p>
+            </section>
+            <section>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.relationship}</p>
+              <p className="mt-1">{relationText}</p>
+            </section>
+            <section>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.recommended}</p>
+              <p className="mt-1">{recommendation}</p>
+            </section>
+          </div>
+          {/* Her .dependency-line: BLOCKS / AFFECTS → UNLOCKS + confidence. */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[10px] bg-card2 px-3 py-2.5">
+            <span>
+              <span className="block text-[9px] font-semibold uppercase tracking-wide text-ink3">{labels.blocksAffects}</span>
+              <span className="mt-0.5 block font-medium text-ink">{blocksTitle ?? labels.needsVerification}</span>
+            </span>
+            <span aria-hidden="true" className="text-ink3 rtl:-scale-x-100">→</span>
+            <span>
+              <span className="block text-[9px] font-semibold uppercase tracking-wide text-ink3">{labels.unlocks}</span>
+              <span className="mt-0.5 block font-medium text-ink">
+                {unlocks && unlocks.length > 0 ? unlocks.join(' · ') : labels.noUnlocks}
+              </span>
+            </span>
+            <em className="ms-auto not-italic text-[10px] text-ink3">{confidence}</em>
+          </div>
+          <div className="mt-3">
+            <RelationEditor taskId={task.id} relations={relations ?? []} taskOptions={taskOptions ?? []} labels={labels} />
+          </div>
+          {projectHref && (
+            <a href={projectHref} className="mt-2 inline-flex min-h-11 items-center text-xs text-mist hover:underline sm:min-h-0">
+              {labels.openProject} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
+            </a>
           )}
-          {unlocks && unlocks.length > 0 && (
-            <p>
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-sage">{labels.unlocks}</span>
-              {unlocks.join(' · ')}
-            </p>
-          )}
-          <RelationEditor taskId={task.id} relations={relations ?? []} taskOptions={taskOptions ?? []} labels={labels} />
         </div>
       )}
     </li>

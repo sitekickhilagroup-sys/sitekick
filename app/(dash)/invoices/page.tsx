@@ -178,65 +178,43 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
         }}
       />
 
+      {/* Her invoices table: VENDOR / INVOICE (with links + Update inside) |
+          PROJECT / ENTITY | DESCRIPTION | DATE | STATUS | AMOUNT. */}
       <div className="overflow-x-auto rounded-(--radius-card) border border-line bg-card shadow-card">
-        <table className="w-full min-w-[1000px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead>
-            <tr className="border-b border-line text-xs text-ink3">
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.vendor')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.project')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.entity')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.number')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('tasks.description')}</th>
-              <th scope="col" className="px-3 py-2 text-end font-medium">{t('common.amount')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.date')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.status')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.paid_date')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.transfer')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.edit_links')}</th>
+            <tr className="border-b border-line bg-card2/60 text-[10px] uppercase tracking-[0.08em] text-ink3">
+              <th scope="col" className="px-3 py-2 text-start font-bold">{t('invoices.col_vendor')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-bold">{t('invoices.col_project')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-bold">{t('tasks.description')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-bold">{t('invoices.date')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-bold">{t('common.status')}</th>
+              <th scope="col" className="px-3 py-2 text-end font-bold">{t('common.amount')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line2">
             {rows.length === 0 && (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-ink3">{t('invoices.empty')}</td></tr>
+              <tr><td colSpan={6} className="px-3 py-8 text-center text-ink3">{t('invoices.empty')}</td></tr>
             )}
             {rows.map((inv) => (
               <tr key={inv.id}>
-                <td className="px-3 py-2 text-ink">{vDisplay(inv.vendor_id)}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.project_id ? pName.get(inv.project_id) : t('common.general')}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.entity ?? ''}</td>
-                <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{inv.number ?? ''}</td>
-                <td className="max-w-[220px] px-3 py-2 text-xs text-ink2">
-                  <span className="block truncate">{inv.budget_line ?? ''}</span>
-                  {inv.notes && <span className="block truncate text-[11px] text-ink3" title={inv.notes}>{inv.notes}</span>}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-end font-mono text-ink">{money(Number(inv.amount_usd))}</td>
-                <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{inv.received_date ?? inv.invoice_date ?? ''}</td>
-                <td className="whitespace-nowrap px-3 py-2">
-                  <StatusChain
-                    invoiceId={inv.id}
-                    status={inv.status as InvoiceStatus}
-                    labels={statusLabels}
-                    advanceLabel={t('invoices.advance')}
-                  />
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{inv.paid_date ?? ''}</td>
-                <td className="px-3 py-2 text-xs">
-                  {inv.transfer_confirmation_url ? (
-                    <a href={inv.transfer_confirmation_url} target="_blank" rel="noreferrer" className="text-chart1 underline">
-                      {t('invoices.transfer')}
-                    </a>
-                  ) : ''}
-                </td>
-                <td className="px-3 py-2 text-xs">
-                  <span className="flex flex-wrap items-center gap-2">
+                <td className="px-3 py-2.5">
+                  <span className="block font-medium text-ink">{vDisplay(inv.vendor_id)}</span>
+                  {inv.number && <span className="block font-mono text-[11px] text-ink3">{t('invoices.number')} {inv.number}</span>}
+                  <span className="mt-1 flex flex-wrap items-center gap-2">
                     {inv.invoice_url && (
-                      <a href={inv.invoice_url} target="_blank" rel="noreferrer" className="text-xs text-mist underline">
-                        {t('invoices.open_invoice')}
+                      <a href={inv.invoice_url} target="_blank" rel="noreferrer" className="text-[11px] text-mist underline">
+                        {t('invoices.open_invoice')} <span aria-hidden="true">↗</span>
                       </a>
                     )}
                     {inv.receipt_url && (
-                      <a href={inv.receipt_url} target="_blank" rel="noreferrer" className="text-xs text-mist underline">
-                        {t('invoices.open_receipt')}
+                      <a href={inv.receipt_url} target="_blank" rel="noreferrer" className="text-[11px] text-mist underline">
+                        {t('invoices.open_receipt')} <span aria-hidden="true">↗</span>
+                      </a>
+                    )}
+                    {inv.transfer_confirmation_url && (
+                      <a href={inv.transfer_confirmation_url} target="_blank" rel="noreferrer" className="text-[11px] text-mist underline">
+                        {t('invoices.transfer')} <span aria-hidden="true">↗</span>
                       </a>
                     )}
                     <LinkEditor
@@ -262,6 +240,27 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                     />
                   </span>
                 </td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-xs">
+                  <span className="block text-ink2">{inv.project_id ? pName.get(inv.project_id) : t('common.general')}</span>
+                  {inv.entity && <span className="block text-[11px] text-ink3">{inv.entity}</span>}
+                </td>
+                <td className="max-w-[220px] px-3 py-2.5 text-xs text-ink2">
+                  <span className="block truncate">{inv.budget_line ?? ''}</span>
+                  {inv.notes && <span className="block truncate text-[11px] text-ink3" title={inv.notes}>{inv.notes}</span>}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-ink2">
+                  <span className="block">{inv.received_date ?? inv.invoice_date ?? ''}</span>
+                  {inv.paid_date && <span className="block text-[11px] text-ink3">{t('invoices.paid_date')} · {inv.paid_date}</span>}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2.5">
+                  <StatusChain
+                    invoiceId={inv.id}
+                    status={inv.status as InvoiceStatus}
+                    labels={statusLabels}
+                    advanceLabel={t('invoices.advance')}
+                  />
+                </td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-end font-mono text-ink">{money(Number(inv.amount_usd))}</td>
               </tr>
             ))}
           </tbody>

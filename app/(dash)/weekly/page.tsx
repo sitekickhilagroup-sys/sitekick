@@ -81,6 +81,7 @@ export default async function WeeklyPage() {
               archiveNote: t('weekly.archive_note'),
               statusLabel: t('weekly.status_label'),
               completedN: t('weekly.completed_n'),
+              actionsN: t('weekly.actions_n'),
             }} />
           );
         })()

@@ -299,7 +299,7 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
       <div className="mt-4 border-t border-line2 pt-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink3">{labels.connectedActions}</p>
-          <a href="#register" className="text-[11px] text-mist hover:underline">
+          <a href="/work?view=all" className="text-[11px] text-mist hover:underline">
             {labels.viewRegister} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
           </a>
         </div>
@@ -308,25 +308,35 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
         ) : (
           <ul className="mt-2 space-y-2">
             {tasks.slice(0, 4).map((task) => (
-              <li key={task.id} className="rounded-[10px] border border-line bg-card p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 text-sm font-medium text-ink">{task.title}</p>
-                  {task.priority === 'critical' && (
-                    <span className="whitespace-nowrap rounded-full bg-coral-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-coral">
-                      {labels.blocking}
-                    </span>
+              // Her .mini-task: status icon square, title, owner · waiting,
+              // register link + inline Update, blocking chip at the end.
+              <li key={task.id} className="grid grid-cols-[27px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-[10px] border border-line bg-card p-3">
+                <span aria-hidden="true" className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs ${
+                  task.priority === 'critical' ? 'bg-coral-soft text-coral' : task.waiting_for ? 'bg-mist-soft text-mist' : 'bg-apricot-soft text-apricot'
+                }`}>
+                  {task.priority === 'critical' ? '!' : task.waiting_for ? '…' : '→'}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">{task.title}</p>
+                  {(task.owner || task.waiting_for) && (
+                    <p className="mt-0.5 truncate text-[11px] text-ink3">
+                      {task.owner ?? ''}
+                      {task.owner && task.waiting_for ? ' · ' : ''}
+                      {task.waiting_for ? `${labels.waitingOn}: ${task.waiting_for}` : ''}
+                    </p>
                   )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <a href="/work?view=all" className="inline-flex min-h-11 items-center rounded-full border border-line px-2.5 py-0.5 text-[11px] text-ink2 hover:bg-card2 sm:min-h-7">
+                      {labels.openRegister}
+                    </a>
+                    <VerbMenu taskId={task.id} labels={labels} />
+                  </div>
                 </div>
-                {(task.owner || task.waiting_for) && (
-                  <p className="mt-0.5 truncate text-[11px] text-ink3">
-                    {task.owner ?? ''}
-                    {task.owner && task.waiting_for ? ' · ' : ''}
-                    {task.waiting_for ? `${labels.waitingOn}: ${task.waiting_for}` : ''}
-                  </p>
+                {task.priority === 'critical' && (
+                  <span className="whitespace-nowrap rounded-full bg-coral-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-coral">
+                    {labels.blocking}
+                  </span>
                 )}
-                <div className="mt-2">
-                  <VerbMenu taskId={task.id} labels={labels} />
-                </div>
               </li>
             ))}
           </ul>
