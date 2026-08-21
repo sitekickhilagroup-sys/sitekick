@@ -19,6 +19,8 @@ export interface AccordionLabels {
   none: string;
   expand: string;
   collapse: string;
+  primaryPhase: string;
+  parallelWs: string;
   /** phase key -> localized label, in canonical order */
   phases: { key: string; label: string }[];
 }
@@ -157,6 +159,21 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
                 <p className="mt-0.5 text-ink2">{thenAction.title}</p>
               </div>
             )}
+            {/* Her PRIMARY PHASE / PARALLEL WORKSTREAM pair above the rail. */}
+            <div className="flex flex-wrap gap-x-8 gap-y-2">
+              {currentPhaseLabel && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.primaryPhase}</p>
+                  <p className="mt-0.5 font-medium text-ink">{currentPhaseLabel}</p>
+                </div>
+              )}
+              {workstreams.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.parallelWs}</p>
+                  <p className="mt-0.5 font-medium text-ink">{workstreams.map((w) => w.name).join(', ')}</p>
+                </div>
+              )}
+            </div>
           </div>
           {lastEvidence && (
             <p className="mt-2 text-[11px] text-ink3">

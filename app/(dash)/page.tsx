@@ -39,6 +39,8 @@ export default async function OverviewPage() {
     none: t('common.none'),
     expand: t('common.expand'),
     collapse: t('common.collapse'),
+    primaryPhase: t('portfolio.primary_phase'),
+    parallelWs: t('portfolio.parallel_ws'),
     phases: (['planning', 'plan_check', 'bidding', 'financing', 'construction'] as const)
       .map((key) => ({ key: key as string, label: t(`phase.${key}`) })),
   };
