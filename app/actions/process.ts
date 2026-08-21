@@ -38,6 +38,25 @@ export async function setSubstageStatus(
   return { ok: true };
 }
 
+// Spec §ג: every sub-stage carries a short explanation ("what is needed to
+// complete it") — her demo shows it under the name and in the detail panel.
+export async function setSubstageNote(projectId: string, projectSubstageId: string, note: string) {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const trimmed = note.trim() || null;
+  const { error } = await admin.from('project_substages').update({ note: trimmed }).eq('id', projectSubstageId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'project_substage',
+    entity_id: projectSubstageId,
+    actor: user.email ?? user.id,
+    action: 'set_note',
+    after: { note: trimmed },
+  });
+  revalidatePath('/projects/' + projectId);
+  return { ok: true };
+}
+
 export async function activateSubstage(projectId: string, substageTemplateId: string, workstreamId: string | null) {
   const user = await requireUser();
   const admin = supabaseAdmin();

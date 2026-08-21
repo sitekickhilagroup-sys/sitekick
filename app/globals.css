@@ -59,7 +59,10 @@
   --color-deep: var(--deep);
   --color-gold: var(--gold);
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
-  --font-serif: var(--font-geist-sans), system-ui, sans-serif;
+  /* Her demo sets every display heading in Georgia serif (.title-row h1,
+     .phase strong, .section-heading h2) — the design doc's all-Geist rule
+     lost to the reference she actually loves. */
+  --font-serif: Georgia, 'Times New Roman', serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --radius-card: 14px;
   --radius-chip: 9px;
@@ -92,6 +95,5 @@ body {
 .stone-tie { height: 2px; width: 14px; background: var(--line); flex: none; }
 .stone-tie.done { background: var(--sage-line); }
 
-/* Geist Sans covers both --font-sans and --font-serif; give heading usage its
-   own weight/tracking so it still reads as a distinct display style. */
-.font-serif { font-weight: 650; letter-spacing: -0.025em; }
+/* Georgia display headings (her demo: font 600, tight natural tracking). */
+.font-serif { font-weight: 600; letter-spacing: 0; }

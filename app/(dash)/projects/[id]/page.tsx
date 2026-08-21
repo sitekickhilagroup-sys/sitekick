@@ -74,6 +74,14 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     'status.verify': t('process.status.verify'),
     'status.submitted': t('process.status.submitted'),
     'status.with_city': t('process.status.with_city'),
+    substages: t('process.substages'),
+    selectedSub: t('process.selected_sub'),
+    connectedActions: t('process.connected_actions'),
+    viewRegister: t('process.view_register'),
+    notePh: t('process.note_ph'),
+    noTasksPhase: t('process.no_tasks_phase'),
+    blocking: t('work.blocking'),
+    waitingOn: t('tasks.waiting'),
   };
 
   const rowLabels = {
@@ -118,75 +126,98 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     : currentIdx >= 0 && idx < currentIdx ? t('process.state.done')
     : t('process.state.upcoming');
 
+  // "Current position" card copy — "Plan Check + Planning in parallel".
+  const parallelPhaseLabels = [...new Set(activeWorkstreams.map((w) =>
+    phaseViews.find((v) => v.phase.key === w.phase_key)?.phase.label ?? w.name,
+  ))].filter((l) => l !== currentPhaseView?.phase.label);
+  const positionText = currentPhaseView
+    ? parallelPhaseLabels.length > 0
+      ? t('process.in_parallel').replace('{a}', currentPhaseView.phase.label).replace('{b}', parallelPhaseLabels.join(', '))
+      : currentPhaseView.phase.label
+    : '—';
+
   return (
-    <div className="space-y-6 pb-16">
-      {/* Project switcher — her demo's top pills; jump between process pages. */}
-      <nav className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+    <div className="space-y-5 pb-16">
+      {/* Project switcher — her demo's top pills (active = white + sage ring). */}
+      <nav aria-label={t('process.project')} className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+        <span className="me-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink3">{t('process.project')}</span>
         {allProjects.map((p) => (
           <Link
             key={p.id}
             href={`/projects/${p.id}`}
             aria-current={p.id === project.id ? 'page' : undefined}
-            className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 py-1 text-sm sm:min-h-0 ${
-              p.id === project.id ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+            className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full border px-3.5 py-1 text-xs sm:min-h-0 ${
+              p.id === project.id
+                ? 'border-sage bg-card font-medium text-sage shadow-card'
+                : 'border-line bg-card2 text-ink2 hover:text-ink'
             }`}
           >
             {p.name}
           </Link>
         ))}
       </nav>
-      <div>
-        <p className="text-sm text-ink3">{t('process.title')}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h1 className="font-serif text-2xl text-ink sm:text-3xl">{project.name}</h1>
-          {project.city_case && (
-            <span className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
-              project.city_on_hold ? 'bg-coral-soft text-coral' : 'bg-card2 text-ink3'
-            }`}>
-              <bdi>{project.city_on_hold ? `${project.city_case} · ${t('rails.on_hold')}` : project.city_case}</bdi>
-            </span>
-          )}
-        </div>
-        <div className="mt-2">
-          <SummaryEditor
-            projectId={project.id}
-            value={project.summary}
-            placeholder={t('process.summary_ph')}
-            editTitle={t('process.summary_edit')}
-            saveLabel={t('common.save')}
-            cancelLabel={t('common.cancel')}
-            errorLabel={t('common.error_save')}
-          />
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <p className="text-sm text-ink3">
-            <span className="font-medium text-ink3">{t('process.current')}:</span>{' '}
-            <span className="text-ink">{currentPhaseView?.phase.label ?? '—'}</span>
-            {activeWorkstreams.length > 0 && (
-              <span className="text-ink3"> + {activeWorkstreams.map((w) => w.name).join(', ')}</span>
+
+      {/* Her "PROJECT CONTROL CENTER" header: display name + case chip +
+          summary line, with the Current-position card floated at the end. */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('process.control_center')}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <h1 className="font-serif text-3xl text-ink sm:text-4xl">{project.name}</h1>
+            {project.city_case && (
+              <span className={`rounded-full px-2.5 py-1 font-mono text-[11px] ${
+                project.city_on_hold ? 'bg-coral-soft text-coral' : 'bg-card2 text-ink3'
+              }`}>
+                <bdi>{project.city_on_hold ? `${project.city_case} · ${t('rails.on_hold')}` : project.city_case}</bdi>
+              </span>
             )}
-          </p>
-          <PhaseSwitcher
-            key={project.current_phase_key ?? 'none'}
-            projectId={project.id}
-            phases={phaseViews.map((v) => v.phase)}
-            current={project.current_phase_key}
-            label={t('process.current')}
-            errorLabel={t('common.error_save')}
-          />
-          <InferButton
-            projectId={project.id}
-            label={t('process.infer')}
-            doneLabel={t('process.infer_done')}
-            sameLabel={t('process.infer_same')}
-            errorLabel={t('common.error_save')}
-          />
+          </div>
+          <div className="mt-1.5 max-w-2xl">
+            <SummaryEditor
+              projectId={project.id}
+              value={project.summary}
+              placeholder={t('process.summary_ph')}
+              editTitle={t('process.summary_edit')}
+              saveLabel={t('common.save')}
+              cancelLabel={t('common.cancel')}
+              errorLabel={t('common.error_save')}
+            />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <PhaseSwitcher
+              key={project.current_phase_key ?? 'none'}
+              projectId={project.id}
+              phases={phaseViews.map((v) => v.phase)}
+              current={project.current_phase_key}
+              label={t('process.current')}
+              errorLabel={t('common.error_save')}
+            />
+            <InferButton
+              projectId={project.id}
+              label={t('process.infer')}
+              doneLabel={t('process.infer_done')}
+              sameLabel={t('process.infer_same')}
+              errorLabel={t('common.error_save')}
+            />
+          </div>
         </div>
+        {/* Her .health-card: pulse dot with a soft halo; hidden on small screens. */}
+        <aside className="hidden items-center gap-3 rounded-[14px] border border-line bg-card px-4.5 py-3.5 shadow-card md:flex">
+          <span aria-hidden="true" className={`h-2.5 w-2.5 flex-none rounded-full ${
+            activeWorkstreams.length > 0
+              ? 'bg-apricot shadow-[0_0_0_5px_var(--color-apricot-soft)]'
+              : 'bg-sage shadow-[0_0_0_5px_var(--color-sage-soft)]'
+          }`} />
+          <span>
+            <span className="block text-[9px] font-semibold uppercase tracking-[0.12em] text-ink3">{t('portfolio.position')}</span>
+            <span className="mt-0.5 block text-[13px] font-semibold text-ink">{positionText}</span>
+          </span>
+        </aside>
       </div>
 
       {activeWorkstreams.length > 0 && (
-        <div className="flex items-start gap-2.5 rounded-(--radius-card) border border-mist/25 bg-mist-soft p-3.5">
-          <span aria-hidden="true" className="mt-0.5 text-mist">↔</span>
+        <div className="flex items-start gap-2.5 rounded-(--radius-card) border border-apricot/30 bg-apricot-soft p-3.5">
+          <span aria-hidden="true" className="mt-0.5 text-apricot">↔</span>
           <p className="text-sm text-ink">
             <span className="font-medium">{t('process.parallel_note_title')}</span>
             <span className="block text-xs text-ink2">{t('process.parallel_note')}</span>
@@ -196,7 +227,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
 
       <ProcessExplorer
         projectId={project.id}
-        labels={labels}
+        labels={{ ...rowLabels, ...labels }}
         phases={phaseViews.map((view, idx): ExplorerPhase => ({
           key: view.phase.key,
           label: view.phase.label,
@@ -206,10 +237,14 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
           substages: view.substages,
           unactivated: unactivatedByPhase.get(view.phase.key) ?? [],
           workstreams: view.workstreams,
+          tasks: (tasksByPhase.get(view.phase.key) ?? []).map((task) => ({
+            id: task.id, title: task.title, owner: task.owner,
+            waiting_for: task.waiting_for, priority: task.priority,
+          })),
         }))}
       />
 
-      <div>
+      <div id="register">
         <p className="text-sm text-ink3">{t('process.connected')}</p>
         {allTasks.length === 0 && (
           <p className="mt-2 rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">

@@ -7,6 +7,8 @@ import { usePathname } from 'next/navigation';
 export interface NavLink {
   href: string;
   label: string;
+  /** Optional count pill (her demo: open tasks on My Work). */
+  badge?: number;
 }
 
 function isActive(href: string, pathname: string) {
@@ -44,7 +46,8 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
   const moreActive = (more ?? []).some((l) => isActive(l.href, pathname));
 
   return (
-    <nav className="hidden flex-1 items-center gap-1 text-sm lg:flex">
+    // Centered like her demo's top bar.
+    <nav className="hidden flex-1 items-center justify-center gap-1 text-sm lg:flex">
       {links.map((l) => {
         const active = isActive(l.href, pathname);
         return (
@@ -52,13 +55,18 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
             key={l.href}
             href={l.href}
             aria-current={active ? 'page' : undefined}
-            className={`whitespace-nowrap rounded-full px-3 py-1 transition-colors ${
+            className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 transition-colors ${
               active
                 ? 'bg-sage-soft font-medium text-sage'
                 : 'text-ink2 hover:bg-card2 hover:text-ink'
             }`}
           >
             {l.label}
+            {l.badge != null && l.badge > 0 && (
+              <span className={`rounded-full px-1.5 font-mono text-[10px] ${
+                active ? 'bg-sage text-white' : 'bg-card2 text-ink3'
+              }`}>{l.badge}</span>
+            )}
           </Link>
         );
       })}
@@ -143,7 +151,7 @@ export function MobileNav({
         href={l.href}
         aria-current={active ? 'page' : undefined}
         onClick={() => setOpen(false)}
-        className={`flex min-h-11 items-center rounded-lg px-3 text-sm ${
+        className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm ${
           active
             ? 'bg-sage-soft font-medium text-sage'
             : quiet
@@ -152,6 +160,11 @@ export function MobileNav({
         }`}
       >
         {l.label}
+        {l.badge != null && l.badge > 0 && (
+          <span className={`rounded-full px-1.5 font-mono text-[10px] ${
+            active ? 'bg-sage text-white' : 'bg-card2 text-ink3'
+          }`}>{l.badge}</span>
+        )}
       </Link>
     );
   };

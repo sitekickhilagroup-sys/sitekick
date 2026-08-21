@@ -4,9 +4,9 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { scoreTask } from '@/lib/priority';
 import { laToday } from '@/lib/date';
-import { WorkRow } from '@/components/work/work-row';
+import { WorkTableRow } from '@/components/work/work-table-row';
 import type { RelationRow } from '@/components/work/relation-editor';
-import type { Blocker, Invoice, Project, Relationship, Task } from '@/lib/types';
+import type { Blocker, Invoice, Phase, Project, Relationship, Task } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,17 +48,20 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const supabase = await supabaseServer();
   // Relationships ride the same batch (table is small — filter in memory
   // below) so the page costs one database round trip, not two.
-  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ] = await Promise.all([
+  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ] = await Promise.all([
     supabase.from('tasks').select('*').eq('status', 'open'),
-    supabase.from('projects').select('id,name'),
+    supabase.from('projects').select('*'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
     supabase.from('agent_proposals').select('id', { count: 'exact', head: true }).eq('state', 'pending'),
     supabase.from('invoices').select('amount_usd,vendor_id').eq('status', 'approved'),
     supabase.from('relationships').select('*'),
+    // Her table's "Phase / sub-stage" column: task.stage_key -> canonical phase.
+    supabase.from('phases').select('*'),
+    supabase.from('stage_phase_map').select('*'),
   ]);
 
   const tasks = (tasksQ.data ?? []) as Task[];
-  const projects = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name'>[];
+  const projects = (projectsQ.data ?? []) as Project[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const pendingCount = proposalsQ.count ?? 0;
   const approvedInvoices = (approvedInvoicesQ.data ?? []) as Pick<Invoice, 'amount_usd' | 'vendor_id'>[];
@@ -66,6 +69,20 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const approvedTotal = approvedInvoices.reduce((s, i) => s + Number(i.amount_usd), 0);
   const vendorGroups = new Set(approvedInvoices.map((i) => i.vendor_id ?? '—')).size;
   const projectNames = new Map(projects.map((p) => [p.id, p.name]));
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+
+  // Phase / sub-stage column: stage_key -> canonical phase via stage_phase_map;
+  // unmapped tasks fall back to their project's current phase.
+  const phaseLabelByKey = new Map(((phasesQ.data ?? []) as Phase[]).map((ph) => [ph.key as string, ph.label]));
+  const phaseKeyByStage = new Map(((stageMapQ.data ?? []) as { stage_key: string; phase_key: string }[])
+    .map((m) => [m.stage_key, m.phase_key]));
+  const prettyStage = (key: string) =>
+    key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const phaseLabelFor = (task: Task): string | null => {
+    const mapped = task.stage_key ? phaseKeyByStage.get(task.stage_key) : null;
+    const key = mapped ?? (task.project_id ? projectById.get(task.project_id)?.current_phase_key : null);
+    return key ? (phaseLabelByKey.get(key) ?? null) : null;
+  };
 
   const filtered = filterView(tasks, view, today);
   const scoreOf = (task: Task) => scoreTask(task, { today });
@@ -156,6 +173,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     update: t('work.update'),
     whyNow: t('work.why_now'),
     unlocks: t('work.unlocks'),
+    details: t('work.details'),
     title: t('rel.title'),
     add: t('rel.add'),
     pickTask: t('rel.pick_task'),
@@ -266,28 +284,54 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       {isEmpty ? (
         <p className="rounded-(--radius-card) border border-line bg-card p-6 text-ink2">{t('work.empty')}</p>
       ) : (
-        orderedGroups.map(([projectId, groupTasks]) => (
-          <section key={projectId ?? 'none'}>
-            <h2 className="text-sm font-medium text-ink2">
-              {projectId ? (projectNames.get(projectId) ?? '') : t('common.general')}
-            </h2>
-            <ul className="mt-2 divide-y divide-line2 rounded-(--radius-card) border border-line bg-card shadow-card">
-              {groupTasks.map((task) => (
-                <WorkRow
-                  key={task.id}
-                  task={task}
-                  labels={rowLabels}
-                  today={today}
-                  rank={rankById?.get(task.id)}
-                  whyNow={whyNowFor(task)}
-                  unlocks={unlocksFor(task.id)}
-                  relations={relationsFor(task.id)}
-                  taskOptions={taskOptionsFor(task)}
-                />
-              ))}
-            </ul>
-          </section>
-        ))
+        orderedGroups.map(([projectId, groupTasks]) => {
+          const project = projectId ? projectById.get(projectId) : null;
+          const phaseLabel = project?.current_phase_key ? phaseLabelByKey.get(project.current_phase_key) : null;
+          return (
+            <section key={projectId ?? 'none'}>
+              {/* Her group header: name + phase · case + count. */}
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
+                <h2 className="text-sm font-semibold text-ink">
+                  {project?.name ?? t('common.general')}
+                </h2>
+                {(phaseLabel || project?.city_case) && (
+                  <span className="font-mono text-[11px] text-ink3">
+                    {[phaseLabel, project?.city_case].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+                <span className="ms-auto text-[11px] text-ink3">
+                  {t('work.today_n').replace('{n}', String(groupTasks.length))}
+                </span>
+              </div>
+              <div className="mt-2 rounded-(--radius-card) border border-line bg-card shadow-card">
+                <div className="hidden grid-cols-[minmax(0,2.1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.1fr)] gap-x-4 border-b border-line bg-card2/60 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.08em] text-ink3 lg:grid">
+                  <span>{t('work.col_what')}</span>
+                  <span>{t('work.col_phase')}</span>
+                  <span>{t('work.col_owner')}</span>
+                  <span>{t('work.col_due')}</span>
+                  <span className="text-end">{t('work.col_status')}</span>
+                </div>
+                <ul>
+                  {groupTasks.map((task) => (
+                    <WorkTableRow
+                      key={task.id}
+                      task={task}
+                      labels={rowLabels}
+                      today={today}
+                      rank={rankById?.get(task.id)}
+                      whyNow={whyNowFor(task)}
+                      unlocks={unlocksFor(task.id)}
+                      relations={relationsFor(task.id)}
+                      taskOptions={taskOptionsFor(task)}
+                      phaseLabel={phaseLabelFor(task)}
+                      stageLabel={task.stage_key ? prettyStage(task.stage_key) : null}
+                    />
+                  ))}
+                </ul>
+              </div>
+            </section>
+          );
+        })
       )}
     </div>
   );
