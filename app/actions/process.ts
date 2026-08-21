@@ -4,18 +4,24 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
-import { type PhaseKey } from '@/lib/types';
+import { type PhaseKey, type ProjectSubstageStatus } from '@/lib/types';
 import { logActivity } from '@/lib/state-writer';
 import { inferProjectPhase } from '@/agents/infer-phase';
 
 const VALID_PHASES: PhaseKey[] = ['planning', 'plan_check', 'bidding', 'financing', 'construction'];
+// Noa's full sub-stage lifecycle (spec §ג, enum widened in 0007).
+const VALID_SUBSTAGE_STATUSES: ProjectSubstageStatus[] = [
+  'upcoming', 'active', 'done', 'not_applicable',
+  'waiting', 'blocked', 'verify', 'submitted', 'with_city',
+];
 
 export async function setSubstageStatus(
   projectId: string,
   projectSubstageId: string,
-  status: 'upcoming' | 'active' | 'done' | 'not_applicable',
+  status: ProjectSubstageStatus,
 ) {
   const user = await requireUser();
+  if (!VALID_SUBSTAGE_STATUSES.includes(status)) return { error: 'invalid status' };
   const admin = supabaseAdmin();
   const completed_at = status === 'done' ? laToday() : null;
   const { error } = await admin.from('project_substages').update({ status, completed_at }).eq('id', projectSubstageId);

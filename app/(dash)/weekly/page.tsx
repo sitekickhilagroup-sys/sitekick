@@ -79,6 +79,8 @@ export default async function WeeklyPage() {
               noteKicker: t('weekly.note_kicker'),
               ownerLabel: t('weekly.owner'),
               archiveNote: t('weekly.archive_note'),
+              statusLabel: t('weekly.status_label'),
+              completedN: t('weekly.completed_n'),
             }} />
           );
         })()
@@ -101,7 +103,7 @@ function buildGroups(items: EmbeddedItem[], contexts: WeeklyReviewSubtopic[], t:
   const byProject = new Map<string, ProjectGroupAcc>();
   for (const embeddedItem of items) {
     const { task, project, ...item } = embeddedItem;
-    const projectName = project?.name ?? t('common.all');
+    const projectName = project?.name ?? t('common.general');
     const subtopicName = item.subtopic ?? t('weekly.general');
     let group = byProject.get(projectName);
     if (!group) {

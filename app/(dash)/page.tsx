@@ -3,17 +3,15 @@ import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { getOverviewData } from '@/lib/queries';
 import { WhatsStuck } from '@/components/overview/whats-stuck';
-import { ProjectRails } from '@/components/overview/project-rails';
-import { DecisionsWeek } from '@/components/overview/decisions-week';
 import { CompareCharts } from '@/components/overview/compare-charts';
 import { ProjectAccordion } from '@/components/portfolio/project-accordion';
 
 export const dynamic = 'force-dynamic';
 
 // Understand-only overview (BUILD_SPEC §2) — acting lives on /work now.
-// Order: plan banner -> inbox banner (when pending) -> portfolio map ->
-// WhatsStuck -> legacy ProjectRails (kept until Noa signs off the
-// accordions; removed at the Sprint D checkpoint) -> DecisionsWeek -> CompareCharts.
+// Alignment spec §ו: ONE process map (the accordions) — legacy ProjectRails
+// and DecisionsWeek are gone from this page; What's stuck caps at 5;
+// inactive projects (Flicker) collapse at the bottom.
 export default async function OverviewPage() {
   const store = await cookies();
   const locale = (store.get(LOCALE_COOKIE)?.value === 'he' ? 'he' : 'en') as Locale;
@@ -21,30 +19,10 @@ export default async function OverviewPage() {
   const data = await getOverviewData();
   const projectNames = Object.fromEntries(data.projects.map((p) => [p.id, p.name]));
 
-  const railLabels = {
-    whatWeOwe: t('rails.what_we_owe'),
-    timeline: t('rails.timeline'),
-    onUs: t('rails.on_us'),
-    cityIssues: t('rails.city_issues'),
-    statusUnknown: t('rails.status_unknown'),
-    doneGroup: t('rails.done_group'),
-    toFinish: t('rails.to_finish'),
-    completedStage: t('rails.completed_stage'),
-    ahead: t('rails.ahead'),
-    alsoActive: t('rails.also_active'),
-    noRecord: t('rails.no_record'),
-    needsChecking: t('rails.needs_checking'),
-    noEvidence: t('rails.no_evidence'),
-    onHold: t('rails.on_hold'),
-    onTrack: t('rails.on_track'),
-    slip: t('rails.slip'),
-    progress: t('rails.progress'),
-    confirmed: t('rails.stage_confirmed'),
-    estimated: t('rails.estimated'),
-    standardUnconfirmed: t('rails.standard_unconfirmed'),
-    expand: t('common.expand'),
-    collapse: t('common.collapse'),
-  };
+  // active !== false (not `=== true`) keeps the page correct even before
+  // migration 0007 lands the column.
+  const activePortfolio = data.portfolio.filter((e) => e.project.active !== false);
+  const inactivePortfolio = data.portfolio.filter((e) => e.project.active === false);
 
   const portfolioLabels = {
     onHold: t('rails.on_hold'),
@@ -106,14 +84,26 @@ export default async function OverviewPage() {
         <h2 id="portfolio-h" className="font-serif text-xl text-ink sm:text-2xl">{t('portfolio.map')}</h2>
         <p className="mt-0.5 text-sm text-ink3">{t('portfolio.map_sub')}</p>
         <div className="mt-4 space-y-3">
-          {data.portfolio.map((entry, i) => (
+          {activePortfolio.map((entry, i) => (
             <ProjectAccordion key={entry.project.id} entry={entry} defaultOpen={i === 0} labels={portfolioLabels} />
           ))}
         </div>
+        {inactivePortfolio.length > 0 && (
+          <details className="mt-3">
+            <summary className="min-h-11 cursor-pointer py-1 text-sm text-ink3 hover:text-ink sm:min-h-0">
+              {t('portfolio.inactive')} · {inactivePortfolio.length}
+            </summary>
+            <div className="mt-2 space-y-3 opacity-80">
+              {inactivePortfolio.map((entry) => (
+                <ProjectAccordion key={entry.project.id} entry={entry} defaultOpen={false} labels={portfolioLabels} />
+              ))}
+            </div>
+          </details>
+        )}
       </section>
 
       <WhatsStuck
-        blockers={data.blockers}
+        blockers={data.blockers.slice(0, 5)}
         projectNames={projectNames}
         title={t('overview.whats_stuck')}
         labels={{
@@ -122,20 +112,6 @@ export default async function OverviewPage() {
           suggested: t('overview.suggested'),
           empty: t('overview.no_actions'),
         }}
-      />
-
-      <ProjectRails
-        projects={data.projects}
-        substages={data.substages}
-        title={t('overview.where_projects')}
-        labels={railLabels}
-      />
-
-      <DecisionsWeek
-        decisions={data.decisions}
-        projectNames={projectNames}
-        title={t('overview.decisions_week')}
-        empty={t('decisions.empty')}
       />
 
       {(data.insights.timeLost || data.insights.staleWait) && (
@@ -153,7 +129,7 @@ export default async function OverviewPage() {
           )}
           {data.insights.staleWait && (
             <article className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-apricot">{t('insights.stale_wait')}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-mist">{t('insights.stale_wait')}</p>
               <p className="mt-1 text-sm font-medium text-ink">
                 {data.insights.staleWait.project ? `${data.insights.staleWait.project} · ` : ''}{data.insights.staleWait.title}
               </p>
@@ -179,7 +155,7 @@ export default async function OverviewPage() {
                     {c.discipline && <span className="block truncate text-[11px] text-ink3">{c.discipline}</span>}
                   </span>
                   <span className={`justify-self-end whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] sm:justify-self-auto ${
-                    c.waitingCount > 0 ? 'bg-apricot-soft text-apricot' : 'bg-card2 text-ink3'
+                    c.waitingCount > 0 ? 'bg-mist-soft text-mist' : 'bg-card2 text-ink3'
                   }`}>
                     {t('insights.waiting_short').replace('{n}', `⁨${c.waitingCount}⁩`)}
                   </span>
@@ -204,7 +180,7 @@ export default async function OverviewPage() {
         subtitle={t('overview.compare_sub')}
         moneyLabel={t('overview.open_money')}
         loadLabel={t('overview.task_load')}
-        allLabel={t('common.all')}
+        allLabel={t('common.general')}
       />
     </div>
   );

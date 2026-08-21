@@ -13,12 +13,17 @@ export default async function DashLayout({ children }: { children: React.ReactNo
   const theme = store.get(THEME_COOKIE)?.value === 'dark' ? 'dark' : 'light';
   const t = getT(locale);
 
+  // Spec §א: only the five core work areas stay primary; everything else
+  // lives under "More" so the top nav never crowds or clips.
   const links = [
     { href: '/', label: t('nav.overview') },
     { href: '/work', label: t('nav.work') },
+    { href: '/projects', label: t('nav.process') },
     { href: '/weekly', label: t('nav.weekly') },
-    { href: '/inbox', label: t('nav.inbox') },
     { href: '/invoices', label: t('nav.invoices') },
+  ];
+  const moreLinks = [
+    { href: '/inbox', label: t('nav.inbox') },
     { href: '/drafts', label: t('nav.drafts') },
     { href: '/digest', label: t('nav.digest') },
     { href: '/directory', label: t('nav.directory') },
@@ -42,7 +47,7 @@ export default async function DashLayout({ children }: { children: React.ReactNo
             <span className="font-serif text-lg font-semibold text-ink">Sitekick</span>
             <span className="hidden text-xs text-ink3 xl:inline">{t('app.tagline')}</span>
           </Link>
-          <NavLinks links={links} />
+          <NavLinks links={links} more={moreLinks} moreLabel={t('nav.more')} />
           <div className="ms-auto flex items-center gap-1 lg:ms-0 lg:gap-2">
             <LocaleToggle locale={locale} label={t('lang.toggle')} />
             <ThemeToggle theme={theme} label={t('theme.toggle')} />
@@ -51,7 +56,7 @@ export default async function DashLayout({ children }: { children: React.ReactNo
                 {t('nav.signout')}
               </button>
             </form>
-            <MobileNav links={links} menuLabel={t('nav.menu')}>
+            <MobileNav links={links} more={moreLinks} menuLabel={t('nav.menu')}>
               <form action={signOut}>
                 <button type="submit" className="flex min-h-11 w-full items-center rounded-lg px-3 text-sm text-ink2 hover:bg-card2 hover:text-ink">
                   {t('nav.signout')}

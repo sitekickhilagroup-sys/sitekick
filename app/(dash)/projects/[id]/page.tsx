@@ -29,10 +29,13 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
   const [{ project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase }, relsQ, projectsQ] = await Promise.all([
     getProjectProcess(supabase, id),
     supabase.from('relationships').select('*'),
-    supabase.from('projects').select('id,name').order('name'),
+    supabase.from('projects').select('*').order('name'),
   ]);
   if (!project) notFound();
-  const allProjects = (projectsQ.data ?? []) as { id: string; name: string }[];
+  // Inactive projects (spec §ו: Flicker) stay out of the switcher pills, but a
+  // direct link to their process page still works — keep the current one visible.
+  const allProjects = ((projectsQ.data ?? []) as { id: string; name: string; active?: boolean }[])
+    .filter((p) => p.active !== false || p.id === id);
 
   const allTasks = [...tasksByPhase.values()].flat().concat(unmappedTasks);
   const listedIds = new Set(allTasks.map((t) => t.id));
@@ -66,6 +69,11 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     'status.active': t('process.status.active'),
     'status.done': t('process.status.done'),
     'status.not_applicable': t('process.status.not_applicable'),
+    'status.waiting': t('process.status.waiting'),
+    'status.blocked': t('process.status.blocked'),
+    'status.verify': t('process.status.verify'),
+    'status.submitted': t('process.status.submitted'),
+    'status.with_city': t('process.status.with_city'),
   };
 
   const rowLabels = {

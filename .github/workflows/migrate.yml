@@ -1,0 +1,25 @@
+# Applies new supabase/migrations/*.sql to prod on every push to main that
+# touches the migrations folder. Needs the SUPABASE_TOKEN repo secret
+# (Management API token). The project ref is public (it ships in
+# NEXT_PUBLIC_SUPABASE_URL), so it lives here in plain text.
+name: Apply migrations
+
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/migrations/**']
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply pending migrations
+        run: node scripts/apply-pending-migrations.mjs
+        env:
+          SUPABASE_TOKEN: ${{ secrets.SUPABASE_TOKEN }}
+          SUPABASE_PROJECT_REF: lmygivkvggerpztacdjp
