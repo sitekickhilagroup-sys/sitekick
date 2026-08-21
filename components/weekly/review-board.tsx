@@ -96,8 +96,11 @@ export function ReviewBoard({ review, groups, labels }: Props) {
                   const doneRows = sub.items.filter((r) => r.item.status_snapshot === 'done');
                   return (
                     <div key={sub.name} className="px-4 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">
-                        {labels.subTopic ? `${labels.subTopic} · ` : ''}{sub.name}
+                      <p className="flex items-baseline gap-2 text-[10px] font-semibold uppercase tracking-wide text-ink3">
+                        <span>{labels.subTopic ? `${labels.subTopic} · ` : ''}{sub.name}</span>
+                        <span className="rounded-full bg-card2 px-1.5 py-0.5 font-mono text-[9px] normal-case">
+                          {(labels.actionsN ?? '{n}').replace('{n}', String(sub.items.length))}
+                        </span>
                       </p>
                       <SubtopicContext
                         reviewId={review.id}

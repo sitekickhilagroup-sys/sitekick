@@ -5,8 +5,9 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { scoreTask } from '@/lib/priority';
 import { laToday } from '@/lib/date';
 import { WorkTableRow } from '@/components/work/work-table-row';
+import { AddAction } from '@/components/work/add-action';
 import type { RelationRow } from '@/components/work/relation-editor';
-import type { Blocker, Invoice, Phase, Project, Relationship, Task } from '@/lib/types';
+import type { Blocker, Invoice, Phase, Project, Relationship, Task, Vendor } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +49,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const supabase = await supabaseServer();
   // Relationships ride the same batch (table is small — filter in memory
   // below) so the page costs one database round trip, not two.
-  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ] = await Promise.all([
+  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, vendorsQ] = await Promise.all([
     supabase.from('tasks').select('*').eq('status', 'open'),
     supabase.from('projects').select('*'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
@@ -58,6 +59,8 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     // Her table's "Phase / sub-stage" column: task.stage_key -> canonical phase.
     supabase.from('phases').select('*'),
     supabase.from('stage_phase_map').select('*'),
+    // Payment Run vendor-group breakdown needs names.
+    supabase.from('vendors').select('id,name'),
   ]);
 
   const tasks = (tasksQ.data ?? []) as Task[];
@@ -67,7 +70,18 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const approvedInvoices = (approvedInvoicesQ.data ?? []) as Pick<Invoice, 'amount_usd' | 'vendor_id'>[];
   const approvedCount = approvedInvoices.length;
   const approvedTotal = approvedInvoices.reduce((s, i) => s + Number(i.amount_usd), 0);
-  const vendorGroups = new Set(approvedInvoices.map((i) => i.vendor_id ?? '—')).size;
+  // Her Payment Run breakdown: one row per vendor group with count + total.
+  const vendorNameById = new Map(((vendorsQ.data ?? []) as Pick<Vendor, 'id' | 'name'>[]).map((v) => [v.id, v.name.trim().replace(/\s+/g, ' ')]));
+  const paymentGroups = [...approvedInvoices
+    .reduce((m, inv) => {
+      const name = inv.vendor_id ? (vendorNameById.get(inv.vendor_id) ?? '—') : '—';
+      const g = m.get(name) ?? { vendor: name, count: 0, total: 0 };
+      g.count++; g.total += Number(inv.amount_usd);
+      m.set(name, g);
+      return m;
+    }, new Map<string, { vendor: string; count: number; total: number }>())
+    .values()].sort((a, b) => b.total - a.total);
+  const vendorGroups = paymentGroups.length;
   const projectNames = new Map(projects.map((p) => [p.id, p.name]));
   const projectById = new Map(projects.map((p) => [p.id, p]));
 
@@ -174,6 +188,21 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     whyNow: t('work.why_now'),
     unlocks: t('work.unlocks'),
     details: t('work.details'),
+    evidence: t('work.evidence'),
+    relationship: t('work.relationship'),
+    recommended: t('work.recommended'),
+    blocksAffects: t('work.blocks_affects'),
+    needsVerification: t('rel.type.needs_verification'),
+    noUnlocks: t('work.no_unlocks'),
+    noRel: t('work.no_rel'),
+    noEvidence: t('work.no_evidence'),
+    confHigh: t('work.conf_high'),
+    confMed: t('work.conf_med'),
+    confLow: t('work.conf_low'),
+    recWaiting: t('work.rec_waiting'),
+    recBlocking: t('work.rec_blocking'),
+    recComplete: t('work.rec_complete'),
+    openProject: t('work.open_project'),
     title: t('rel.title'),
     add: t('rel.add'),
     pickTask: t('rel.pick_task'),
@@ -202,12 +231,38 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     { key: 'all', label: t('work.view.all'), sub: t('work.tab_sub.all'), count: countOf('all') },
   ];
 
+  const activeTab = viewTabs.find((v) => v.key === view);
+
   return (
     <div className="space-y-4 pb-16">
-      <div>
+      {/* Her register-hero (centered) + the Add-action button. */}
+      <div className="relative pt-2 text-center">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('work.title')}</p>
         <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('work.statement')}</h1>
-        <p className="mt-1 text-sm text-ink3">{t('work.sub')}</p>
+        <p className="mx-auto mt-1 max-w-xl text-sm text-ink3">{t('work.sub')}</p>
+        <div className="mt-3 flex justify-center sm:absolute sm:end-0 sm:top-2 sm:mt-0">
+          <AddAction
+            projects={projects.filter((p) => p.active !== false).map((p) => ({ id: p.id, name: p.name }))}
+            labels={{
+              addAction: t('work.add_action'),
+              titlePh: t('work.add_title_ph'),
+              project: t('common.project'),
+              general: t('common.general'),
+              owner: t('tasks.owner'),
+              due: t('work.col_due'),
+              waiting: t('tasks.waiting'),
+              save: t('common.save'),
+              cancel: t('common.cancel'),
+              error: t('common.error_save'),
+              back: t('common.cancel'),
+              dupKicker: t('work.dup_kicker'),
+              dupTitle: t('work.dup_title'),
+              dupSub: t('work.dup_sub'),
+              dupSame: t('work.dup_same'),
+              dupNew: t('work.dup_new'),
+            }}
+          />
+        </div>
       </div>
 
       {pendingCount > 0 && (
@@ -219,23 +274,34 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
         </Link>
       )}
 
-      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+      {/* Her .management-cards: big count, view name, one-line meaning. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {viewTabs.map(({ key, label, sub, count }) => (
           <Link
             key={key}
             href={`/work?view=${key}`}
             aria-current={view === key ? 'page' : undefined}
-            className={`inline-flex min-h-11 shrink-0 flex-col justify-center whitespace-nowrap rounded-xl px-4 py-1.5 ${
-              view === key ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+            className={`rounded-[13px] border px-3.5 py-3 transition-colors ${
+              view === key
+                ? 'border-sage-line bg-sage-soft shadow-[0_0_0_2px_var(--color-sage-soft)]'
+                : 'border-line bg-card hover:border-line2'
             }`}
           >
-            <span className="text-sm font-medium">
-              {label} <span className={view === key ? 'opacity-70' : 'text-ink3'}>{count}</span>
-            </span>
-            <span className={`text-[10px] ${view === key ? 'opacity-70' : 'text-ink3'}`}>{sub}</span>
+            <span className={`block font-serif text-2xl ${view === key ? 'text-sage' : 'text-ink'}`}>{count}</span>
+            <span className="mt-0.5 block text-sm font-medium text-ink">{label}</span>
+            <span className="block text-[10px] text-ink3">{sub}</span>
           </Link>
         ))}
       </div>
+
+      {/* Her .register-context strip. */}
+      {activeTab && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[11px] bg-card2/70 px-4 py-2.5">
+          <span className="font-serif text-sm text-ink">{activeTab.label}</span>
+          <span className="text-xs text-ink3">{activeTab.sub}</span>
+          <span className="ms-auto text-[11px] text-ink3">{t('work.one_record')}</span>
+        </div>
+      )}
 
       {view === 'blocking' && blockers.length > 0 && (
         <div className="space-y-3">
@@ -262,13 +328,12 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       )}
 
       {view === 'today' && approvedCount > 0 && (
-        <Link
-          href="/invoices?status=approved"
-          className="block rounded-(--radius-card) border border-sage-line bg-sage-soft p-4 hover:opacity-90"
-        >
-          <div className="flex items-center gap-3">
+        // Her .payment-run: collapsible aggregate with per-vendor rows
+        // linking into Invoices — one payment task, full detail behind it.
+        <details className="rounded-(--radius-card) border border-sage-line bg-sage-soft">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 p-4">
             <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sage font-mono text-sm text-white">$</span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-ink">{t('work.payment_run')}</span>
               <span className="mt-0.5 block text-xs text-ink2">
                 {t('work.payment_run_sub')
@@ -277,8 +342,32 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                 {' · '}{t('work.payment_groups').replace('{n}', String(vendorGroups))}
               </span>
             </span>
+            <span aria-hidden="true" className="font-serif text-lg text-sage">+</span>
+          </summary>
+          <div className="space-y-1.5 border-t border-sage-line/50 p-3">
+            {paymentGroups.map((g) => (
+              <Link
+                key={g.vendor}
+                href={`/invoices?status=approved&vendor=${encodeURIComponent(g.vendor)}`}
+                className="flex min-h-11 items-center gap-3 rounded-[10px] border border-line bg-card px-3 py-2 hover:border-sage-line"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-ink">{g.vendor}</span>
+                  <span className="block text-[11px] text-ink3">
+                    {t('invoices.open_total').replace('{n}', `⁨${g.count}⁩`)}
+                  </span>
+                </span>
+                <span className="font-mono text-sm text-ink">
+                  {g.total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                </span>
+                <span aria-hidden="true" className="text-ink3 rtl:-scale-x-100">→</span>
+              </Link>
+            ))}
+            <Link href="/invoices" className="inline-flex min-h-11 items-center px-1 text-xs text-mist hover:underline sm:min-h-0">
+              {t('work.open_invoices')} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
+            </Link>
           </div>
-        </Link>
+        </details>
       )}
 
       {isEmpty ? (
@@ -325,6 +414,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                       taskOptions={taskOptionsFor(task)}
                       phaseLabel={phaseLabelFor(task)}
                       stageLabel={task.stage_key ? prettyStage(task.stage_key) : null}
+                      projectHref={task.project_id ? `/projects/${task.project_id}` : null}
                     />
                   ))}
                 </ul>

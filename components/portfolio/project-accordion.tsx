@@ -54,63 +54,51 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
       ? 'bg-coral-soft text-coral'
       : riskState === 'waiting' ? 'bg-mist-soft text-mist' : 'bg-sage-soft text-sage';
 
+  // Her .health-dot semantics on the trigger.
+  const dotClass =
+    riskState === 'on_hold' || riskState === 'at_risk' ? 'bg-coral shadow-[0_0_0_4px_var(--color-coral-soft)]'
+    : riskState === 'waiting' ? 'bg-mist shadow-[0_0_0_4px_var(--color-mist-soft)]'
+    : 'bg-sage shadow-[0_0_0_4px_var(--color-sage-soft)]';
+
   return (
-    <article className="rounded-(--radius-card) border border-line bg-card shadow-card">
-      {/* Whole header toggles the body (row = tap target); the name link and
-          chevron stop propagation / act on their own. */}
+    <article className={`overflow-hidden rounded-[12px] border transition-colors ${
+      open ? 'border-sage-line bg-card shadow-card' : 'border-line bg-card2/50'
+    }`}>
+      {/* Her .project-drop-trigger grid: dot | name+case | position | state chip | ± */}
       <div
-        className="flex cursor-pointer flex-wrap items-center gap-2 p-4"
+        className="grid cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto_22px] items-center gap-3 px-4 py-3 sm:grid-cols-[16px_minmax(0,1fr)_110px_auto_22px]"
         onClick={() => setOpen((v) => !v)}
       >
-        <h3 className="text-[15px] font-semibold text-ink">
+        <span aria-hidden="true" className={`h-2 w-2 rounded-full ${dotClass}`} />
+        <h3 className="min-w-0">
           <Link
             href={`/projects/${project.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex min-h-11 items-center hover:underline sm:min-h-0"
+            className="block truncate font-serif text-[15px] text-ink hover:underline"
           >
             {project.name}
           </Link>
-        </h3>
-
-        {project.city_case && (
-          <span className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
-            project.city_on_hold ? 'bg-coral-soft text-coral' : 'bg-inset text-ink3'
-          }`}>
-            {project.city_case}{project.city_on_hold ? ` · ${labels.onHold}` : ''}
-          </span>
-        )}
-
-        {currentPhaseLabel && (
-          <span className="rounded-full bg-sage px-2.5 py-1 text-xs font-medium text-white">
-            {currentPhaseLabel}
-          </span>
-        )}
-
-        {workstreams.map((w) => (
-          <span key={w.id} className="rounded-full bg-mist-soft px-2 py-0.5 text-[11px] text-mist">
-            {w.name}
-          </span>
-        ))}
-
-        <span className="ms-auto flex items-center gap-1.5">
-          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${stateClass}`}>
-            {stateLabel}
-          </span>
-          {blockingCount > 0 && (
-            <span className="whitespace-nowrap rounded-full bg-coral-soft px-2 py-0.5 text-xs text-coral">
-              {labels.blockingN.replace('{n}', String(blockingCount))}
+          {project.city_case && (
+            <span className="block truncate font-mono text-[10px] text-ink3">
+              {project.city_case}{project.city_on_hold ? ` · ${labels.onHold}` : ''}
             </span>
           )}
+        </h3>
+        <span className="hidden min-w-0 sm:block">
+          <span className="block text-[8px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.position}</span>
+          <span className="mt-0.5 block truncate text-xs font-semibold text-ink">{currentPhaseLabel ?? '—'}</span>
         </span>
-
+        <span className={`justify-self-end whitespace-nowrap rounded-[10px] px-2 py-1 text-center text-[10px] ${stateClass}`}>
+          {stateLabel}{blockingCount > 0 ? ` · ${labels.blockingN.replace('{n}', String(blockingCount))}` : ''}
+        </span>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
           aria-expanded={open}
           aria-label={open ? labels.collapse : labels.expand}
-          className="inline-flex min-h-11 min-w-11 flex-none items-center justify-center rounded-full text-ink2 hover:text-ink sm:min-h-9 sm:min-w-9"
+          className="inline-flex min-h-11 min-w-11 flex-none items-center justify-center font-serif text-lg text-sage sm:min-h-0 sm:min-w-0"
         >
-          <span className={`inline-block transition-transform rtl:-scale-x-100 ${open ? 'rotate-90' : ''}`}>▸</span>
+          {open ? '−' : '+'}
         </button>
       </div>
 
@@ -119,10 +107,9 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
           {project.summary && (
             <p className="mb-3 max-w-2xl text-sm leading-relaxed text-ink2">{project.summary}</p>
           )}
-          {/* Numbered 01-05 phase rail — current phase in sage, phases lit by an
-              active parallel workstream in mist, everything else quiet. */}
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.position}</p>
-          <ol className="mb-3 flex flex-wrap gap-1.5">
+          {/* Her .drop-phases rail: 5 top-border strips — sage current,
+              apricot parallel, quiet line otherwise. */}
+          <ol className="mb-3 grid grid-cols-5 gap-1">
             {labels.phases.map((ph, i) => {
               const isCurrent = project.current_phase_key === ph.key;
               const isParallel = !isCurrent && parallelPhaseKeys.includes(ph.key);
@@ -130,13 +117,13 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
                 <li
                   key={ph.key}
                   aria-current={isCurrent ? 'step' : undefined}
-                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${
-                    isCurrent ? 'bg-sage text-white'
-                    : isParallel ? 'bg-mist-soft text-mist'
-                    : 'bg-card2 text-ink3'
+                  className={`border-t-[3px] pt-1.5 text-[10px] leading-tight ${
+                    isCurrent ? 'border-sage font-semibold text-sage'
+                    : isParallel ? 'border-apricot text-apricot'
+                    : 'border-line text-ink3'
                   }`}
                 >
-                  <span className="font-mono">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="block font-mono text-[9px]">{String(i + 1).padStart(2, '0')}</span>
                   {ph.label}
                 </li>
               );
@@ -175,17 +162,18 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
               )}
             </div>
           </div>
-          {lastEvidence && (
-            <p className="mt-2 text-[11px] text-ink3">
-              {labels.evidence.replace('{date}', '')}<bdi>{lastEvidence}</bdi>
+          {/* Her .portfolio-actions row: evidence line + solid green button. */}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line2 pt-3">
+            <p className="text-[11px] text-ink3">
+              {lastEvidence ? <>{labels.evidence.replace('{date}', '')}<bdi>{lastEvidence}</bdi></> : null}
             </p>
-          )}
-          <Link
-            href={`/projects/${project.id}`}
-            className="mt-3 inline-flex min-h-11 items-center text-sm text-mist hover:underline sm:min-h-0"
-          >
-            {labels.investigate} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
-          </Link>
+            <Link
+              href={`/projects/${project.id}`}
+              className="inline-flex min-h-11 items-center rounded-[9px] bg-sage px-3.5 py-2 text-xs font-semibold text-white hover:opacity-90 sm:min-h-0"
+            >
+              {labels.investigate} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
+            </Link>
+          </div>
         </div>
       )}
     </article>

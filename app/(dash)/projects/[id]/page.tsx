@@ -3,15 +3,11 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
-import { laToday } from '@/lib/date';
 import { getProjectProcess } from '@/lib/process';
 import { ProcessExplorer, type ExplorerPhase } from '@/components/process/process-explorer';
 import { SummaryEditor } from '@/components/process/summary-editor';
 import { PhaseSwitcher } from '@/components/process/phase-switcher';
 import { InferButton } from '@/components/process/infer-button';
-import { WorkRow } from '@/components/work/work-row';
-import { type RelationRow } from '@/components/work/relation-editor';
-import type { Relationship } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -23,12 +19,8 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
   const t = getT(locale);
 
   const supabase = await supabaseServer();
-  const today = laToday();
-  // Relationships fetched alongside the process batch (no second round trip)
-  // — the table is small, so we take it whole and filter to listed tasks.
-  const [{ project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase }, relsQ, projectsQ] = await Promise.all([
+  const [{ project, phaseViews, tasksByPhase, unactivatedByPhase }, projectsQ] = await Promise.all([
     getProjectProcess(supabase, id),
-    supabase.from('relationships').select('*'),
     supabase.from('projects').select('*').order('name'),
   ]);
   if (!project) notFound();
@@ -36,26 +28,6 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
   // direct link to their process page still works — keep the current one visible.
   const allProjects = ((projectsQ.data ?? []) as { id: string; name: string; active?: boolean }[])
     .filter((p) => p.active !== false || p.id === id);
-
-  const allTasks = [...tasksByPhase.values()].flat().concat(unmappedTasks);
-  const listedIds = new Set(allTasks.map((t) => t.id));
-  const relationships = ((relsQ.data ?? []) as Relationship[]).filter(
-    (r) => listedIds.has(r.from_task_id) || listedIds.has(r.to_task_id),
-  );
-  const taskTitleById = new Map(allTasks.map((t) => [t.id, t.title]));
-  const taskOptions = allTasks.map((t) => ({ id: t.id, title: t.title }));
-  const relationsFor = (taskId: string): RelationRow[] =>
-    relationships
-      .filter((r) => r.from_task_id === taskId || r.to_task_id === taskId)
-      .map((r) => {
-        const direction: 'from' | 'to' = r.from_task_id === taskId ? 'from' : 'to';
-        const otherId = direction === 'from' ? r.to_task_id : r.from_task_id;
-        return { rel: r, otherTitle: taskTitleById.get(otherId) ?? '', direction };
-      })
-      // Drop edges to a task we can't resolve a title for (closed or
-      // otherwise not loaded on this page) — a nameless chip is worse than none.
-      .filter((row) => row.otherTitle);
-  const taskOptionsFor = (taskId: string) => taskOptions.filter((o) => o.id !== taskId);
 
   const currentPhaseView = phaseViews.find((v) => v.phase.key === project.current_phase_key);
   const activeWorkstreams = phaseViews.flatMap((v) => v.workstreams).filter((w) => w.status === 'active');
@@ -82,6 +54,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     noTasksPhase: t('process.no_tasks_phase'),
     blocking: t('work.blocking'),
     waitingOn: t('tasks.waiting'),
+    openRegister: t('process.open_register'),
   };
 
   const rowLabels = {
@@ -244,54 +217,6 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
         }))}
       />
 
-      <div id="register">
-        <p className="text-sm text-ink3">{t('process.connected')}</p>
-        {allTasks.length === 0 && (
-          <p className="mt-2 rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">
-            {t('process.no_connected')}
-          </p>
-        )}
-        <div className="mt-2 space-y-5">
-          {phaseViews.map((view) => {
-            const tasks = tasksByPhase.get(view.phase.key) ?? [];
-            if (tasks.length === 0) return null;
-            return (
-              <section key={view.phase.key}>
-                <h2 className="text-sm font-medium text-ink2">{view.phase.label}</h2>
-                <ul className="mt-2 divide-y divide-line2 rounded-(--radius-card) border border-line bg-card shadow-card">
-                  {tasks.map((task) => (
-                    <WorkRow
-                      key={task.id}
-                      task={task}
-                      labels={rowLabels}
-                      today={today}
-                      relations={relationsFor(task.id)}
-                      taskOptions={taskOptionsFor(task.id)}
-                    />
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
-          {unmappedTasks.length > 0 && (
-            <section>
-              <h2 className="text-sm font-medium text-ink2">{t('process.unmapped')}</h2>
-              <ul className="mt-2 divide-y divide-line2 rounded-(--radius-card) border border-line bg-card shadow-card">
-                {unmappedTasks.map((task) => (
-                  <WorkRow
-                    key={task.id}
-                    task={task}
-                    labels={rowLabels}
-                    today={today}
-                    relations={relationsFor(task.id)}
-                    taskOptions={taskOptionsFor(task.id)}
-                  />
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
