@@ -85,7 +85,10 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   return (
     <div className="space-y-4 pb-16">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('nav.invoices')}</h1>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('invoices.kicker')}</p>
+          <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('invoices.statement')}</h1>
+        </div>
         <p className="text-sm text-ink2">
           <span className="font-mono font-medium text-ink">{money(openTotal)}</span>
           {' · '}{t('invoices.open_total').replace('{n}', `⁨${openInvoices.length}⁩`)}

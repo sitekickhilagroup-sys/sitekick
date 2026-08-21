@@ -159,8 +159,11 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('work.title')}</h1>
-      <p className="mt-1 text-sm text-ink3">{t('work.sub')}</p>
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('work.title')}</p>
+        <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('work.statement')}</h1>
+        <p className="mt-1 text-sm text-ink3">{t('work.sub')}</p>
+      </div>
 
       {pendingCount > 0 && (
         <Link

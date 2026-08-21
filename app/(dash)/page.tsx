@@ -67,24 +67,38 @@ export default async function OverviewPage() {
 
   return (
     <div className="space-y-8 pb-16 sm:space-y-10">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('overview.kicker')}</p>
+        <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('overview.statement')}</h1>
+      </div>
+
       <Link
         href="/work"
-        className="block min-h-11 rounded-(--radius-card) border border-line bg-card p-4 shadow-card hover:opacity-90"
+        className="flex min-h-11 items-center gap-4 rounded-(--radius-card) border border-line bg-card p-4 shadow-card hover:opacity-90"
       >
-        <p className="text-sm font-medium text-ink">{t('portfolio.open_plan')}</p>
-        <p className="mt-1 text-xs text-ink2">
-          {t('portfolio.open_plan_sub').replace('{n}', String(data.tasks.length))}
-        </p>
+        <span className="font-serif text-3xl text-sage sm:text-4xl">{data.tasks.length}</span>
+        <span className="min-w-0">
+          <span className="block text-sm font-medium text-ink">{t('portfolio.open_plan')}</span>
+          <span className="mt-0.5 block text-xs text-ink2">
+            {t('portfolio.open_plan_sub').replace('{n}', String(data.tasks.length))}{' '}
+            <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
+          </span>
+        </span>
       </Link>
 
       {data.pendingProposals > 0 && (
         <Link
           href="/inbox"
-          className="block min-h-11 rounded-(--radius-card) border border-apricot/40 bg-apricot-soft p-4 text-apricot shadow-card hover:opacity-90"
+          className="flex min-h-11 items-center gap-4 rounded-(--radius-card) border border-apricot/40 bg-apricot-soft p-4 shadow-card hover:opacity-90"
         >
-          <p className="text-sm font-medium">
-            {t('portfolio.review_pending').replace('{n}', String(data.pendingProposals))}
-          </p>
+          <span className="font-serif text-3xl text-apricot">{data.pendingProposals}</span>
+          <span className="min-w-0">
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-apricot">{t('inbox.title')}</span>
+            <span className="mt-0.5 block text-sm text-ink">
+              {t('portfolio.review_pending').replace('{n}', String(data.pendingProposals))}{' '}
+              <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
+            </span>
+          </span>
         </Link>
       )}
 
@@ -149,6 +163,37 @@ export default async function OverviewPage() {
             </article>
           )}
         </div>
+      )}
+
+      {data.consultants.length > 0 && (
+        <article className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-mist">{t('insights.consultants')}</p>
+          <p className="mt-0.5 text-xs text-ink3">{t('insights.consultants_sub')}</p>
+          <ul className="mt-3 space-y-2">
+            {data.consultants.map((c) => {
+              const maxUsd = Math.max(1, ...data.consultants.map((x) => x.openUsd));
+              return (
+                <li key={c.name} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[180px_auto_1fr_90px]">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-ink">{c.name}</span>
+                    {c.discipline && <span className="block truncate text-[11px] text-ink3">{c.discipline}</span>}
+                  </span>
+                  <span className={`justify-self-end whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] sm:justify-self-auto ${
+                    c.waitingCount > 0 ? 'bg-apricot-soft text-apricot' : 'bg-card2 text-ink3'
+                  }`}>
+                    {t('insights.waiting_short').replace('{n}', `⁨${c.waitingCount}⁩`)}
+                  </span>
+                  <span className="col-span-2 h-3 overflow-hidden rounded bg-inset sm:col-span-1">
+                    <i className="block h-full rounded bg-chart1" style={{ width: `${Math.round((c.openUsd / maxUsd) * 100)}%` }} />
+                  </span>
+                  <span className="col-span-2 text-end font-mono text-xs text-ink sm:col-span-1">
+                    {c.openUsd.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </article>
       )}
 
       <CompareCharts

@@ -135,22 +135,22 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
               );
             })}
           </ol>
-          <div className="space-y-2 text-sm">
-            <p>
-              <span className="font-medium text-ink2">{labels.next}:</span>{' '}
-              <span className="text-ink">{nextAction ? nextAction.title : labels.none}</span>
-            </p>
-            <p>
-              <span className="font-medium text-ink2">{labels.blocker}:</span>{' '}
-              <span className="text-ink">
+          <div className="space-y-2.5 text-sm">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-sage">{labels.next}</p>
+              <p className="mt-0.5 text-ink">{nextAction ? nextAction.title : labels.none}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-coral">{labels.blocker}</p>
+              <p className="mt-0.5 text-ink">
                 {mainBlocker ? `${mainBlocker.what} · ${mainBlocker.blocked_by}` : labels.none}
-              </span>
-            </p>
-            {thenAction && (
-              <p>
-                <span className="font-medium text-ink2">{labels.then}:</span>{' '}
-                <span className="text-ink2">{thenAction.title}</span>
               </p>
+            </div>
+            {thenAction && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.then}</p>
+                <p className="mt-0.5 text-ink2">{thenAction.title}</p>
+              </div>
             )}
           </div>
           {lastEvidence && (

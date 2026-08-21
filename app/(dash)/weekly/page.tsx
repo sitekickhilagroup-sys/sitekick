@@ -35,8 +35,8 @@ export default async function WeeklyPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('weekly.title')}</h1>
-      <p className="mt-1 text-sm text-ink3">{t('weekly.sub')}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('weekly.title')}</p>
+      <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('weekly.sub')}</h1>
       {!embedded ? (
         <div className="mt-6 rounded-(--radius-card) border border-line bg-card p-6">
           <PrepareButton label={t('weekly.prepare')} error={t('common.error_save')} />
@@ -62,6 +62,7 @@ export default async function WeeklyPage() {
               stWaiting: t('weekly.st_waiting'),
               stBlocked: t('weekly.st_blocked'),
               stNoUpdate: t('weekly.st_no_update'),
+              itemKicker: t('weekly.item_kicker'),
             }} />
           );
         })()
