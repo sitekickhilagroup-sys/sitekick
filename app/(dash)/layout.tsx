@@ -5,7 +5,7 @@ import { LocaleToggle } from '@/components/locale-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { signOut } from '@/app/actions/auth';
 import { Logo } from '@/components/logo';
-import { NavLinks } from '@/components/nav-links';
+import { MobileNav, NavLinks } from '@/components/nav-links';
 
 export default async function DashLayout({ children }: { children: React.ReactNode }) {
   const store = await cookies();
@@ -36,21 +36,28 @@ export default async function DashLayout({ children }: { children: React.ReactNo
         {t('nav.skip')}
       </a>
       <header className="sticky top-0 z-40 border-b border-line bg-bg/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-6 px-4">
-          <Link href="/" className="flex items-center gap-2.5">
+        <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-4 lg:gap-6">
+          <Link href="/" className="flex shrink-0 items-center gap-2.5">
             <Logo size={26} />
             <span className="font-serif text-lg font-semibold text-ink">Sitekick</span>
-            <span className="hidden text-xs text-ink3 sm:inline">{t('app.tagline')}</span>
+            <span className="hidden text-xs text-ink3 xl:inline">{t('app.tagline')}</span>
           </Link>
           <NavLinks links={links} />
-          <div className="flex items-center gap-2">
+          <div className="ms-auto flex items-center gap-1 lg:ms-0 lg:gap-2">
             <LocaleToggle locale={locale} label={t('lang.toggle')} />
             <ThemeToggle theme={theme} label={t('theme.toggle')} />
-            <form action={signOut}>
+            <form action={signOut} className="hidden lg:block">
               <button type="submit" className="rounded-full px-3 py-1 text-xs text-ink3 transition-colors hover:text-ink">
                 {t('nav.signout')}
               </button>
             </form>
+            <MobileNav links={links} menuLabel={t('nav.menu')}>
+              <form action={signOut}>
+                <button type="submit" className="flex min-h-11 w-full items-center rounded-lg px-3 text-sm text-ink2 hover:bg-card2 hover:text-ink">
+                  {t('nav.signout')}
+                </button>
+              </form>
+            </MobileNav>
           </div>
         </div>
       </header>

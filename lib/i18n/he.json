@@ -171,6 +171,7 @@
   "tasks.empty": "אין משימות פתוחות — הוסיפו משימה או העלו קובץ מעקב",
   "common.error_save": "השמירה נכשלה — נסו שוב",
   "nav.skip": "דילוג לתוכן",
+  "nav.menu": "תפריט",
   "actions.why_critical": "קריטי",
   "actions.why_due": "יעד",
   "actions.unlocks": "משחרר {n}",

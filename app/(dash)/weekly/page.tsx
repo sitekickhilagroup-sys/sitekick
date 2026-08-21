@@ -5,9 +5,18 @@ import { laToday } from '@/lib/date';
 import { nextMonday } from '@/lib/weekly';
 import { PrepareButton } from '@/components/weekly/prepare-button';
 import { ReviewBoard } from '@/components/weekly/review-board';
-import type { Project, Task, WeeklyReview, WeeklyReviewItem } from '@/lib/types';
+import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+
+// Review + items + task/project names in ONE embedded query (FKs from
+// migration 0005) — the old review -> items -> titles chain cost three
+// sequential database round trips.
+type EmbeddedItem = WeeklyReviewItem & {
+  task: { id: string; title: string } | null;
+  project: { id: string; name: string } | null;
+};
+type EmbeddedReview = WeeklyReview & { weekly_review_items: EmbeddedItem[] };
 
 export default async function WeeklyPage() {
   const store = await cookies();
@@ -18,70 +27,56 @@ export default async function WeeklyPage() {
 
   const { data: reviewData } = await supabase
     .from('weekly_reviews')
-    .select('*')
+    .select('*, weekly_review_items(*, task:tasks(id,title), project:projects(id,name))')
     .eq('meeting_date', meetingDate)
+    .order('sequence', { referencedTable: 'weekly_review_items', ascending: true })
     .maybeSingle();
-  const review = reviewData as WeeklyReview | null;
+  const embedded = reviewData as EmbeddedReview | null;
 
   return (
     <div>
       <h1 className="font-serif text-3xl text-ink">{t('weekly.title')}</h1>
       <p className="mt-1 text-sm text-ink3">{t('weekly.sub')}</p>
-      {!review ? (
+      {!embedded ? (
         <div className="mt-6 rounded-(--radius-card) border border-line bg-card p-6">
           <PrepareButton label={t('weekly.prepare')} error={t('common.error_save')} />
         </div>
       ) : (
-        <ReviewBoard review={review} groups={await loadGroups(supabase, review, t)} labels={{
-          error: t('common.error_save'),
-          saved: t('weekly.saved'),
-          save: t('weekly.save'),
-          uploaded: t('weekly.uploaded'),
-          upload: t('weekly.upload'),
-          note: t('weekly.note'),
-          meeting: t('weekly.meeting'),
-          completed: t('work.verb.completed'),
-          notApplicable: t('work.verb.not_applicable'),
-          statusOpen: t('weekly.status_open'),
-        }} />
+        (() => {
+          const { weekly_review_items: items, ...review } = embedded;
+          return (
+            <ReviewBoard review={review} groups={buildGroups(items, t)} labels={{
+              error: t('common.error_save'),
+              saved: t('weekly.saved'),
+              save: t('weekly.save'),
+              uploaded: t('weekly.uploaded'),
+              upload: t('weekly.upload'),
+              note: t('weekly.note'),
+              meeting: t('weekly.meeting'),
+              completed: t('work.verb.completed'),
+              notApplicable: t('work.verb.not_applicable'),
+              statusOpen: t('weekly.status_open'),
+            }} />
+          );
+        })()
       )}
     </div>
   );
 }
 
-async function loadGroups(
-  supabase: Awaited<ReturnType<typeof supabaseServer>>,
-  review: WeeklyReview,
-  t: ReturnType<typeof getT>,
-) {
-  const { data: itemsData } = await supabase
-    .from('weekly_review_items')
-    .select('*')
-    .eq('weekly_review_id', review.id)
-    .order('sequence', { ascending: true });
-  const items = (itemsData ?? []) as WeeklyReviewItem[];
-
-  const taskIds = items.map((i) => i.task_id);
-  const projectIds = items.map((i) => i.project_id).filter((x): x is string => !!x);
-
-  const [tasksQ, projectsQ] = await Promise.all([
-    taskIds.length ? supabase.from('tasks').select('id,title').in('id', taskIds) : Promise.resolve({ data: [] as unknown[] }),
-    projectIds.length ? supabase.from('projects').select('id,name').in('id', projectIds) : Promise.resolve({ data: [] as unknown[] }),
-  ]);
-  const taskTitles = new Map(((tasksQ.data ?? []) as Pick<Task, 'id' | 'title'>[]).map((r) => [r.id, r.title]));
-  const projectNames = new Map(((projectsQ.data ?? []) as Pick<Project, 'id' | 'name'>[]).map((r) => [r.id, r.name]));
-
-  // Project (name, or "All" when the task carries no project) -> Sub-topic
-  // ("General" when unset) -> rows, preserving the already-sequence-sorted
-  // item order both across and within groups.
+// Project (name, or "All" when the task carries no project) -> Sub-topic
+// ("General" when unset) -> rows, preserving the already-sequence-sorted
+// item order both across and within groups.
+function buildGroups(items: EmbeddedItem[], t: ReturnType<typeof getT>) {
   interface Row { item: WeeklyReviewItem; title: string }
   interface SubtopicGroup { name: string; items: Row[] }
   interface ProjectGroupAcc { projectName: string; subtopics: Map<string, Row[]> }
 
   const order: string[] = [];
   const byProject = new Map<string, ProjectGroupAcc>();
-  for (const item of items) {
-    const projectName = item.project_id ? projectNames.get(item.project_id) ?? t('common.all') : t('common.all');
+  for (const embeddedItem of items) {
+    const { task, project, ...item } = embeddedItem;
+    const projectName = project?.name ?? t('common.all');
     const subtopicName = item.subtopic ?? t('weekly.general');
     let group = byProject.get(projectName);
     if (!group) {
@@ -91,7 +86,7 @@ async function loadGroups(
     }
     let rows = group.subtopics.get(subtopicName);
     if (!rows) { rows = []; group.subtopics.set(subtopicName, rows); }
-    rows.push({ item, title: taskTitles.get(item.task_id) ?? '' });
+    rows.push({ item, title: task?.title ?? '' });
   }
 
   return order.map((projectName): { projectName: string; subtopics: SubtopicGroup[] } => {
