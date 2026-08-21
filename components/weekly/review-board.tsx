@@ -19,6 +19,9 @@ export function ReviewBoard({ review, groups, labels }: Props) {
 
   return (
     <div className="mt-6 space-y-5">
+      {groups.length === 0 && labels.noItems && (
+        <p className="rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{labels.noItems}</p>
+      )}
       {groups.map((group) => (
         <section key={group.projectName} className="overflow-hidden rounded-(--radius-card) border border-line bg-card shadow-card">
           <h2 className="border-b border-line bg-card2 px-4 py-2.5 text-sm font-semibold text-ink">{group.projectName}</h2>
@@ -48,7 +51,7 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
 
   const statusClass =
     item.status_snapshot === 'done' ? 'bg-sage-soft text-sage'
-    : item.status_snapshot === 'dropped' ? 'bg-inset text-ink3'
+    : item.status_snapshot === 'dropped' ? 'bg-card2 text-ink3'
     : 'bg-mist-soft text-mist';
   const statusText =
     item.status_snapshot === 'done' ? labels.completed
@@ -70,7 +73,7 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
   return (
     <li className="flex flex-wrap items-center gap-2">
       <span className="min-w-0 flex-1 basis-full text-sm text-ink sm:basis-auto">{title}</span>
-      <span className={`rounded-full px-2 py-0.5 text-[11px] ${statusClass}`}>{statusText}</span>
+      <span role="status" className={`rounded-full px-2 py-0.5 text-[11px] ${statusClass}`}>{statusText}</span>
       <input
         defaultValue={item.weekly_note ?? ''}
         onBlur={(e) => saveNote(e.target.value)}
@@ -82,11 +85,11 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
       {!saved && (
         <span className="flex items-center gap-1.5">
           <button type="button" disabled={pending} onClick={() => act('completed')}
-            className="min-h-11 rounded-lg bg-sage px-2.5 py-1.5 text-xs text-white disabled:opacity-50 sm:min-h-0 sm:py-1">
+            className="min-h-11 cursor-pointer rounded-lg bg-sage px-2.5 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-50 sm:min-h-0 sm:py-1">
             {labels.completed}
           </button>
           <button type="button" disabled={pending} onClick={() => act('not_applicable')}
-            className="min-h-11 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink2 disabled:opacity-50 sm:min-h-0 sm:py-1">
+            className="min-h-11 cursor-pointer rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink2 hover:bg-card2 disabled:opacity-50 sm:min-h-0 sm:py-1">
             {labels.notApplicable}
           </button>
         </span>
@@ -128,7 +131,7 @@ function ReviewFooter({ review, labels }: { review: WeeklyReview; labels: Record
 
   return (
     <footer className="flex flex-wrap items-center gap-3 rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
-      <span className="font-mono text-xs text-ink2">{labels.meeting} · {review.meeting_date}</span>
+      <span className="font-mono text-xs text-ink3">{labels.meeting} · <bdi>{review.meeting_date}</bdi></span>
       <button
         type="button"
         disabled={pending || saved}

@@ -22,7 +22,10 @@ export default async function DirectoryPage() {
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="font-serif text-3xl text-ink">{t('nav.directory')}</h1>
+      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('nav.directory')}</h1>
+      {vendors.length === 0 && (
+        <p className="rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{t('directory.empty')}</p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {vendors.map((v) => (
           <article key={v.id} className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
@@ -39,10 +42,16 @@ export default async function DirectoryPage() {
             {v.notes && <p className="mt-0.5 text-xs text-ink3">{v.notes}</p>}
             <div className="mt-2 space-y-0.5 text-xs text-ink2">
               {v.contact_name && <p>{v.contact_name}</p>}
-              {v.email && <a className="block text-chart1" href={`mailto:${v.email}`}>{v.email}</a>}
-              {v.phone && <p className="font-mono">{v.phone}</p>}
+              {v.email && <a className="inline-flex min-h-11 items-center text-chart1 hover:underline sm:min-h-0" href={`mailto:${v.email}`}>{v.email}</a>}
+              {v.phone && (
+                <p>
+                  <a className="inline-flex min-h-11 items-center font-mono text-chart1 hover:underline sm:min-h-0" href={`tel:${v.phone.replace(/[^\d+]/g, '')}`}>
+                    <bdi>{v.phone}</bdi>
+                  </a>
+                </p>
+              )}
             </div>
-            {v.status && <p className="mt-2 inline-block rounded-full bg-inset px-2 py-0.5 text-[11px] text-ink3">{v.status}</p>}
+            {v.status && <p className="mt-2 inline-block rounded-full bg-card2 px-2 py-0.5 text-[11px] text-ink3">{v.status}</p>}
           </article>
         ))}
       </div>

@@ -16,7 +16,7 @@ export function LocaleToggle({ locale, label }: { locale: Locale; label: string 
         await setLocale(locale === 'en' ? 'he' : 'en');
         router.refresh();
       })}
-      className="rounded-full border border-line bg-card px-3 py-1 text-xs text-ink2 shadow-card transition-colors hover:text-ink"
+      className="min-h-11 cursor-pointer rounded-full border border-line bg-card px-3 py-1 text-xs text-ink2 shadow-card transition-colors hover:text-ink sm:min-h-0"
     >
       {label}
     </button>

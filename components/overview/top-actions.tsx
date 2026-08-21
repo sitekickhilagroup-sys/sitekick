@@ -18,7 +18,7 @@ interface Props {
 export function TopActions({ actions, title, subtitle, empty, rowLabels }: Props) {
   return (
     <section aria-labelledby="top-actions-h">
-      <h1 id="top-actions-h" className="font-serif text-3xl text-ink">{title}</h1>
+      <h1 id="top-actions-h" className="font-serif text-2xl text-ink sm:text-3xl">{title}</h1>
       <p className="mt-1 text-sm text-ink3">{subtitle}</p>
       {actions.length === 0 ? (
         <p className="mt-6 rounded-(--radius-card) border border-line bg-card p-6 text-ink2">{empty}</p>

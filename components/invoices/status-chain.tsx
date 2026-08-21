@@ -51,10 +51,11 @@ export function StatusChain({ invoiceId, status, labels, advanceLabel }: Props) 
           type="button"
           disabled={pending}
           onClick={() => start(async () => { await advanceInvoice(invoiceId); })}
-          className="ms-1 rounded-full border border-line px-1.5 py-0.5 text-[10px] text-ink3 hover:text-ink disabled:opacity-50"
+          aria-label={`${advanceLabel}: ${labels[status]}`}
+          className="ms-1 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full border border-line px-1.5 py-0.5 text-[10px] text-ink3 hover:bg-card2 hover:text-ink disabled:opacity-50 sm:min-h-6 sm:min-w-6"
           title={advanceLabel}
         >
-          →
+          <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
         </button>
       )}
     </span>

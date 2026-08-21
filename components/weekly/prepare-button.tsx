@@ -19,12 +19,13 @@ export function PrepareButton({ label, error }: { label: string; error: string }
   });
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       <button
         type="button"
         disabled={pending}
+        aria-busy={pending}
         onClick={prepare}
-        className="min-h-11 rounded-lg bg-sage px-4 py-2 text-sm text-white disabled:opacity-50 sm:min-h-0"
+        className="min-h-11 cursor-pointer rounded-lg bg-sage px-4 py-2 text-sm text-white disabled:opacity-50 sm:min-h-0"
       >
         {label}
       </button>

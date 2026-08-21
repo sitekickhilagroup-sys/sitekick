@@ -11,7 +11,7 @@ export default async function LoginPage() {
     <main className="flex min-h-dvh items-center justify-center p-6">
       <div className="w-full max-w-sm rounded-(--radius-card) border border-line bg-card p-8 shadow-card">
         <Logo size={40} />
-        <h1 className="mt-4 font-serif text-2xl text-ink">{t('login.title')}</h1>
+        <h1 className="mt-4 font-serif text-xl text-ink sm:text-2xl">{t('login.title')}</h1>
         <p className="mt-1 text-sm text-ink3">{t('app.tagline')}</p>
         <LoginForm
           labels={{

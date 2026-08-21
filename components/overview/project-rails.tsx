@@ -32,7 +32,7 @@ export function ProjectRails({ projects, substages, title, labels }: Props) {
         aria-expanded={sectionOpen}
         className="flex w-full items-center justify-between gap-3"
       >
-        <h2 id="rails-h" className="font-serif text-2xl text-ink">{title}</h2>
+        <h2 id="rails-h" className="font-serif text-xl text-ink sm:text-2xl">{title}</h2>
         <span className="rounded-full border border-line bg-card px-3 py-1 text-xs text-ink2">
           {sectionOpen ? labels.collapse : labels.expand}
         </span>
@@ -128,9 +128,9 @@ export function ProjectRails({ projects, substages, title, labels }: Props) {
                   type="button"
                   onClick={() => setOpenRails((m) => ({ ...m, [p.id]: !isOpen }))}
                   aria-expanded={isOpen}
-                  className="mt-2 flex w-full items-center gap-2 rounded-lg px-1 py-1 text-start text-sm text-ink2 hover:text-ink"
+                  className="mt-2 flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-1 py-1 text-start text-sm text-ink2 hover:text-ink sm:min-h-0"
                 >
-                  <span className={`inline-block transition-transform ${isOpen ? 'rotate-90' : ''}`}>▸</span>
+                  <span aria-hidden="true" className={`inline-block transition-transform rtl:-scale-x-100 ${isOpen ? 'rotate-90 rtl:rotate-90' : ''}`}>▸</span>
                   <span className="font-medium text-ink">
                     {current?.label ?? ''}
                     {current?.substage ? <em className="font-normal text-ink2"> · {current.substage}</em> : null}
@@ -155,8 +155,8 @@ export function ProjectRails({ projects, substages, title, labels }: Props) {
                           key={tb}
                           type="button"
                           onClick={() => setTab((m) => ({ ...m, [p.id]: tb }))}
-                          className={`rounded-full px-3 py-1 text-xs ${
-                            activeTab === tb ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+                          className={`min-h-11 rounded-full px-3 py-1 text-xs sm:min-h-0 ${
+                            activeTab === tb ? 'bg-ink text-bg' : 'bg-card2 text-ink3 hover:text-ink'
                           }`}
                         >
                           {tb === 'work' ? labels.whatWeOwe : labels.timeline}
@@ -180,7 +180,7 @@ export function ProjectRails({ projects, substages, title, labels }: Props) {
                                   : i === at ? 'rounded bg-sage-soft px-1.5 py-0.5 font-medium text-sage'
                                   : 'text-ink3'
                                 }>
-                                  {s}{i < rail.length - 1 ? ' ›' : ''}
+                                  {s}{i < rail.length - 1 && <span aria-hidden="true" className="inline-block rtl:-scale-x-100"> ›</span>}
                                 </span>
                               ))}
                             </p>

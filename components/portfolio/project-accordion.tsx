@@ -32,10 +32,16 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
 
   return (
     <article className="rounded-(--radius-card) border border-line bg-card shadow-card">
-      <div className="flex flex-wrap items-center gap-2 p-4">
+      {/* Whole header toggles the body (row = tap target); the name link and
+          chevron stop propagation / act on their own. */}
+      <div
+        className="flex cursor-pointer flex-wrap items-center gap-2 p-4"
+        onClick={() => setOpen((v) => !v)}
+      >
         <h3 className="text-[15px] font-semibold text-ink">
           <Link
             href={`/projects/${project.id}`}
+            onClick={(e) => e.stopPropagation()}
             className="inline-flex min-h-11 items-center hover:underline sm:min-h-0"
           >
             {project.name}
@@ -70,7 +76,7 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
 
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
           aria-expanded={open}
           aria-label={open ? labels.collapse : labels.expand}
           className="inline-flex min-h-11 min-w-11 flex-none items-center justify-center rounded-full text-ink2 hover:text-ink sm:min-h-9 sm:min-w-9"
@@ -97,7 +103,7 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
             href={`/projects/${project.id}`}
             className="mt-3 inline-flex min-h-11 items-center text-sm text-mist hover:underline sm:min-h-0"
           >
-            {labels.investigate} →
+            {labels.investigate} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
           </Link>
         </div>
       )}

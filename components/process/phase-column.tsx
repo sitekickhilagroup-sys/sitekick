@@ -14,7 +14,7 @@ export function PhaseColumn({ projectId, view, isCurrent, unactivated, labels }:
   return (
     <div className="rounded-(--radius-card) border border-line bg-card p-3 shadow-card">
       <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${
-        isCurrent ? 'bg-sage text-white' : 'bg-card2 text-ink2'
+        isCurrent ? 'bg-sage text-white' : 'bg-card2 text-ink3'
       }`}>
         {view.phase.label}
       </span>
@@ -43,7 +43,7 @@ export function PhaseColumn({ projectId, view, isCurrent, unactivated, labels }:
 
       {unactivated.length > 0 && (
         <details className="mt-3">
-          <summary className="min-h-11 cursor-pointer py-1 text-xs text-ink2 hover:text-ink sm:min-h-0">{labels.activate}</summary>
+          <summary className="min-h-11 cursor-pointer py-1 text-xs text-ink3 hover:text-ink sm:min-h-0">{labels.activate}</summary>
           <ul className="mt-1">
             {unactivated.map((template) => (
               <SubstageRow key={template.id} projectId={projectId} template={template} instance={null} labels={labels} />

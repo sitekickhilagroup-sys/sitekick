@@ -33,7 +33,7 @@ export function Dropzone({ projects, labels }: { projects: string[]; labels: Lab
       <label className="flex items-center gap-2 text-sm text-ink2">
         {labels.project}
         <select value={project} onChange={(e) => setProject(e.target.value)}
-          className="rounded-lg border border-line bg-card px-2 py-1.5 text-sm text-ink">
+          className="min-h-11 cursor-pointer rounded-lg border border-line bg-card px-2 py-1.5 text-sm text-ink sm:min-h-0">
           <option value="">{labels.all}</option>
           {projects.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
@@ -49,17 +49,22 @@ export function Dropzone({ projects, labels }: { projects: string[]; labels: Lab
           const file = e.dataTransfer.files?.[0];
           if (file) void send(file);
         }}
-        className={`flex h-44 w-full items-center justify-center rounded-(--radius-card) border-2 border-dashed text-sm transition-colors ${
-          dragging ? 'border-sage bg-sage-soft text-sage' : 'border-line bg-card text-ink2 hover:border-sage-line'
+        aria-busy={state === 'busy'}
+        className={`flex min-h-44 w-full cursor-pointer items-center justify-center rounded-(--radius-card) border-2 border-dashed px-4 text-sm transition-colors ${
+          dragging ? 'border-sage bg-sage-soft text-sage'
+          : state === 'error' ? 'border-coral/50 bg-card text-coral'
+          : 'border-line bg-card text-ink2 hover:border-sage-line'
         }`}
       >
-        {state === 'busy' ? `${labels.processing} ${detail}`
-          : state === 'done' ? `✓ ${labels.done} · ${detail}`
-          : state === 'error' ? `✗ ${labels.failed} · ${detail}`
-          : labels.drop}
+        <span role="status" className="max-w-full truncate">
+          {state === 'busy' ? `${labels.processing} ${detail}`
+            : state === 'done' ? `✓ ${labels.done} · ${detail}`
+            : state === 'error' ? `✗ ${labels.failed} · ${detail}`
+            : labels.drop}
+        </span>
       </button>
       <input
-        ref={input} type="file" accept=".pdf,.txt,.docx,.xlsx,.xls,.eml,.jsonl,.csv,.zip,.olm" className="hidden"
+        ref={input} type="file" accept=".pdf,.txt,.docx,.xlsx,.xls,.eml,.jsonl,.csv,.zip,.olm,.mp4" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void send(f); e.target.value = ''; }}
       />
     </div>

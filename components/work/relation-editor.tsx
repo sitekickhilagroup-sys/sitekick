@@ -51,6 +51,9 @@ export function RelationEditor({ taskId, relations, taskOptions, labels }: Props
     <div className="mt-2 space-y-2 border-t border-line2 pt-2">
       <p className="text-[11px] font-medium text-ink2">{labels.title}</p>
 
+      {relations.length === 0 && labels.relEmpty && (
+        <p className="text-[11px] text-ink3">{labels.relEmpty}</p>
+      )}
       {relations.length > 0 && (
         <ul className="flex flex-wrap gap-1.5">
           {relations.map(({ rel, otherTitle, direction }) => (
@@ -84,7 +87,7 @@ export function RelationEditor({ taskId, relations, taskOptions, labels }: Props
         <select
           value={to}
           onChange={(e) => setTo(e.target.value)}
-          aria-label={labels.add}
+          aria-label={labels.pickTask ?? labels.add}
           className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9"
         >
           <option value="">—</option>

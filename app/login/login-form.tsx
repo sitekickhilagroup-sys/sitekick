@@ -34,8 +34,8 @@ export function LoginForm({ labels }: { labels: Labels }) {
       </div>
       {error && <p role="alert" className="text-sm text-coral">{error}</p>}
       <button
-        type="submit" disabled={pending}
-        className="w-full rounded-lg bg-sage px-4 py-2 font-medium text-white transition-transform active:scale-[0.98] disabled:opacity-60"
+        type="submit" disabled={pending} aria-busy={pending}
+        className="min-h-11 w-full cursor-pointer rounded-lg bg-sage px-4 py-2 font-medium text-white transition-transform active:scale-[0.98] disabled:opacity-60"
       >
         {pending ? '…' : labels.submit}
       </button>

@@ -18,7 +18,7 @@ export default async function DigestPage() {
   return (
     <div className="space-y-4 pb-16">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="font-serif text-3xl text-ink">{t('nav.digest')}</h1>
+        <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('nav.digest')}</h1>
         <GenerateButton label={t('digest.generate')} />
       </div>
       {!latest && (

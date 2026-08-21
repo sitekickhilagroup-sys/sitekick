@@ -115,6 +115,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     fromSource: t('actions.from_source'),
     waiting: t('work.verb.waiting'),
     editWaiting: t('actions.edit_waiting'),
+    save: t('common.save'),
     cancel: t('common.cancel'),
     errorSave: t('common.error_save'),
     completed: t('work.verb.completed'),
@@ -126,6 +127,8 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     update: t('work.update'),
     title: t('rel.title'),
     add: t('rel.add'),
+    pickTask: t('rel.pick_task'),
+    relEmpty: t('rel.empty'),
     reason: t('rel.reason'),
     remove: t('rel.remove'),
     error: t('common.error_save'),
@@ -148,19 +151,19 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="font-serif text-3xl text-ink">{t('work.title')}</h1>
+      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('work.title')}</h1>
       <p className="mt-1 text-sm text-ink3">{t('work.sub')}</p>
 
       {pendingCount > 0 && (
         <Link
           href="/inbox"
-          className="block rounded-(--radius-card) border border-apricot/40 bg-apricot-soft px-4 py-2.5 text-sm text-apricot hover:underline"
+          className="flex min-h-11 items-center rounded-(--radius-card) border border-apricot/40 bg-apricot-soft px-4 py-2.5 text-sm text-apricot hover:underline"
         >
           {t('inbox.title')} · {pendingCount}
         </Link>
       )}
 
-      <div className="flex gap-1 overflow-x-auto">
+      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
         {viewTabs.map(({ key, label }) => (
           <Link
             key={key}

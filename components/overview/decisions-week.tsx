@@ -25,7 +25,7 @@ export function DecisionsWeek({ decisions, projectNames, title, empty }: Props) 
 
   return (
     <section aria-labelledby="decisions-h">
-      <h2 id="decisions-h" className="font-serif text-2xl text-ink">{title}</h2>
+      <h2 id="decisions-h" className="font-serif text-xl text-ink sm:text-2xl">{title}</h2>
       {decisions.length === 0 ? (
         <p className="mt-4 rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{empty}</p>
       ) : (
@@ -40,13 +40,13 @@ export function DecisionsWeek({ decisions, projectNames, title, empty }: Props) 
                       type="button"
                       onClick={() => setOpen((m) => ({ ...m, [d.id]: !m[d.id] }))}
                       aria-expanded={!!open[d.id]}
-                      className="flex w-full items-start gap-2 px-4 py-2.5 text-start"
+                      className="flex min-h-11 w-full cursor-pointer items-start gap-2 px-4 py-2.5 text-start hover:bg-card2 sm:min-h-0"
                     >
-                      <span className={`mt-1 inline-block text-xs text-ink3 transition-transform ${open[d.id] ? 'rotate-90' : ''}`}>▸</span>
+                      <span aria-hidden="true" className={`mt-1 inline-block text-xs text-ink3 transition-transform rtl:-scale-x-100 ${open[d.id] ? 'rotate-90 rtl:rotate-90' : ''}`}>▸</span>
                       <span className="text-sm leading-snug text-ink">{d.title}</span>
                     </button>
                     {open[d.id] && d.detail && (
-                      <p className="border-t border-line2 bg-card2 px-11 py-2 text-xs text-ink2">{d.detail}</p>
+                      <p className="border-t border-line2 bg-card2 px-11 py-2 text-xs text-ink3">{d.detail}</p>
                     )}
                   </li>
                 ))}

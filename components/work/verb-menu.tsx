@@ -29,7 +29,7 @@ export function VerbMenu({ taskId, labels }: { taskId: string; labels: Record<st
           type={NEEDS_DATE.includes(askInput) ? 'date' : 'text'}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') run(askInput, draft); if (e.key === 'Escape') setAskInput(null); }}
-          className={`w-32 rounded-lg border bg-card px-2 py-0.5 text-xs text-ink ${failed ? 'border-coral' : 'border-mist'}`} />
+          className={`min-h-11 w-32 rounded-lg border bg-card px-2 py-0.5 text-xs text-ink sm:min-h-0 ${failed ? 'border-coral' : 'border-mist'}`} />
         <button type="button" disabled={pending} onClick={() => run(askInput, draft)} aria-label={labels[askInput]}
           className="min-h-11 rounded-full bg-sage px-2.5 py-0.5 text-[11px] text-white disabled:opacity-50 sm:min-h-7"><span aria-hidden="true">✓</span></button>
         <button type="button" onClick={() => setAskInput(null)} aria-label={labels.cancel}
@@ -40,15 +40,16 @@ export function VerbMenu({ taskId, labels }: { taskId: string; labels: Record<st
   }
 
   return (
-    <span className="relative inline-block">
+    <span className="relative inline-block" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}>
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu"
         className="min-h-11 rounded-full border border-line bg-card px-3 py-1 text-xs text-ink2 hover:bg-card2 sm:min-h-0">
         {labels.update}
       </button>
       {open && (
         <>
-          <span aria-hidden="true" onClick={() => setOpen(false)} className="fixed inset-0 z-20 sm:hidden" />
-          <span role="menu" className="fixed inset-x-2 bottom-2 z-30 flex flex-col rounded-lg border border-line bg-card p-1 shadow-card sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:w-44">
+          <span aria-hidden="true" onClick={() => setOpen(false)} className="fixed inset-0 z-20 bg-ink/40 sm:bg-transparent" />
+          <span role="menu" className="fixed inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border-t border-line bg-card p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-card sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:w-44 sm:rounded-lg sm:border sm:p-1">
+            <span aria-hidden="true" className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-line sm:hidden" />
             {VERBS.map((v) => (
               <button key={v} type="button" role="menuitem" disabled={pending}
                 onClick={() => (NEEDS_TEXT.includes(v) || NEEDS_DATE.includes(v)) ? setAskInput(v) : run(v, null)}

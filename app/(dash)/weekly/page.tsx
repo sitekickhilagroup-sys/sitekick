@@ -35,7 +35,7 @@ export default async function WeeklyPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-3xl text-ink">{t('weekly.title')}</h1>
+      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('weekly.title')}</h1>
       <p className="mt-1 text-sm text-ink3">{t('weekly.sub')}</p>
       {!embedded ? (
         <div className="mt-6 rounded-(--radius-card) border border-line bg-card p-6">
@@ -56,6 +56,7 @@ export default async function WeeklyPage() {
               completed: t('work.verb.completed'),
               notApplicable: t('work.verb.not_applicable'),
               statusOpen: t('weekly.status_open'),
+              noItems: t('weekly.no_items'),
             }} />
           );
         })()

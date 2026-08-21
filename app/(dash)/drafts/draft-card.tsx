@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { setDraftStatus } from '@/app/actions/drafts';
 import type { Draft } from '@/lib/types';
 
@@ -11,8 +11,16 @@ interface Labels {
 
 export function DraftCard({ draft, labels }: { draft: Draft; labels: Labels }) {
   const [pending, start] = useTransition();
+  const [copied, setCopied] = useState(false);
   const act = (status: 'approved' | 'dismissed' | 'sent') =>
     start(async () => { await setDraftStatus(draft.id, status); });
+
+  const copy = () => {
+    navigator.clipboard.writeText(`${draft.subject}\n\n${draft.body}`).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
+      () => setCopied(false),
+    );
+  };
 
   const mailto = `mailto:${draft.to_email ?? ''}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
 
@@ -24,36 +32,40 @@ export function DraftCard({ draft, labels }: { draft: Draft; labels: Labels }) {
           draft.status === 'proposed' ? 'bg-apricot-soft text-apricot'
           : draft.status === 'approved' ? 'bg-sage-soft text-sage'
           : draft.status === 'sent' ? 'bg-mist-soft text-mist'
-          : 'bg-inset text-ink3'
+          : 'bg-card2 text-ink3'
         }`}>
           {labels.statusLabel[draft.status] ?? draft.status}
         </span>
       </div>
-      {draft.to_email && <p className="mt-0.5 text-xs text-ink3">→ {draft.to_email}</p>}
+      {draft.to_email && (
+        <p className="mt-0.5 text-xs text-ink3">
+          <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span> {draft.to_email}
+        </p>
+      )}
       <p className="mt-2 whitespace-pre-wrap rounded-lg bg-card2 p-3 text-sm leading-relaxed text-ink2">{draft.body}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         {draft.status === 'proposed' && (
           <>
             <button type="button" disabled={pending} onClick={() => act('approved')}
-              className="rounded-lg bg-sage px-3 py-1 text-xs text-white disabled:opacity-50">
+              className="min-h-11 cursor-pointer rounded-lg bg-sage px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50 sm:min-h-0">
               {labels.approve}
             </button>
             <button type="button" disabled={pending} onClick={() => act('dismissed')}
-              className="rounded-lg border border-line px-3 py-1 text-xs text-ink2 disabled:opacity-50">
+              className="min-h-11 cursor-pointer rounded-lg border border-line px-3 py-1 text-xs text-ink2 hover:bg-card2 disabled:opacity-50 sm:min-h-0">
               {labels.dismiss}
             </button>
           </>
         )}
         {draft.status === 'approved' && (
           <>
-            <a href={mailto} className="rounded-lg bg-mist px-3 py-1 text-xs text-white">{labels.openMail}</a>
-            <button type="button"
-              onClick={() => navigator.clipboard.writeText(`${draft.subject}\n\n${draft.body}`)}
-              className="rounded-lg border border-line px-3 py-1 text-xs text-ink2">
-              {labels.copy}
+            <a href={mailto} className="inline-flex min-h-11 items-center rounded-lg bg-mist px-3 py-1 text-xs text-white hover:opacity-90 sm:min-h-0">{labels.openMail}</a>
+            <button type="button" onClick={copy}
+              className="min-h-11 cursor-pointer rounded-lg border border-line px-3 py-1 text-xs text-ink2 hover:bg-card2 sm:min-h-0">
+              {labels.copy}{copied && <span aria-hidden="true" className="ms-1 text-sage">✓</span>}
             </button>
+            {copied && <span role="status" className="sr-only">{labels.copy} ✓</span>}
             <button type="button" disabled={pending} onClick={() => act('sent')}
-              className="rounded-lg border border-sage-line px-3 py-1 text-xs text-sage disabled:opacity-50">
+              className="min-h-11 cursor-pointer rounded-lg border border-sage-line px-3 py-1 text-xs text-sage hover:bg-sage-soft disabled:opacity-50 sm:min-h-0">
               {labels.markSent}
             </button>
           </>

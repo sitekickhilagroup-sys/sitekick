@@ -67,6 +67,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     fromSource: t('actions.from_source'),
     waiting: t('work.verb.waiting'),
     editWaiting: t('actions.edit_waiting'),
+    save: t('common.save'),
     cancel: t('common.cancel'),
     errorSave: t('common.error_save'),
     completed: t('work.verb.completed'),
@@ -78,6 +79,8 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     update: t('work.update'),
     title: t('rel.title'),
     add: t('rel.add'),
+    pickTask: t('rel.pick_task'),
+    relEmpty: t('rel.empty'),
     reason: t('rel.reason'),
     remove: t('rel.remove'),
     error: t('common.error_save'),
@@ -95,18 +98,18 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
       <div>
         <p className="text-sm text-ink3">{t('process.title')}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h1 className="font-serif text-3xl text-ink">{project.name}</h1>
+          <h1 className="font-serif text-2xl text-ink sm:text-3xl">{project.name}</h1>
           {project.city_case && (
             <span className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
-              project.city_on_hold ? 'bg-coral-soft text-coral' : 'bg-inset text-ink3'
+              project.city_on_hold ? 'bg-coral-soft text-coral' : 'bg-card2 text-ink3'
             }`}>
-              {project.city_on_hold ? `${project.city_case} · ${t('rails.on_hold')}` : project.city_case}
+              <bdi>{project.city_on_hold ? `${project.city_case} · ${t('rails.on_hold')}` : project.city_case}</bdi>
             </span>
           )}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <p className="text-sm text-ink2">
-            <span className="font-medium text-ink2">{t('process.current')}:</span>{' '}
+          <p className="text-sm text-ink3">
+            <span className="font-medium text-ink3">{t('process.current')}:</span>{' '}
             <span className="text-ink">{currentPhaseView?.phase.label ?? '—'}</span>
             {activeWorkstreams.length > 0 && (
               <span className="text-ink3"> + {activeWorkstreams.map((w) => w.name).join(', ')}</span>
@@ -147,6 +150,11 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
 
       <div>
         <p className="text-sm text-ink3">{t('process.connected')}</p>
+        {allTasks.length === 0 && (
+          <p className="mt-2 rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">
+            {t('process.no_connected')}
+          </p>
+        )}
         <div className="mt-2 space-y-5">
           {phaseViews.map((view) => {
             const tasks = tasksByPhase.get(view.phase.key) ?? [];

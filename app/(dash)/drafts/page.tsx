@@ -32,7 +32,7 @@ export default async function DraftsPage() {
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="font-serif text-3xl text-ink">{t('drafts.title')}</h1>
+      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('drafts.title')}</h1>
       {active.length === 0 && (
         <p className="rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{t('drafts.empty')}</p>
       )}
@@ -40,7 +40,7 @@ export default async function DraftsPage() {
         {active.map((d) => <DraftCard key={d.id} draft={d} labels={labels} />)}
       </div>
       {past.length > 0 && (
-        <div className="grid gap-3 opacity-60 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           {past.map((d) => <DraftCard key={d.id} draft={d} labels={labels} />)}
         </div>
       )}

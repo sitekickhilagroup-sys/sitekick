@@ -31,7 +31,7 @@ export function CompareCharts({ openMoney, tasks, projectNames, title, moneyLabe
 
   return (
     <section aria-labelledby="compare-h">
-      <h2 id="compare-h" className="font-serif text-2xl text-ink">{title}</h2>
+      <h2 id="compare-h" className="font-serif text-xl text-ink sm:text-2xl">{title}</h2>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
           <h3 className="text-sm font-medium text-ink2">{moneyLabel}</h3>

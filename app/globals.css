@@ -75,6 +75,13 @@ body {
   min-height: 100dvh;
 }
 
+/* Filled accent buttons: dark theme lightens --sage/--mist, so the hardcoded
+   text-white pairing drops to ~2.2:1 — force dark ink on them instead (7.6:1). */
+[data-theme="dark"] .bg-sage,
+[data-theme="dark"] .bg-mist {
+  color: var(--deep);
+}
+
 :focus-visible {
   outline: 2px solid var(--mist);
   outline-offset: 2px;
