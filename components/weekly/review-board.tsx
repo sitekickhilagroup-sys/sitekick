@@ -103,7 +103,12 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
 
   return (
     <li className="flex flex-wrap items-center gap-2">
-      <span className="min-w-0 flex-1 basis-full text-sm text-ink sm:basis-auto">{title}</span>
+      <span className="min-w-0 flex-1 basis-full sm:basis-auto">
+        {item.carried_from && labels.itemKicker && (
+          <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.itemKicker}</span>
+        )}
+        <span className="block text-sm text-ink">{title}</span>
+      </span>
       <span role="status" className={`rounded-full px-2 py-0.5 text-[11px] ${statusClass}`}>{statusText}</span>
       <input
         defaultValue={item.weekly_note ?? ''}

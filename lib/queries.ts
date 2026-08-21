@@ -3,7 +3,7 @@ import { followUpAlerts, topActions } from './priority.ts';
 import { laToday } from './date.ts';
 import type {
   Action, Blocker, Decision, Invoice, Phase, Project, ProjectEvent, ProjectStage,
-  Relationship, StageRequirement, SubstageCatalogRow, Task, Workstream,
+  Relationship, StageRequirement, SubstageCatalogRow, Task, Vendor, Workstream,
 } from './types.ts';
 
 export interface ProjectView extends Project {
@@ -50,6 +50,8 @@ export interface OverviewData {
     timeLost: { project: string; text: string; days: number } | null;
     staleWait: { project: string; title: string; who: string; days: number } | null;
   };
+  /** Consultants tab (client demo): open items waiting on each vendor + their open money. */
+  consultants: { name: string; discipline: string | null; waitingCount: number; openUsd: number }[];
   today: string;
 }
 
@@ -57,7 +59,7 @@ export async function getOverviewData(): Promise<OverviewData> {
   const supabase = await supabaseServer();
   const [
     projectsQ, stagesQ, reqsQ, eventsQ, tasksQ, blockersQ, decisionsQ, invoicesQ, catalogQ, relationshipsQ,
-    phasesQ, workstreamsQ, pendingProposalsQ,
+    phasesQ, workstreamsQ, pendingProposalsQ, vendorsQ,
   ] = await Promise.all([
     supabase.from('projects').select('*').order('name'),
     supabase.from('project_stages').select('*').order('position'),
@@ -71,7 +73,7 @@ export async function getOverviewData(): Promise<OverviewData> {
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
     supabase.from('decisions').select('*').order('created_at', { ascending: false }).limit(30),
     // Overview only charts open money + the Rowan queue.
-    supabase.from('invoices').select('project_id,status,amount_usd').in('status', ['received', 'for_rowan_approval', 'approved']),
+    supabase.from('invoices').select('project_id,status,amount_usd,vendor_id').in('status', ['received', 'for_rowan_approval', 'approved']),
     supabase.from('substage_catalog').select('*').order('position'),
     // Feeds the priority engine's "unlocks" bonus — only blocking edges matter there.
     supabase.from('relationships').select('*').eq('type', 'blocks'),
@@ -82,6 +84,8 @@ export async function getOverviewData(): Promise<OverviewData> {
     supabase.from('workstreams').select('*').eq('status', 'active').order('name'),
     // Head count only — the inbox banner just needs "is there anything to review".
     supabase.from('agent_proposals').select('id', { count: 'exact', head: true }).eq('state', 'pending'),
+    // Consultants intelligence: who open work waits on + their open money.
+    supabase.from('vendors').select('id,name,discipline'),
   ]);
 
   const projects = (projectsQ.data ?? []) as Project[];
@@ -91,7 +95,7 @@ export async function getOverviewData(): Promise<OverviewData> {
   const tasks = (tasksQ.data ?? []) as Task[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const decisions = (decisionsQ.data ?? []) as Decision[];
-  const invoices = (invoicesQ.data ?? []) as Pick<Invoice, 'project_id' | 'status' | 'amount_usd'>[];
+  const invoices = (invoicesQ.data ?? []) as Pick<Invoice, 'project_id' | 'status' | 'amount_usd' | 'vendor_id'>[];
   const catalog = (catalogQ.data ?? []) as SubstageCatalogRow[];
   const relationships = (relationshipsQ.data ?? []) as Relationship[];
   const phases = (phasesQ.data ?? []) as Phase[];
@@ -199,6 +203,23 @@ export async function getOverviewData(): Promise<OverviewData> {
   const oldestWait = waitingTasks[0] ?? null;
   const daysSince = (iso: string) =>
     Math.max(0, Math.floor((Date.parse(today) - Date.parse(iso.slice(0, 10))) / 86400000));
+  // Consultants: same waiting_for-substring match the directory uses, plus
+  // open invoice totals per vendor. Only vendors with something live make the list.
+  const vendorRows = (vendorsQ.data ?? []) as Pick<Vendor, 'id' | 'name' | 'discipline'>[];
+  const consultants = vendorRows
+    .map((v) => {
+      const waitingCount = openTasks.filter(
+        (t) => t.waiting_for && v.name.toLowerCase().includes(t.waiting_for.toLowerCase()),
+      ).length;
+      const openUsd = invoices
+        .filter((inv) => inv.vendor_id === v.id)
+        .reduce((s, inv) => s + Number(inv.amount_usd), 0);
+      return { name: v.name, discipline: v.discipline, waitingCount, openUsd };
+    })
+    .filter((c) => c.waitingCount > 0 || c.openUsd > 0)
+    .sort((a, b) => b.waitingCount - a.waitingCount || b.openUsd - a.openUsd)
+    .slice(0, 8);
+
   const insights = {
     timeLost: worstBlocker
       ? {
@@ -232,6 +253,7 @@ export async function getOverviewData(): Promise<OverviewData> {
     pendingProposals,
     portfolio,
     insights,
+    consultants,
     today,
   };
 }
