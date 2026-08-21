@@ -45,12 +45,15 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const view: WorkView = (VIEWS as string[]).includes(rawView) ? (rawView as WorkView) : 'today';
 
   const supabase = await supabaseServer();
-  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ] = await Promise.all([
+  // Relationships ride the same batch (table is small — filter in memory
+  // below) so the page costs one database round trip, not two.
+  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ] = await Promise.all([
     supabase.from('tasks').select('*').eq('status', 'open'),
     supabase.from('projects').select('id,name'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
     supabase.from('agent_proposals').select('id', { count: 'exact', head: true }).eq('state', 'pending'),
     supabase.from('invoices').select('amount_usd').eq('status', 'approved'),
+    supabase.from('relationships').select('*'),
   ]);
 
   const tasks = (tasksQ.data ?? []) as Task[];
@@ -78,20 +81,12 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   const isEmpty = view === 'blocking' ? blockers.length === 0 && filtered.length === 0 : filtered.length === 0;
 
-  // Relationships for the tasks actually listed on this view — two .in()
-  // queries (a task can be the "from" or "to" side) merged + deduped by id.
-  const listedIds = filtered.map((t) => t.id);
-  const [relFromQ, relToQ] = await Promise.all([
-    listedIds.length
-      ? supabase.from('relationships').select('*').in('from_task_id', listedIds)
-      : Promise.resolve({ data: [] as Relationship[] }),
-    listedIds.length
-      ? supabase.from('relationships').select('*').in('to_task_id', listedIds)
-      : Promise.resolve({ data: [] as Relationship[] }),
-  ]);
-  const relById = new Map<string, Relationship>();
-  for (const r of [...(relFromQ.data ?? []), ...(relToQ.data ?? [])] as Relationship[]) relById.set(r.id, r);
-  const relationships = [...relById.values()];
+  // Relationships for the tasks actually listed on this view — already
+  // fetched in the batch above; a task can be the "from" or "to" side.
+  const listedIds = new Set(filtered.map((t) => t.id));
+  const relationships = ((relsQ.data ?? []) as Relationship[]).filter(
+    (r) => listedIds.has(r.from_task_id) || listedIds.has(r.to_task_id),
+  );
   const taskTitleById = new Map(tasks.map((t) => [t.id, t.title]));
   const tasksByProject = new Map<string | null, Task[]>();
   for (const t of tasks) {

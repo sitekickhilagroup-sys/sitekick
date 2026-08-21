@@ -20,24 +20,19 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
   const t = getT(locale);
 
   const supabase = await supabaseServer();
-  const { project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase } = await getProjectProcess(supabase, id);
+  // Relationships fetched alongside the process batch (no second round trip)
+  // — the table is small, so we take it whole and filter to listed tasks.
+  const [{ project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase }, relsQ] = await Promise.all([
+    getProjectProcess(supabase, id),
+    supabase.from('relationships').select('*'),
+  ]);
   if (!project) notFound();
 
-  // Relationships for every task rendered on this page — two .in() queries
-  // (a task can be the "from" or "to" side) merged + deduped by id.
   const allTasks = [...tasksByPhase.values()].flat().concat(unmappedTasks);
-  const listedIds = allTasks.map((t) => t.id);
-  const [relFromQ, relToQ] = await Promise.all([
-    listedIds.length
-      ? supabase.from('relationships').select('*').in('from_task_id', listedIds)
-      : Promise.resolve({ data: [] as Relationship[] }),
-    listedIds.length
-      ? supabase.from('relationships').select('*').in('to_task_id', listedIds)
-      : Promise.resolve({ data: [] as Relationship[] }),
-  ]);
-  const relById = new Map<string, Relationship>();
-  for (const r of [...(relFromQ.data ?? []), ...(relToQ.data ?? [])] as Relationship[]) relById.set(r.id, r);
-  const relationships = [...relById.values()];
+  const listedIds = new Set(allTasks.map((t) => t.id));
+  const relationships = ((relsQ.data ?? []) as Relationship[]).filter(
+    (r) => listedIds.has(r.from_task_id) || listedIds.has(r.to_task_id),
+  );
   const taskTitleById = new Map(allTasks.map((t) => [t.id, t.title]));
   const taskOptions = allTasks.map((t) => ({ id: t.id, title: t.title }));
   const relationsFor = (taskId: string): RelationRow[] =>
@@ -135,8 +130,8 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="grid min-w-[900px] gap-3 lg:grid-cols-5">
+      <div>
+        <div className="grid gap-3 lg:grid-cols-5">
           {phaseViews.map((view) => (
             <PhaseColumn
               key={view.phase.key}

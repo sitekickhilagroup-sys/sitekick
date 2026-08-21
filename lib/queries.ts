@@ -47,7 +47,10 @@ export async function getOverviewData(): Promise<OverviewData> {
     supabase.from('projects').select('*').order('name'),
     supabase.from('project_stages').select('*').order('position'),
     supabase.from('stage_requirements').select('*').order('position'),
-    supabase.from('project_events').select('*').order('created_at'),
+    // Newest 400 only — this table grows with every ingested email/import,
+    // and the overview payload must not grow with it. Reversed below so the
+    // rails timeline still renders oldest -> newest.
+    supabase.from('project_events').select('*').order('created_at', { ascending: false }).limit(400),
     // Only open tasks are ever rendered/scored — don't ship done/dropped history.
     supabase.from('tasks').select('*').eq('status', 'open').order('created_at'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
@@ -69,7 +72,7 @@ export async function getOverviewData(): Promise<OverviewData> {
   const projects = (projectsQ.data ?? []) as Project[];
   const stages = (stagesQ.data ?? []) as ProjectStage[];
   const requirements = (reqsQ.data ?? []) as StageRequirement[];
-  const events = (eventsQ.data ?? []) as ProjectEvent[];
+  const events = ((eventsQ.data ?? []) as ProjectEvent[]).reverse();
   const tasks = (tasksQ.data ?? []) as Task[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const decisions = (decisionsQ.data ?? []) as Decision[];
