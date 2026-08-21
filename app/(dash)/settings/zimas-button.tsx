@@ -7,18 +7,18 @@ export function ZimasButton({ label }: { label: string }) {
   const [result, setResult] = useState('');
   const [pending, start] = useTransition();
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex flex-wrap items-center gap-2">
       <button
-        type="button" disabled={pending}
+        type="button" disabled={pending} aria-busy={pending}
         onClick={() => start(async () => {
           const r = await runZimasNow();
           setResult(`✓ ${r.processed}`);
         })}
-        className="rounded-lg border border-line bg-card px-3 py-1.5 text-sm text-ink2 hover:text-ink disabled:opacity-60"
+        className="min-h-11 cursor-pointer rounded-lg border border-line bg-card px-3 py-1.5 text-sm text-ink2 hover:text-ink disabled:opacity-60 sm:min-h-0"
       >
         {pending ? '…' : label}
       </button>
-      {result && <span className="text-xs text-sage">{result}</span>}
+      {result && <span role="status" className="text-xs text-sage">{result}</span>}
     </span>
   );
 }

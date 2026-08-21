@@ -54,7 +54,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-5 pb-16">
-      <h1 className="font-serif text-3xl text-ink">{t('settings.title')}</h1>
+      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('settings.title')}</h1>
 
       <Card title={t('settings.import_requirements')}>
         <ImportForm

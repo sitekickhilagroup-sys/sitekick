@@ -42,3 +42,4 @@ next-env.d.ts
 
 # never commit ad-hoc temp/secret scratch files
 *.tmp
+*.stackdump

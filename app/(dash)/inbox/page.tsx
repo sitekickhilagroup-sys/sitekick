@@ -25,7 +25,7 @@ export default async function InboxPage() {
 
   return (
     <div>
-      <h1 className="font-serif text-3xl text-ink">{t('inbox.title')}</h1>
+      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('inbox.title')}</h1>
       <p className="mt-1 text-sm text-ink3">{t('inbox.sub')}</p>
       {proposals.length === 0 ? (
         <p className="mt-6 rounded-(--radius-card) border border-line bg-card p-6 text-ink2">{t('inbox.empty')}</p>

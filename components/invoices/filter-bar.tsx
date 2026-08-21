@@ -32,7 +32,7 @@ export function FilterBar({ options, labels }: Props) {
       <select
         value={params.get(key) ?? ''}
         onChange={(e) => set(key, e.target.value)}
-        className="rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink"
+        className="min-h-11 cursor-pointer rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink sm:min-h-0"
       >
         <option value="">{labels.all}</option>
         {values.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
@@ -49,12 +49,12 @@ export function FilterBar({ options, labels }: Props) {
       <label className="flex items-center gap-1.5 text-xs text-ink2">
         {labels.from}
         <input type="date" value={params.get('from') ?? ''} onChange={(e) => set('from', e.target.value)}
-          className="rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink" />
+          className="min-h-11 rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink sm:min-h-0" />
       </label>
       <label className="flex items-center gap-1.5 text-xs text-ink2">
         {labels.to}
         <input type="date" value={params.get('to') ?? ''} onChange={(e) => set('to', e.target.value)}
-          className="rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink" />
+          className="min-h-11 rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink sm:min-h-0" />
       </label>
     </div>
   );

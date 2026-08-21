@@ -67,7 +67,7 @@ export function ActionRow({ action, index, labels }: { action: Action; index: nu
             />
           )}
           {action.source && (
-            <span className="rounded-full bg-inset px-2 py-0.5 text-[10px] text-ink3" title={action.source}>
+            <span className="rounded-full bg-card2 px-2 py-0.5 text-[10px] text-ink3" title={action.source}>
               {labels.fromSource}: {action.source.length > 42 ? action.source.slice(0, 42) + '…' : action.source}
             </span>
           )}
@@ -90,7 +90,7 @@ export function ActionRow({ action, index, labels }: { action: Action; index: nu
           <button
             type="button" disabled={pending} onClick={() => clear('dropped')}
             title={labels.dismiss} aria-label={labels.dismiss}
-            className="min-h-7 min-w-7 rounded-full border border-line px-2 py-0.5 text-[11px] text-ink3 hover:bg-inset disabled:opacity-50"
+            className="min-h-11 min-w-11 cursor-pointer sm:min-h-7 sm:min-w-7 rounded-full border border-line px-2 py-0.5 text-[11px] text-ink3 hover:bg-inset disabled:opacity-50"
           >
             <span aria-hidden="true">✕</span>
           </button>

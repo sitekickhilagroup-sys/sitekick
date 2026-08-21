@@ -10,7 +10,7 @@ interface Props {
 export function WhatsStuck({ blockers, projectNames, title, labels }: Props) {
   return (
     <section aria-labelledby="stuck-h">
-      <h2 id="stuck-h" className="font-serif text-2xl text-ink">{title}</h2>
+      <h2 id="stuck-h" className="font-serif text-xl text-ink sm:text-2xl">{title}</h2>
       {blockers.length === 0 ? (
         <p className="mt-4 rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{labels.empty}</p>
       ) : (
@@ -28,7 +28,7 @@ export function WhatsStuck({ blockers, projectNames, title, labels }: Props) {
                 <span className="font-medium text-ink2">{labels.blockedBy}:</span> {b.blocked_by}
               </p>
               {b.suggested_action && (
-                <p className="mt-1 rounded-lg bg-apricot-soft px-2.5 py-1.5 text-xs text-ink2">
+                <p className="mt-1 rounded-lg bg-apricot-soft px-2.5 py-1.5 text-xs text-ink">
                   <span className="font-medium">{labels.suggested}:</span> {b.suggested_action}
                 </p>
               )}

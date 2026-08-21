@@ -21,7 +21,7 @@ export function SubstageRow({ projectId, template, instance, labels }: Props) {
   const cls =
     status === 'done' ? 'bg-sage-soft text-sage'
     : status === 'active' ? 'bg-mist-soft text-mist'
-    : status === 'not_applicable' ? 'bg-inset text-ink3'
+    : status === 'not_applicable' ? 'bg-card2 text-ink3'
     : 'bg-card2 text-ink3';
 
   const onClick = () => start(async () => {
@@ -45,7 +45,7 @@ export function SubstageRow({ projectId, template, instance, labels }: Props) {
         disabled={pending}
         onClick={onClick}
         aria-label={`${template.name}: ${labels['status.' + status]}`}
-        className={`min-h-11 whitespace-nowrap rounded-full px-2.5 py-1 text-xs disabled:opacity-50 sm:min-h-0 ${cls}`}
+        className={`min-h-11 cursor-pointer whitespace-nowrap rounded-full px-2.5 py-1 text-xs ring-line transition-shadow hover:ring-2 disabled:opacity-50 sm:min-h-0 ${cls}`}
       >
         {labels['status.' + status]}
       </button>

@@ -18,10 +18,11 @@ export function ProposalCard({ proposal, projectName, taskTitle, labels, summary
     if (res?.error) setFailed(true);
   });
   const pay = proposal.payload as Record<string, unknown>;
+  const arrow = <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>;
   // relationship_create payloads describe an edge between two tasks rather
   // than a single field — show it as "from → to" instead of the generic chain.
-  const computedSummary = pay.from_match && pay.to_match
-    ? `${pay.from_match} → ${pay.to_match}`
+  const computedSummary: React.ReactNode = pay.from_match && pay.to_match
+    ? <>{String(pay.from_match)} {arrow} {String(pay.to_match)}</>
     : String(pay.phase_key ?? pay.title ?? pay.what ?? pay.task_match ?? '');
   const summary = summaryOverride ?? computedSummary;
   return (
@@ -32,7 +33,7 @@ export function ProposalCard({ proposal, projectName, taskTitle, labels, summary
         <span className="ms-auto text-[11px] text-ink3">{labels.confidence}: {Math.round(proposal.confidence * 100)}%</span>
       </div>
       <p className="mt-2 text-sm text-ink">{summary || taskTitle}</p>
-      {taskTitle && summary && <p className="mt-0.5 text-xs text-ink3">→ {taskTitle}</p>}
+      {taskTitle && summary && <p className="mt-0.5 text-xs text-ink3">{arrow} {taskTitle}</p>}
       {proposal.reasoning && <p className="mt-1 text-xs text-ink3">{proposal.reasoning}</p>}
       {typeof pay.evidence === 'string' && pay.evidence && <p className="mt-1 border-s-2 border-line ps-2 text-xs italic text-ink3">{pay.evidence}</p>}
       <div className="mt-3 flex items-center gap-2">

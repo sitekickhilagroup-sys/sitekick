@@ -71,23 +71,24 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="font-serif text-3xl text-ink">{t('nav.invoices')}</h1>
+      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('nav.invoices')}</h1>
 
       {rowan.length > 0 && (
         <p className="rounded-(--radius-card) border border-apricot/40 bg-apricot-soft px-4 py-2.5 text-sm text-ink">
+          {/* FSI/PDI marks bidi-isolate the LTR number/amount inside the Hebrew sentence */}
           {t('invoices.waiting_rowan')
-            .replace('{n}', String(rowan.length))
-            .replace('{total}', money(rowanTotal))}
+            .replace('{n}', `⁨${rowan.length}⁩`)
+            .replace('{total}', `⁨${money(rowanTotal)}⁩`)}
         </p>
       )}
 
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1">
         {tabs.map(({ key, label }) => (
           <Link
             key={key}
             href={`/invoices?tab=${key}`}
-            className={`rounded-full px-4 py-1.5 text-sm ${
-              tab === key ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+            className={`inline-flex min-h-11 items-center rounded-full px-4 py-1.5 text-sm sm:min-h-0 ${
+              tab === key ? 'bg-ink text-bg' : 'bg-card2 text-ink3 hover:text-ink'
             }`}
           >
             {label}
@@ -117,16 +118,16 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
         <table className="w-full min-w-[900px] text-sm">
           <thead>
             <tr className="border-b border-line text-xs text-ink3">
-              <th className="px-3 py-2 text-start font-medium">{t('common.vendor')}</th>
-              <th className="px-3 py-2 text-start font-medium">{t('common.project')}</th>
-              <th className="px-3 py-2 text-start font-medium">{t('invoices.entity')}</th>
-              <th className="px-3 py-2 text-start font-medium">{t('invoices.number')}</th>
-              <th className="px-3 py-2 text-end font-medium">{t('common.amount')}</th>
-              <th className="px-3 py-2 text-start font-medium">{t('invoices.received')}</th>
-              <th className="px-3 py-2 text-start font-medium">{t('common.status')}</th>
-              <th className="px-3 py-2 text-start font-medium">{t('invoices.paid_date')}</th>
-              <th className="px-3 py-2 text-start font-medium">{t('invoices.transfer')}</th>
-              <th className="px-3 py-2 text-start font-medium">{t('invoices.edit_links')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.vendor')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.project')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.entity')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.number')}</th>
+              <th scope="col" className="px-3 py-2 text-end font-medium">{t('common.amount')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.received')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.status')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.paid_date')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.transfer')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.edit_links')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line2">
@@ -173,8 +174,10 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                       invoiceId={inv.id}
                       invoiceUrl={inv.invoice_url}
                       receiptUrl={inv.receipt_url}
+                      context={[inv.vendor_id ? vName.get(inv.vendor_id) : null, inv.number].filter(Boolean).join(' ')}
                       labels={{
                         edit: t('invoices.edit_links'),
+                        save: t('common.save'),
                         invoice: t('invoices.open_invoice'),
                         receipt: t('invoices.open_receipt'),
                         cancel: t('common.cancel'),

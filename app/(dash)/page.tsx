@@ -58,7 +58,7 @@ export default async function OverviewPage() {
   };
 
   return (
-    <div className="space-y-10 pb-16">
+    <div className="space-y-8 pb-16 sm:space-y-10">
       <Link
         href="/work"
         className="block min-h-11 rounded-(--radius-card) border border-line bg-card p-4 shadow-card hover:opacity-90"
@@ -81,7 +81,7 @@ export default async function OverviewPage() {
       )}
 
       <section aria-labelledby="portfolio-h">
-        <h2 id="portfolio-h" className="font-serif text-2xl text-ink">{t('portfolio.map')}</h2>
+        <h2 id="portfolio-h" className="font-serif text-xl text-ink sm:text-2xl">{t('portfolio.map')}</h2>
         <div className="mt-4 space-y-3">
           {data.portfolio.map((entry, i) => (
             <ProjectAccordion key={entry.project.id} entry={entry} defaultOpen={i === 0} labels={portfolioLabels} />

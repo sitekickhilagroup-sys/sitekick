@@ -32,8 +32,9 @@ export function InferButton({ projectId, label, doneLabel, sameLabel, errorLabel
       <button
         type="button"
         disabled={pending}
+        aria-busy={pending}
         onClick={onClick}
-        className="min-h-11 rounded-lg border border-line px-2 py-1 text-xs text-ink2 disabled:opacity-50 sm:min-h-0"
+        className="min-h-11 cursor-pointer rounded-lg border border-line px-2 py-1 text-xs text-ink3 hover:bg-card2 hover:text-ink disabled:opacity-50 sm:min-h-0"
       >
         {label}
       </button>

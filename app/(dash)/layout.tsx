@@ -61,7 +61,7 @@ export default async function DashLayout({ children }: { children: React.ReactNo
           </div>
         </div>
       </header>
-      <main id="main" className="mx-auto max-w-[1400px] px-4 py-6">{children}</main>
+      <main id="main" className="mx-auto max-w-[1400px] px-4 py-4 sm:py-6">{children}</main>
     </div>
   );
 }

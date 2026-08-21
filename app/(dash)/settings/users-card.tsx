@@ -10,6 +10,7 @@ export interface UserLabels {
 
 export function UsersCard({ users, meId, labels }: { users: AppUser[]; meId: string; labels: UserLabels }) {
   const [created, setCreated] = useState<{ email: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [pending, start] = useTransition();
 
@@ -34,7 +35,7 @@ export function UsersCard({ users, meId, labels }: { users: AppUser[]; meId: str
                     if (r.error) setError(r.error);
                   });
                 }}
-                className="rounded-full border border-line px-2 py-0.5 text-[11px] text-coral hover:bg-coral-soft disabled:opacity-50"
+                className="min-h-11 cursor-pointer rounded-full border border-line px-2 py-0.5 text-[11px] text-coral hover:bg-coral-soft disabled:opacity-50 sm:min-h-0"
               >
                 {labels.remove}
               </button>
@@ -56,10 +57,10 @@ export function UsersCard({ users, meId, labels }: { users: AppUser[]; meId: str
         <label className="text-xs text-ink2">
           {labels.email}
           <input name="email" type="email" required placeholder="name@company.com"
-            className="ms-1 w-64 rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink" />
+            className="ms-1 min-h-11 w-64 max-w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-0" />
         </label>
-        <button type="submit" disabled={pending}
-          className="rounded-lg bg-sage px-4 py-1.5 text-sm text-white disabled:opacity-60">
+        <button type="submit" disabled={pending} aria-busy={pending}
+          className="min-h-11 cursor-pointer rounded-lg bg-sage px-4 py-1.5 text-sm text-white disabled:opacity-60 sm:min-h-0">
           + {labels.add}
         </button>
       </form>
@@ -69,13 +70,17 @@ export function UsersCard({ users, meId, labels }: { users: AppUser[]; meId: str
           <span>{labels.tempPass} <b>{created.email}</b>:</span>
           <code className="rounded bg-card px-2 py-0.5 font-mono">{created.password}</code>
           <button type="button"
-            onClick={() => navigator.clipboard.writeText(`${created.email} / ${created.password}`)}
-            className="rounded-full border border-sage-line px-2 py-0.5 text-[11px] text-sage">
-            {labels.copy}
+            onClick={() => navigator.clipboard.writeText(`${created.email} / ${created.password}`).then(
+              () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
+              () => setCopied(false),
+            )}
+            className="min-h-11 cursor-pointer rounded-full border border-sage-line px-2 py-0.5 text-[11px] text-sage hover:bg-card sm:min-h-0">
+            {labels.copy}{copied && <span aria-hidden="true" className="ms-1">✓</span>}
           </button>
+          {copied && <span role="status" className="sr-only">{labels.copy} ✓</span>}
         </div>
       )}
-      {error && <p className="text-sm text-coral">{error}</p>}
+      {error && <p role="alert" className="text-sm text-coral">{error}</p>}
     </div>
   );
 }

@@ -41,7 +41,7 @@ export function TasksSection({ tasks, projects, labels }: Props) {
   return (
     <section aria-labelledby="tasks-h">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="tasks-h" className="font-serif text-2xl text-ink">{labels.title}</h2>
+        <h2 id="tasks-h" className="font-serif text-xl text-ink sm:text-2xl">{labels.title}</h2>
         <div className="flex items-center gap-2">
           {rowError && <span role="alert" className="rounded-full bg-coral-soft px-2 py-0.5 text-[11px] text-coral">{rowError}</span>}
           <button

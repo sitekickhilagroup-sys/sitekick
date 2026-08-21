@@ -27,21 +27,21 @@ export function ImportForm({ projects, labels }: { projects: string[]; labels: L
       <p className="text-xs text-ink3">{labels.help}</p>
       <label className="flex items-center gap-2 text-sm text-ink2">
         {labels.project}
-        <select name="project" required className="rounded-lg border border-line bg-card px-2 py-1.5 text-sm text-ink">
+        <select name="project" required className="min-h-11 cursor-pointer rounded-lg border border-line bg-card px-2 py-1.5 text-sm text-ink sm:min-h-0">
           {projects.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
       </label>
       <textarea
-        name="json" required rows={8} spellCheck={false}
+        name="json" required rows={8} spellCheck={false} aria-label={labels.help}
         placeholder='{"stage": "entitlements", "stages": {"entitlements": {"items": [{"r": "...", "state": "open", "who": "us"}]}}}'
         className="w-full rounded-lg border border-line bg-card2 p-3 font-mono text-xs text-ink"
       />
       <div className="flex items-center gap-3">
-        <button type="submit" disabled={pending}
-          className="rounded-lg bg-sage px-4 py-1.5 text-sm text-white disabled:opacity-60">
+        <button type="submit" disabled={pending} aria-busy={pending}
+          className="min-h-11 cursor-pointer rounded-lg bg-sage px-4 py-1.5 text-sm text-white disabled:opacity-60 sm:min-h-0">
           {pending ? '…' : labels.run}
         </button>
-        {message && <p className="text-xs text-ink2">{message}</p>}
+        {message && <p role="status" className="text-xs text-ink2">{message}</p>}
       </div>
     </form>
   );

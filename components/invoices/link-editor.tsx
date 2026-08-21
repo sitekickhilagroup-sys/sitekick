@@ -5,6 +5,7 @@ import { saveInvoiceLinks } from '@/app/actions/invoices';
 
 interface Labels {
   edit: string;
+  save?: string;
   invoice: string;
   receipt: string;
   cancel: string;
@@ -15,12 +16,14 @@ interface Props {
   invoiceId: string;
   invoiceUrl: string | null;
   receiptUrl: string | null;
+  /** Row-identifying text (vendor / number) so screen readers can tell rows apart. */
+  context?: string;
   labels: Labels;
 }
 
 // Item 7: invoice/receipt links, edited in place — same shape as WaitingEditor
 // (pencil button -> editing state -> save/cancel).
-export function LinkEditor({ invoiceId, invoiceUrl, receiptUrl, labels }: Props) {
+export function LinkEditor({ invoiceId, invoiceUrl, receiptUrl, context, labels }: Props) {
   const [editing, setEditing] = useState(false);
   const [invoiceDraft, setInvoiceDraft] = useState(invoiceUrl ?? '');
   const [receiptDraft, setReceiptDraft] = useState(receiptUrl ?? '');
@@ -32,7 +35,7 @@ export function LinkEditor({ invoiceId, invoiceUrl, receiptUrl, labels }: Props)
       <button
         type="button"
         title={labels.edit}
-        aria-label={labels.edit}
+        aria-label={context ? `${labels.edit} · ${context}` : labels.edit}
         onClick={() => {
           setInvoiceDraft(invoiceUrl ?? '');
           setReceiptDraft(receiptUrl ?? '');
@@ -75,7 +78,7 @@ export function LinkEditor({ invoiceId, invoiceUrl, receiptUrl, labels }: Props)
         onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
         className={`min-h-11 w-36 rounded-lg border bg-card px-2 py-0.5 text-xs text-ink outline-none sm:min-h-0 ${failed ? 'border-coral' : 'border-mist'}`}
       />
-      <button type="button" disabled={pending} onClick={save} aria-label={labels.edit}
+      <button type="button" disabled={pending} onClick={save} aria-label={labels.save ?? labels.edit}
         className="min-h-11 rounded-full bg-sage px-2.5 py-0.5 text-[11px] text-white disabled:opacity-50 sm:min-h-7">
         <span aria-hidden="true">✓</span>
       </button>

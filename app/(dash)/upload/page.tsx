@@ -16,7 +16,7 @@ export default async function UploadPage() {
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="font-serif text-3xl text-ink">{t('upload.title')}</h1>
+      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('upload.title')}</h1>
       <p className="text-sm text-ink3">{t('upload.help')}</p>
       <Dropzone
         projects={projects.map((p) => p.name)}
