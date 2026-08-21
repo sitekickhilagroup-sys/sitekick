@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 // migration 0005) — the old review -> items -> titles chain cost three
 // sequential database round trips.
 type EmbeddedItem = WeeklyReviewItem & {
-  task: { id: string; title: string } | null;
+  task: { id: string; title: string; owner: string | null; due: string | null } | null;
   project: { id: string; name: string } | null;
 };
 type EmbeddedReview = WeeklyReview & { weekly_review_items: EmbeddedItem[] };
@@ -27,7 +27,7 @@ export default async function WeeklyPage() {
 
   const { data: reviewData } = await supabase
     .from('weekly_reviews')
-    .select('*, weekly_review_items(*, task:tasks(id,title), project:projects(id,name))')
+    .select('*, weekly_review_items(*, task:tasks(id,title,owner,due), project:projects(id,name))')
     .eq('meeting_date', meetingDate)
     .order('sequence', { referencedTable: 'weekly_review_items', ascending: true })
     .maybeSingle();
@@ -63,6 +63,18 @@ export default async function WeeklyPage() {
               stBlocked: t('weekly.st_blocked'),
               stNoUpdate: t('weekly.st_no_update'),
               itemKicker: t('weekly.item_kicker'),
+              modeDraft: t('weekly.mode_draft'),
+              modePresent: t('weekly.mode_present'),
+              step1t: t('weekly.step1_t'), step1d: t('weekly.step1_d'),
+              step2t: t('weekly.step2_t'), step2d: t('weekly.step2_d'),
+              step3t: t('weekly.step3_t'), step3d: t('weekly.step3_d'),
+              saveKicker: t('weekly.save_kicker'),
+              saveSub: t('weekly.save_sub'),
+              uploadKicker: t('weekly.upload_kicker'),
+              uploadSub: t('weekly.upload_sub'),
+              noteKicker: t('weekly.note_kicker'),
+              ownerLabel: t('weekly.owner'),
+              archiveNote: t('weekly.archive_note'),
             }} />
           );
         })()
@@ -75,7 +87,7 @@ export default async function WeeklyPage() {
 // ("General" when unset) -> rows, preserving the already-sequence-sorted
 // item order both across and within groups.
 function buildGroups(items: EmbeddedItem[], t: ReturnType<typeof getT>) {
-  interface Row { item: WeeklyReviewItem; title: string }
+  interface Row { item: WeeklyReviewItem; title: string; owner: string | null; due: string | null }
   interface SubtopicGroup { name: string; items: Row[] }
   interface ProjectGroupAcc { projectName: string; subtopics: Map<string, Row[]> }
 
@@ -93,7 +105,7 @@ function buildGroups(items: EmbeddedItem[], t: ReturnType<typeof getT>) {
     }
     let rows = group.subtopics.get(subtopicName);
     if (!rows) { rows = []; group.subtopics.set(subtopicName, rows); }
-    rows.push({ item, title: task?.title ?? '' });
+    rows.push({ item, title: task?.title ?? '', owner: task?.owner ?? null, due: task?.due ?? null });
   }
 
   return order.map((projectName): { projectName: string; subtopics: SubtopicGroup[] } => {

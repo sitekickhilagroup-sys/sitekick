@@ -11,6 +11,16 @@ const EN: GuideContent = {
   intro: 'Sitekick turns your emails, meeting summaries, invoices and trackers into one operational picture: where every project stands, what is stuck, and what to do today. In the current phase you feed it by uploading files; the automatic mailbox connections are wired and will be switched on later.',
   sections: [
     {
+      title: 'Five flows you can run today',
+      body: [
+        '1 · Feed it mail — Upload → drop an OLM/ZIP archive (or EML/DOCX/XLSX/PDF). Tasks, blockers and decisions appear; anything that changes existing data waits in the Inbox for your approval.',
+        "2 · Run the morning — My Work → Today. Work top-down; every row updates in place (Completed, Sent email, Waiting on…, Delayed…). The Payment Run card jumps to approved invoices.",
+        '3 · Investigate a project — tap its name anywhere. Pick a phase on the rail, tick sub-stages, switch the current phase or let Claude infer it from the emails (suggestion lands in the Inbox).',
+        "4 · Weekly meeting — Sunday: Prepare this week's review. Monday: switch to presentation mode, walk the list, set statuses and notes. Save, then attach the recording.",
+        '5 · Pay — Invoices: watch the chain Received → For Rowan → Approved → Paid, advance with the arrow, filter by vendor pills.',
+      ],
+    },
+    {
       title: 'The overview page',
       body: [
         "Open today's plan — the first card jumps to My Work, where every open item sits ranked. When agent suggestions await review, an amber banner links to the Inbox.",
@@ -47,8 +57,10 @@ const EN: GuideContent = {
     {
       title: 'Weekly review — prepare Sunday, run Monday',
       body: [
-        "Prepare this week's review builds Monday's agenda in one click: open items grouped by project and sub-topic, with everything from last week carried forward with its current status.",
-        'During the meeting, mark items Completed or N/A and jot a note per item. Save the review to freeze it; attach the meeting recording (MP4) afterwards.',
+        "Prepare this week's review builds Monday's agenda in one click: open items grouped by project and sub-topic, everything from last week carried forward with its status.",
+        'Two modes: Sunday draft (edit) and Monday presentation (clean, read-only — for screen sharing).',
+        'Per item: Completed / Open / Carry forward / Waiting / Blocked / No update, plus a "Weekly update / next step" note. Completed updates the real task; the rest are meeting annotations.',
+        'Save the review to freeze it; attach the meeting recording (MP4) afterwards. Only open, waiting, blocked and carried items continue into next week.',
       ],
     },
     {
@@ -104,6 +116,16 @@ const HE: GuideContent = {
   intro: 'Sitekick הופך מיילים, סיכומי פגישות, חשבוניות וטרקרים לתמונה תפעולית אחת: איפה כל פרויקט עומד, מה תקוע, ומה עושים היום. בשלב הנוכחי מזינים אותו בהעלאת קבצים; החיבורים האוטומטיים לתיבות המייל מוכנים ויופעלו בהמשך.',
   sections: [
     {
+      title: 'חמישה פלואוים שאפשר להריץ כבר היום',
+      body: [
+        '1 · מזינים מיילים — העלאה ← גוררים ארכיון OLM/ZIP (או EML/DOCX/XLSX/PDF). משימות, חסימות והחלטות מופיעות; כל שינוי לנתון קיים ממתין לאישור בתיבת הביקורת.',
+        '2 · מריצים את הבוקר — העבודה שלי ← היום. עוברים מלמעלה למטה; כל שורה מתעדכנת במקום (בוצע, נשלח מייל, ממתין ל…, נדחה…). כרטיס סבב התשלומים קופץ לחשבוניות המאושרות.',
+        '3 · חוקרים פרויקט — לוחצים על שמו בכל מקום. בוחרים שלב במסילה, מסמנים תתי-שלבים, מחליפים שלב נוכחי או נותנים לקלוד לזהות מהמיילים (ההצעה מגיעה לתיבה).',
+        '4 · הפגישה השבועית — ראשון: הכנת הסקירה. שני: עוברים למצב הצגה, עוברים על הרשימה, קובעים סטטוסים והערות. שומרים, ואז מצרפים את ההקלטה.',
+        '5 · משלמים — חשבוניות: עוקבים אחרי השרשרת התקבלה ← לרואן ← מאושרת ← שולמה, מקדמים עם החץ, מסננים עם כפתורי הספקים.',
+      ],
+    },
+    {
       title: 'מסך המבט-על',
       body: [
         'פתיחת התוכנית להיום — הכרטיס הראשון מוביל ל"העבודה שלי", שם כל הפריטים הפתוחים מדורגים. כשהצעות של הסוכן ממתינות לבדיקה, באנר כתום מוביל לתיבת הביקורת.',
@@ -140,8 +162,10 @@ const HE: GuideContent = {
     {
       title: 'סקירה שבועית — מכינים בראשון, מריצים בשני',
       body: [
-        'לחיצה אחת על "הכנת הסקירה" בונה את סדר היום של יום שני: פריטים פתוחים מקובצים לפי פרויקט ותת-נושא, וכל מה שנשאר מהשבוע שעבר עובר קדימה עם הסטטוס הנוכחי.',
-        'במהלך הפגישה מסמנים בוצע / לא רלוונטי ורושמים הערה לכל פריט. שומרים את הסקירה כדי לקבע אותה; את הקלטת הפגישה (MP4) מצרפים אחר כך.',
+        'לחיצה אחת על "הכנת הסקירה" בונה את סדר היום של יום שני: פריטים פתוחים מקובצים לפי פרויקט ותת-נושא, כל מה שנשאר מהשבוע שעבר עובר קדימה עם הסטטוס שלו.',
+        'שני מצבים: טיוטת יום ראשון (עריכה) והצגת יום שני (נקי, לקריאה בלבד — לשיתוף מסך).',
+        'לכל פריט: בוצע / פתוח / עובר קדימה / ממתין / חסום / אין עדכון, ושדה "עדכון שבועי / צעד הבא". "בוצע" מעדכן את המשימה האמיתית; השאר הערות פגישה.',
+        'שומרים את הסקירה כדי לקבע; מצרפים את ההקלטה (MP4) אחר כך. רק פריטים פתוחים, ממתינים, חסומים ועוברים-קדימה ממשיכים לשבוע הבא.',
       ],
     },
     {

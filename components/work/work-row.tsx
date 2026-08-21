@@ -21,13 +21,15 @@ export function WorkRow({ task, labels, relations, taskOptions, today }: Props) 
   const blocking = task.priority === 'critical';
 
   return (
-    <li className="flex flex-wrap items-start gap-3 border-b border-line2 px-3 py-2 last:border-b-0">
-      <details className="min-w-0 flex-1">
+    // Mobile: title block, then a controls row — never squeeze the title.
+    // Desktop: title grows, controls sit at the end of the row.
+    <li className="flex flex-wrap items-start gap-x-3 gap-y-2 border-b border-line2 px-3 py-2.5 last:border-b-0">
+      <details className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <summary className="min-h-11 cursor-pointer list-none sm:min-h-0">
-          <span className="flex items-center gap-2 sm:items-baseline">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:items-baseline">
             <span aria-hidden="true" className="text-ink3">+</span>
-            <span className="min-w-0 text-sm text-ink">{task.title}</span>
-            <span className="ms-auto flex shrink-0 items-center gap-1.5">
+            <span className="min-w-0 flex-1 text-sm text-ink">{task.title}</span>
+            <span className="flex shrink-0 items-center gap-1.5">
               {blocking && labels.blocking && (
                 <span className="rounded-full bg-coral-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-coral">
                   {labels.blocking}
@@ -61,9 +63,11 @@ export function WorkRow({ task, labels, relations, taskOptions, today }: Props) 
           <RelationEditor taskId={task.id} relations={relations ?? []} taskOptions={taskOptions ?? []} labels={labels} />
         </div>
       </details>
-      <WaitingEditor taskId={task.id} value={task.waiting_for} label={labels.waiting}
-        editTitle={labels.editWaiting} saveLabel={labels.save} cancelLabel={labels.cancel} errorLabel={labels.errorSave} />
-      <VerbMenu taskId={task.id} labels={labels} />
+      <span className="flex min-w-0 basis-full flex-wrap items-center gap-2 sm:basis-auto sm:shrink-0 sm:justify-end">
+        <WaitingEditor taskId={task.id} value={task.waiting_for} label={labels.waiting}
+          editTitle={labels.editWaiting} saveLabel={labels.save} cancelLabel={labels.cancel} errorLabel={labels.errorSave} />
+        <VerbMenu taskId={task.id} labels={labels} />
+      </span>
     </li>
   );
 }
