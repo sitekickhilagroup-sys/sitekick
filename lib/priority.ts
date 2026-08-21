@@ -1,4 +1,4 @@
-import type { Action, Blocker, ProjectStage, Task } from './types.ts';
+import type { Action, Blocker, ProjectStage, Relationship, Task } from './types.ts';
 
 // Deterministic priority engine — no LLM. Drives Top Actions + digest.
 
@@ -15,6 +15,7 @@ function daysUntil(date: string | null, today: string): number | null {
 }
 
 export function scoreTask(t: Task, ctx: ScoreContext): number {
+  if (t.manual_priority != null) return 1000 + t.manual_priority;
   let score = 0;
   if (t.priority === 'critical') score += 40;
   else if (t.priority === 'high') score += 20;
@@ -63,7 +64,12 @@ export function topActions(
   stagesByProject: Map<string, ProjectStage[]>,
   projectNames: Map<string, string>, // project_id -> name
   opts: TopActionsOptions,
+  relationships: Relationship[] = [],
 ): Action[] {
+  // Snoozed tasks are still "open" and remain valid unlock targets — capture
+  // the open-id set before the snooze filter below drops them from `tasks`.
+  const openIds = new Set(tasks.filter((t) => t.status === 'open').map((t) => t.id));
+  tasks = tasks.filter((t) => !t.snoozed_until || t.snoozed_until <= opts.today);
   const currentByProject = new Map<string, string | null>();
   for (const [pid, stages] of stagesByProject) {
     currentByProject.set(pid, stages.find((s) => s.status === 'current')?.stage_key ?? null);
@@ -72,10 +78,22 @@ export function topActions(
   const taskActions: Action[] = tasks
     .filter((t) => t.status === 'open')
     .map((t) => {
-      const score = scoreTask(t, {
+      let score = scoreTask(t, {
         today: opts.today,
         currentStageKey: t.project_id ? currentByProject.get(t.project_id) : null,
       });
+      // "Unlocks" bonus: only relationships confirmed (verified or manually
+      // overridden) count — unverified LLM-proposed links stay silent. Also
+      // require the target task to still be open, so edges left dangling by
+      // a completed/deleted downstream task don't keep inflating the score.
+      const unlocks = relationships.filter(
+        (r) =>
+          r.from_task_id === t.id &&
+          r.type === 'blocks' &&
+          (r.verified_by || r.manual_override) &&
+          openIds.has(r.to_task_id),
+      ).length;
+      score += unlocks * 18;
       return {
         kind: 'task' as const,
         id: t.id,
@@ -85,6 +103,7 @@ export function topActions(
           critical: t.priority === 'critical' || undefined,
           due: t.due,
           waiting: t.waiting_for,
+          unlocks: unlocks || undefined,
         },
         score,
         source: t.source,

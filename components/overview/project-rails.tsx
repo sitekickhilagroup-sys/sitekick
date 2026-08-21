@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { ProjectView } from '@/lib/queries';
 import { RequirementsPane, type RailLabels } from './requirements-pane';
 
@@ -62,7 +63,9 @@ export function ProjectRails({ projects, substages, title, labels }: Props) {
             return (
               <article key={p.id} className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-[15px] font-semibold text-ink">{p.name}</h3>
+                  <h3 className="text-[15px] font-semibold text-ink">
+                    <Link href={'/projects/' + p.id} className="hover:underline">{p.name}</Link>
+                  </h3>
                   {p.city_case && (
                     <span className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
                       p.city_on_hold ? 'bg-coral-soft text-coral' : 'bg-inset text-ink3'
@@ -89,7 +92,11 @@ export function ProjectRails({ projects, substages, title, labels }: Props) {
                         ? 'bg-sage text-white border-sage'
                         : s.risk
                           ? 'bg-coral-soft text-coral border-coral/40'
-                          : 'bg-card2 text-ink3 border-line';
+                          // Client feedback (Noa #4): parallel stages must BOTH look active,
+                          // not just the current one — color also_active like done.
+                          : s.also_active
+                            ? 'bg-sage-soft text-sage border-sage-line'
+                            : 'bg-card2 text-ink3 border-line';
                     const sel = s.stage_key === shown?.stage_key;
                     return (
                       <span key={s.id} className="flex flex-none items-center">

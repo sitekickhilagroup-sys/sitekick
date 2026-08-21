@@ -9,7 +9,7 @@ interface Props {
   rowLabels: {
     markDone: string; dismiss: string; waiting: string; editWaiting: string;
     fromSource: string; cancel: string; errorSave: string; all: string;
-    whyCritical: string; whyDue: string; stuckDays: string; blockedBy: string;
+    whyCritical: string; whyDue: string; unlocksN: string; stuckDays: string; blockedBy: string;
   };
 }
 

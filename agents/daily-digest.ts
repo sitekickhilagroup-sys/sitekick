@@ -3,7 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { runStructured } from '../lib/claude.ts';
 import { followUpAlerts, topActions } from '../lib/priority.ts';
-import type { Action, Blocker, Invoice, Project, ProjectStage, Task } from '../lib/types.ts';
+import type { Action, Blocker, Invoice, Project, ProjectStage, Relationship, Task } from '../lib/types.ts';
 
 const DigestSchema = z.object({ body_md: z.string().min(1) });
 
@@ -22,18 +22,20 @@ export async function buildDigest(
   forDate: string,
   client?: Anthropic,
 ): Promise<{ body_md: string; top_actions: Action[] }> {
-  const [projectsQ, stagesQ, tasksQ, blockersQ, invoicesQ] = await Promise.all([
+  const [projectsQ, stagesQ, tasksQ, blockersQ, invoicesQ, relationshipsQ] = await Promise.all([
     admin.from('projects').select('*'),
     admin.from('project_stages').select('*'),
     admin.from('tasks').select('*').eq('status', 'open'),
     admin.from('blockers').select('*').eq('status', 'active'),
     admin.from('invoices').select('*').eq('status', 'for_rowan_approval'),
+    admin.from('relationships').select('*').eq('type', 'blocks'),
   ]);
   const projects = (projectsQ.data ?? []) as Project[];
   const stages = (stagesQ.data ?? []) as ProjectStage[];
   const tasks = (tasksQ.data ?? []) as Task[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const rowanInvoices = (invoicesQ.data ?? []) as Invoice[];
+  const relationships = (relationshipsQ.data ?? []) as Relationship[];
 
   const stagesByProject = new Map<string, ProjectStage[]>();
   for (const s of stages) {
@@ -43,7 +45,7 @@ export async function buildDigest(
   }
   const names = new Map(projects.map((p) => [p.id, p.name]));
 
-  const actions = topActions(tasks, blockers, stagesByProject, names, { today: forDate, limit: 8 });
+  const actions = topActions(tasks, blockers, stagesByProject, names, { today: forDate, limit: 8 }, relationships);
   const followUps = followUpAlerts(tasks, forDate);
   const atRisk = stages.filter((s) => s.risk && s.slip_days > 0);
   const rowanTotal = rowanInvoices.reduce((sum, i) => sum + Number(i.amount_usd), 0);

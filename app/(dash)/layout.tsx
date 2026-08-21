@@ -15,6 +15,9 @@ export default async function DashLayout({ children }: { children: React.ReactNo
 
   const links = [
     { href: '/', label: t('nav.overview') },
+    { href: '/work', label: t('nav.work') },
+    { href: '/weekly', label: t('nav.weekly') },
+    { href: '/inbox', label: t('nav.inbox') },
     { href: '/invoices', label: t('nav.invoices') },
     { href: '/drafts', label: t('nav.drafts') },
     { href: '/digest', label: t('nav.digest') },
