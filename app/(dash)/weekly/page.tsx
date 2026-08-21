@@ -57,6 +57,11 @@ export default async function WeeklyPage() {
               notApplicable: t('work.verb.not_applicable'),
               statusOpen: t('weekly.status_open'),
               noItems: t('weekly.no_items'),
+              progress: t('weekly.progress'),
+              stCarried: t('weekly.st_carried'),
+              stWaiting: t('weekly.st_waiting'),
+              stBlocked: t('weekly.st_blocked'),
+              stNoUpdate: t('weekly.st_no_update'),
             }} />
           );
         })()

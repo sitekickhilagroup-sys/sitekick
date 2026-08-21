@@ -5,6 +5,7 @@ interface Props {
   tasks: Task[];
   projectNames: Record<string, string>;
   title: string;
+  subtitle?: string;
   moneyLabel: string;
   loadLabel: string;
   allLabel: string;
@@ -14,7 +15,7 @@ const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
 // Item 5: comparison charts live at the bottom. CSS bars, no chart lib.
-export function CompareCharts({ openMoney, tasks, projectNames, title, moneyLabel, loadLabel, allLabel }: Props) {
+export function CompareCharts({ openMoney, tasks, projectNames, title, subtitle, moneyLabel, loadLabel, allLabel }: Props) {
   const maxMoney = Math.max(1, ...openMoney.map((m) => m.open_usd));
 
   const load = new Map<string, { open: number; waiting: number }>();
@@ -32,6 +33,7 @@ export function CompareCharts({ openMoney, tasks, projectNames, title, moneyLabe
   return (
     <section aria-labelledby="compare-h">
       <h2 id="compare-h" className="font-serif text-xl text-ink sm:text-2xl">{title}</h2>
+      {subtitle && <p className="mt-0.5 text-sm text-ink3">{subtitle}</p>}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
           <h3 className="text-sm font-medium text-ink2">{moneyLabel}</h3>

@@ -21,6 +21,9 @@ Rules:
 - planned=false marks unplanned/reactive work (Hebrew: balatam).
 - Extract blockers: something stuck, who/what blocks it, downstream impact.
 - Extract decisions actually made (not proposals).
+- STYLE: be direct and short. Task titles <= 12 words. Descriptions and reasoning
+  one tight sentence each (up to ~30 words when the detail earns it) — facts only,
+  no framing, no restating the source.
 - Draft escalation emails only when a blocker clearly needs one; keep them short and factual.
 - vendor_hours: when a vendor states hour estimates or hours worked, capture them.
 - deadline_updates: when a date for known work changed, record task_match (title words), new_due (YYYY-MM-DD), evidence (quote).

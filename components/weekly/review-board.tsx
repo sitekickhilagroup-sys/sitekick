@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { attachRecording, saveItemNote, saveReview, setItemStatus } from '@/app/actions/weekly';
+import { attachRecording, saveItemNote, saveReview, setItemSnapshot, setItemStatus, type SnapshotState } from '@/app/actions/weekly';
 import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
 
 interface Row { item: WeeklyReviewItem; title: string }
@@ -16,9 +16,18 @@ interface Props {
 
 export function ReviewBoard({ review, groups, labels }: Props) {
   const saved = review.status === 'saved';
+  const allItems = groups.flatMap((g) => g.subtopics.flatMap((s) => s.items));
+  const doneCount = allItems.filter((r) => r.item.status_snapshot === 'done').length;
 
   return (
     <div className="mt-6 space-y-5">
+      {allItems.length > 0 && labels.progress && (
+        <p role="status" className="text-sm text-ink2">
+          {labels.progress
+            .replace('{done}', `⁨${doneCount}⁩`)
+            .replace('{total}', `⁨${allItems.length}⁩`)}
+        </p>
+      )}
       {groups.length === 0 && labels.noItems && (
         <p className="rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{labels.noItems}</p>
       )}
@@ -51,11 +60,18 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
 
   const statusClass =
     item.status_snapshot === 'done' ? 'bg-sage-soft text-sage'
-    : item.status_snapshot === 'dropped' ? 'bg-card2 text-ink3'
+    : item.status_snapshot === 'blocked' ? 'bg-coral-soft text-coral'
+    : item.status_snapshot === 'waiting' ? 'bg-apricot-soft text-apricot'
+    : item.status_snapshot === 'carried' ? 'bg-mist-soft text-mist'
+    : item.status_snapshot === 'dropped' || item.status_snapshot === 'no_update' ? 'bg-card2 text-ink3'
     : 'bg-mist-soft text-mist';
   const statusText =
     item.status_snapshot === 'done' ? labels.completed
     : item.status_snapshot === 'dropped' ? labels.notApplicable
+    : item.status_snapshot === 'carried' ? labels.stCarried
+    : item.status_snapshot === 'waiting' ? labels.stWaiting
+    : item.status_snapshot === 'blocked' ? labels.stBlocked
+    : item.status_snapshot === 'no_update' ? labels.stNoUpdate
     : labels.statusOpen;
 
   const saveNote = (note: string) => start(async () => {
@@ -70,6 +86,21 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
     if (res?.error) setFailed(true);
   });
 
+  // Client-demo meeting statuses — annotations only; the canonical task is
+  // untouched (Completed stays the task-mutating path via `act`).
+  const snap = (state: SnapshotState) => start(async () => {
+    setFailed(false);
+    const res = await setItemSnapshot(item.id, state);
+    if (res?.error) setFailed(true);
+  });
+  const snapButtons: { state: SnapshotState; label: string }[] = [
+    { state: 'open', label: labels.statusOpen },
+    { state: 'carried', label: labels.stCarried },
+    { state: 'waiting', label: labels.stWaiting },
+    { state: 'blocked', label: labels.stBlocked },
+    { state: 'no_update', label: labels.stNoUpdate },
+  ];
+
   return (
     <li className="flex flex-wrap items-center gap-2">
       <span className="min-w-0 flex-1 basis-full text-sm text-ink sm:basis-auto">{title}</span>
@@ -83,13 +114,28 @@ function ReviewItemRow({ row, saved, labels }: { row: Row; saved: boolean; label
         className="min-h-11 w-full flex-1 rounded-lg border border-line bg-card2 px-2.5 py-1.5 text-xs text-ink outline-none disabled:opacity-50 sm:min-h-0 sm:w-40"
       />
       {!saved && (
-        <span className="flex items-center gap-1.5">
+        <span className="flex basis-full flex-wrap items-center gap-1.5">
           <button type="button" disabled={pending} onClick={() => act('completed')}
-            className="min-h-11 cursor-pointer rounded-lg bg-sage px-2.5 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-50 sm:min-h-0 sm:py-1">
+            className={`min-h-11 cursor-pointer rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50 sm:min-h-0 sm:py-1 ${
+              item.status_snapshot === 'done'
+                ? 'bg-sage text-white'
+                : 'border border-sage-line text-sage hover:bg-sage-soft'
+            }`}>
             {labels.completed}
           </button>
+          {snapButtons.map(({ state, label }) => (
+            <button key={state} type="button" disabled={pending} onClick={() => snap(state)}
+              aria-pressed={item.status_snapshot === state}
+              className={`min-h-11 cursor-pointer rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50 sm:min-h-0 sm:py-1 ${
+                item.status_snapshot === state
+                  ? 'bg-ink text-bg'
+                  : 'border border-line text-ink2 hover:bg-card2'
+              }`}>
+              {label}
+            </button>
+          ))}
           <button type="button" disabled={pending} onClick={() => act('not_applicable')}
-            className="min-h-11 cursor-pointer rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink2 hover:bg-card2 disabled:opacity-50 sm:min-h-0 sm:py-1">
+            className="min-h-11 cursor-pointer rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink3 hover:bg-card2 disabled:opacity-50 sm:min-h-0 sm:py-1">
             {labels.notApplicable}
           </button>
         </span>

@@ -6,18 +6,21 @@ interface Props {
   projectId: string;
   view: PhaseView;
   isCurrent: boolean;
+  /** Localized phase state line: Current focus / Active in parallel / Done / Not started. */
+  stateLabel?: string;
   unactivated: SubstageTemplate[];
   labels: Record<string, string>;
 }
 
-export function PhaseColumn({ projectId, view, isCurrent, unactivated, labels }: Props) {
+export function PhaseColumn({ projectId, view, isCurrent, stateLabel, unactivated, labels }: Props) {
   return (
-    <div className="rounded-(--radius-card) border border-line bg-card p-3 shadow-card">
+    <div className={`rounded-(--radius-card) border bg-card p-3 shadow-card ${isCurrent ? 'border-sage-line' : 'border-line'}`}>
       <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-medium ${
         isCurrent ? 'bg-sage text-white' : 'bg-card2 text-ink3'
       }`}>
         {view.phase.label}
       </span>
+      {stateLabel && <span className="ms-2 align-middle text-[11px] text-ink3">{stateLabel}</span>}
 
       {view.workstreams.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">

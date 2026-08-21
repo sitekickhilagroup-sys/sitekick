@@ -157,6 +157,29 @@ export async function setItemStatus(itemId: string, taskId: string, verb: Review
   return { ok: true };
 }
 
+// Meeting annotations (client demo's status set): review-only snapshot values
+// that do NOT mutate the canonical task — Completed / Not applicable keep the
+// task-mutating path above. 'open' resets the annotation.
+const SNAPSHOT_STATES = ['open', 'carried', 'waiting', 'blocked', 'no_update'] as const;
+export type SnapshotState = (typeof SNAPSHOT_STATES)[number];
+
+export async function setItemSnapshot(itemId: string, snapshot: SnapshotState) {
+  const user = await requireUser();
+  if (!SNAPSHOT_STATES.includes(snapshot)) return { error: 'invalid status' };
+  const admin = supabaseAdmin();
+  const { error } = await admin
+    .from('weekly_review_items')
+    .update({ status_snapshot: snapshot })
+    .eq('id', itemId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'weekly_review_item', entity_id: itemId, actor: user.email ?? user.id,
+    action: 'snapshot', after: { status_snapshot: snapshot },
+  });
+  revalidatePath('/weekly');
+  return { ok: true };
+}
+
 export async function saveReview(reviewId: string) {
   const user = await requireUser();
   const admin = supabaseAdmin();

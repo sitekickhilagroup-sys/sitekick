@@ -1,7 +1,9 @@
+import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
+import { laToday } from '@/lib/date';
 import { getProjectProcess } from '@/lib/process';
 import { PhaseColumn } from '@/components/process/phase-column';
 import { PhaseSwitcher } from '@/components/process/phase-switcher';
@@ -20,13 +22,16 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
   const t = getT(locale);
 
   const supabase = await supabaseServer();
+  const today = laToday();
   // Relationships fetched alongside the process batch (no second round trip)
   // — the table is small, so we take it whole and filter to listed tasks.
-  const [{ project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase }, relsQ] = await Promise.all([
+  const [{ project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase }, relsQ, projectsQ] = await Promise.all([
     getProjectProcess(supabase, id),
     supabase.from('relationships').select('*'),
+    supabase.from('projects').select('id,name').order('name'),
   ]);
   if (!project) notFound();
+  const allProjects = (projectsQ.data ?? []) as { id: string; name: string }[];
 
   const allTasks = [...tasksByPhase.values()].flat().concat(unmappedTasks);
   const listedIds = new Set(allTasks.map((t) => t.id));
@@ -63,6 +68,9 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
   };
 
   const rowLabels = {
+    dueNow: t('work.due.now'),
+    dueOverdue: t('work.due.overdue'),
+    blocking: t('work.blocking'),
     owner: t('tasks.owner'),
     fromSource: t('actions.from_source'),
     waiting: t('work.verb.waiting'),
@@ -93,8 +101,31 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     'rel.blocked_by_this': t('rel.blocked_by_this'),
   };
 
+  const currentIdx = phaseViews.findIndex((v) => v.phase.key === project.current_phase_key);
+  const parallelKeys = new Set<string>(activeWorkstreams.map((w) => w.phase_key));
+  const phaseStateFor = (key: string, idx: number) =>
+    key === project.current_phase_key ? t('process.state.current')
+    : parallelKeys.has(key) ? t('process.state.parallel')
+    : currentIdx >= 0 && idx < currentIdx ? t('process.state.done')
+    : t('process.state.upcoming');
+
   return (
     <div className="space-y-6 pb-16">
+      {/* Project switcher — her demo's top pills; jump between process pages. */}
+      <nav className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
+        {allProjects.map((p) => (
+          <Link
+            key={p.id}
+            href={`/projects/${p.id}`}
+            aria-current={p.id === project.id ? 'page' : undefined}
+            className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 py-1 text-sm sm:min-h-0 ${
+              p.id === project.id ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+            }`}
+          >
+            {p.name}
+          </Link>
+        ))}
+      </nav>
       <div>
         <p className="text-sm text-ink3">{t('process.title')}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -133,14 +164,25 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
         </div>
       </div>
 
+      {activeWorkstreams.length > 0 && (
+        <div className="flex items-start gap-2.5 rounded-(--radius-card) border border-mist/25 bg-mist-soft p-3.5">
+          <span aria-hidden="true" className="mt-0.5 text-mist">↔</span>
+          <p className="text-sm text-ink">
+            <span className="font-medium">{t('process.parallel_note_title')}</span>
+            <span className="block text-xs text-ink2">{t('process.parallel_note')}</span>
+          </p>
+        </div>
+      )}
+
       <div>
         <div className="grid gap-3 lg:grid-cols-5">
-          {phaseViews.map((view) => (
+          {phaseViews.map((view, idx) => (
             <PhaseColumn
               key={view.phase.key}
               projectId={project.id}
               view={view}
               isCurrent={view.phase.key === project.current_phase_key}
+              stateLabel={phaseStateFor(view.phase.key, idx)}
               unactivated={unactivatedByPhase.get(view.phase.key) ?? []}
               labels={labels}
             />
@@ -168,6 +210,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
                       key={task.id}
                       task={task}
                       labels={rowLabels}
+                      today={today}
                       relations={relationsFor(task.id)}
                       taskOptions={taskOptionsFor(task.id)}
                     />
@@ -185,6 +228,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
                     key={task.id}
                     task={task}
                     labels={rowLabels}
+                    today={today}
                     relations={relationsFor(task.id)}
                     taskOptions={taskOptionsFor(task.id)}
                   />
