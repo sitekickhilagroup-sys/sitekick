@@ -5,7 +5,7 @@ import { laToday } from '@/lib/date';
 import { nextMonday } from '@/lib/weekly';
 import { PrepareButton } from '@/components/weekly/prepare-button';
 import { ReviewBoard } from '@/components/weekly/review-board';
-import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
+import type { WeeklyReview, WeeklyReviewItem, WeeklyReviewSubtopic } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,10 @@ type EmbeddedItem = WeeklyReviewItem & {
   task: { id: string; title: string; owner: string | null; due: string | null } | null;
   project: { id: string; name: string } | null;
 };
-type EmbeddedReview = WeeklyReview & { weekly_review_items: EmbeddedItem[] };
+type EmbeddedReview = WeeklyReview & {
+  weekly_review_items: EmbeddedItem[];
+  weekly_review_subtopics: WeeklyReviewSubtopic[];
+};
 
 export default async function WeeklyPage() {
   const store = await cookies();
@@ -27,7 +30,7 @@ export default async function WeeklyPage() {
 
   const { data: reviewData } = await supabase
     .from('weekly_reviews')
-    .select('*, weekly_review_items(*, task:tasks(id,title,owner,due), project:projects(id,name))')
+    .select('*, weekly_review_items(*, task:tasks(id,title,owner,due), project:projects(id,name)), weekly_review_subtopics(*)')
     .eq('meeting_date', meetingDate)
     .order('sequence', { referencedTable: 'weekly_review_items', ascending: true })
     .maybeSingle();
@@ -43,9 +46,10 @@ export default async function WeeklyPage() {
         </div>
       ) : (
         (() => {
-          const { weekly_review_items: items, ...review } = embedded;
+          const { weekly_review_items: items, weekly_review_subtopics: contexts, ...review } = embedded;
           return (
-            <ReviewBoard review={review} groups={buildGroups(items, t)} labels={{
+            <ReviewBoard review={review} groups={buildGroups(items, contexts, t)} labels={{
+              contextPh: t('weekly.context_ph'),
               error: t('common.error_save'),
               saved: t('weekly.saved'),
               save: t('weekly.save'),
@@ -86,10 +90,12 @@ export default async function WeeklyPage() {
 // Project (name, or "All" when the task carries no project) -> Sub-topic
 // ("General" when unset) -> rows, preserving the already-sequence-sorted
 // item order both across and within groups.
-function buildGroups(items: EmbeddedItem[], t: ReturnType<typeof getT>) {
+function buildGroups(items: EmbeddedItem[], contexts: WeeklyReviewSubtopic[], t: ReturnType<typeof getT>) {
   interface Row { item: WeeklyReviewItem; title: string; owner: string | null; due: string | null }
-  interface SubtopicGroup { name: string; items: Row[] }
-  interface ProjectGroupAcc { projectName: string; subtopics: Map<string, Row[]> }
+  interface SubtopicGroup { name: string; projectId: string | null; context: string | null; items: Row[] }
+  interface ProjectGroupAcc { projectName: string; projectId: string | null; subtopics: Map<string, Row[]> }
+
+  const ctxByKey = new Map(contexts.map((c) => [`${c.project_id ?? ''}|${c.subtopic}`, c.context]));
 
   const order: string[] = [];
   const byProject = new Map<string, ProjectGroupAcc>();
@@ -99,7 +105,7 @@ function buildGroups(items: EmbeddedItem[], t: ReturnType<typeof getT>) {
     const subtopicName = item.subtopic ?? t('weekly.general');
     let group = byProject.get(projectName);
     if (!group) {
-      group = { projectName, subtopics: new Map() };
+      group = { projectName, projectId: item.project_id ?? null, subtopics: new Map() };
       byProject.set(projectName, group);
       order.push(projectName);
     }
@@ -112,7 +118,12 @@ function buildGroups(items: EmbeddedItem[], t: ReturnType<typeof getT>) {
     const group = byProject.get(projectName)!;
     return {
       projectName,
-      subtopics: [...group.subtopics.entries()].map(([name, rows]) => ({ name, items: rows })),
+      subtopics: [...group.subtopics.entries()].map(([name, rows]) => ({
+        name,
+        projectId: group.projectId,
+        context: ctxByKey.get(`${group.projectId ?? ''}|${name}`) ?? null,
+        items: rows,
+      })),
     };
   });
 }

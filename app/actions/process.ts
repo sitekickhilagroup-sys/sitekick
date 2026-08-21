@@ -80,6 +80,26 @@ export async function setCurrentPhase(projectId: string, phaseKey: PhaseKey) {
   return { ok: true };
 }
 
+// Narrative context paragraph (0006). Manual first-class; agents may propose
+// later, but a person can always set it directly.
+export async function setProjectSummary(projectId: string, summary: string) {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const trimmed = summary.trim() || null;
+  const { error } = await admin.from('projects').update({ summary: trimmed }).eq('id', projectId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'project',
+    entity_id: projectId,
+    actor: user.email ?? user.id,
+    action: 'set_summary',
+    after: { summary: trimmed },
+  });
+  revalidatePath('/projects/' + projectId);
+  revalidatePath('/');
+  return { ok: true };
+}
+
 export async function addWorkstream(projectId: string, name: string, phaseKey: PhaseKey) {
   const user = await requireUser();
   const trimmed = name.trim();

@@ -6,6 +6,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { laToday } from '@/lib/date';
 import { getProjectProcess } from '@/lib/process';
 import { ProcessExplorer, type ExplorerPhase } from '@/components/process/process-explorer';
+import { SummaryEditor } from '@/components/process/summary-editor';
 import { PhaseSwitcher } from '@/components/process/phase-switcher';
 import { InferButton } from '@/components/process/infer-button';
 import { WorkRow } from '@/components/work/work-row';
@@ -137,6 +138,17 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
               <bdi>{project.city_on_hold ? `${project.city_case} · ${t('rails.on_hold')}` : project.city_case}</bdi>
             </span>
           )}
+        </div>
+        <div className="mt-2">
+          <SummaryEditor
+            projectId={project.id}
+            value={project.summary}
+            placeholder={t('process.summary_ph')}
+            editTitle={t('process.summary_edit')}
+            saveLabel={t('common.save')}
+            cancelLabel={t('common.cancel')}
+            errorLabel={t('common.error_save')}
+          />
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <p className="text-sm text-ink3">

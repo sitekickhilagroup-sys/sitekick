@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { attachRecording, saveItemNote, saveReview, setItemSnapshot, setItemStatus, type SnapshotState } from '@/app/actions/weekly';
+import { attachRecording, saveItemNote, saveReview, saveSubtopicContext, setItemSnapshot, setItemStatus, type SnapshotState } from '@/app/actions/weekly';
 import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
 
 interface Row { item: WeeklyReviewItem; title: string; owner?: string | null; due?: string | null }
-interface SubtopicGroup { name: string; items: Row[] }
+interface SubtopicGroup { name: string; projectId?: string | null; context?: string | null; items: Row[] }
 interface ProjectGroup { projectName: string; subtopics: SubtopicGroup[] }
 
 interface Props {
@@ -77,6 +77,14 @@ export function ReviewBoard({ review, groups, labels }: Props) {
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">
                   {labels.subTopic ? `${labels.subTopic} · ` : ''}{sub.name}
                 </p>
+                <SubtopicContext
+                  reviewId={review.id}
+                  projectId={sub.projectId ?? null}
+                  subtopic={sub.name}
+                  value={sub.context ?? null}
+                  readOnly={readOnly}
+                  placeholder={labels.contextPh}
+                />
                 <ul className="mt-2 space-y-3">
                   {sub.items.map((row, i) => (
                     <ReviewItemRow key={row.item.id} row={row} index={i + 1} readOnly={readOnly} labels={labels} />
@@ -93,6 +101,40 @@ export function ReviewBoard({ review, groups, labels }: Props) {
           {labels.archiveNote}
         </p>
       )}
+    </div>
+  );
+}
+
+// Sub-topic narrative (0006): read as prose; in draft mode a quiet textarea
+// saves on blur — same rhythm as the per-item note.
+function SubtopicContext({ reviewId, projectId, subtopic, value, readOnly, placeholder }: {
+  reviewId: string; projectId: string | null; subtopic: string; value: string | null;
+  readOnly: boolean; placeholder?: string;
+}) {
+  const [pending, start] = useTransition();
+  const [failed, setFailed] = useState(false);
+
+  if (readOnly) {
+    return value
+      ? <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-ink2">{value}</p>
+      : null;
+  }
+  return (
+    <div className="mt-1.5">
+      <textarea
+        defaultValue={value ?? ''}
+        rows={2}
+        onBlur={(e) => start(async () => {
+          setFailed(false);
+          const res = await saveSubtopicContext(reviewId, projectId, subtopic, e.target.value);
+          if (res?.error) setFailed(true);
+        })}
+        disabled={pending}
+        aria-label={placeholder}
+        placeholder={placeholder}
+        className="w-full max-w-2xl rounded-lg border border-line2 bg-card2 p-2 text-sm leading-relaxed text-ink outline-none disabled:opacity-50"
+      />
+      {failed && <p role="alert" className="text-xs text-coral">!</p>}
     </div>
   );
 }

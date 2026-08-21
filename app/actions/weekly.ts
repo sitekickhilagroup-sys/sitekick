@@ -106,6 +106,25 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
     .upsert(items, { onConflict: 'weekly_review_id,task_id' });
   if (upsertError) return { error: upsertError.message };
 
+  // Carry sub-topic context paragraphs forward (0006) — never clobber ones
+  // already written against this week's review. Soft-fail: context is an
+  // enhancement, not a reason to break prepare.
+  if (priorReview) {
+    const { data: priorCtx } = await admin
+      .from('weekly_review_subtopics')
+      .select('project_id,subtopic,context')
+      .eq('weekly_review_id', priorReview.id);
+    const { data: curCtx } = await admin
+      .from('weekly_review_subtopics')
+      .select('project_id,subtopic')
+      .eq('weekly_review_id', reviewId);
+    const have = new Set((curCtx ?? []).map((r) => `${r.project_id ?? ''}|${r.subtopic}`));
+    const toInsert = (priorCtx ?? [])
+      .filter((r) => r.context && !have.has(`${r.project_id ?? ''}|${r.subtopic}`))
+      .map((r) => ({ weekly_review_id: reviewId, project_id: r.project_id, subtopic: r.subtopic, context: r.context }));
+    if (toInsert.length) await admin.from('weekly_review_subtopics').insert(toInsert);
+  }
+
   await logActivity(admin, {
     entity_type: 'weekly_review', entity_id: reviewId, actor: user.email ?? user.id,
     action: 'prepare', after: { meeting_date: meetingDate, item_count: items.length },
@@ -154,6 +173,39 @@ export async function setItemStatus(itemId: string, taskId: string, verb: Review
   }
 
   revalidatePath('/weekly'); revalidatePath('/'); revalidatePath('/work');
+  return { ok: true };
+}
+
+// Sub-topic context paragraph (0006): the narrative shown above a sub-topic's
+// actions. Manual input is first-class — select-then-write keeps the null-safe
+// unique index happy without relying on upsert against an expression index.
+export async function saveSubtopicContext(
+  reviewId: string, projectId: string | null, subtopic: string, context: string,
+) {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const trimmed = context.trim() || null;
+  let query = admin
+    .from('weekly_review_subtopics')
+    .select('id')
+    .eq('weekly_review_id', reviewId)
+    .eq('subtopic', subtopic);
+  query = projectId ? query.eq('project_id', projectId) : query.is('project_id', null);
+  const { data: existing, error: findError } = await query.maybeSingle();
+  if (findError) return { error: findError.message };
+
+  const { error } = existing
+    ? await admin.from('weekly_review_subtopics').update({ context: trimmed }).eq('id', existing.id)
+    : await admin.from('weekly_review_subtopics').insert({
+        weekly_review_id: reviewId, project_id: projectId, subtopic, context: trimmed,
+      });
+  if (error) return { error: error.message };
+
+  await logActivity(admin, {
+    entity_type: 'weekly_review', entity_id: reviewId, actor: user.email ?? user.id,
+    action: 'subtopic_context', after: { subtopic, context: trimmed },
+  });
+  revalidatePath('/weekly');
   return { ok: true };
 }
 

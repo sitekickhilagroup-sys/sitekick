@@ -25,6 +25,8 @@ export interface Project {
   target_rti: string | null;
   created_at: string;
   current_phase_key: PhaseKey | null;
+  /** Narrative context paragraph (0006) — shown on the portfolio card + process page. */
+  summary: string | null;
 }
 
 export interface ProjectStage {
@@ -323,6 +325,15 @@ export interface WeeklyReview {
   status: WeeklyReviewStatus;
   source_review_id: string | null;
   recording_document_id: string | null;
+  created_at: string;
+}
+
+export interface WeeklyReviewSubtopic {
+  id: string;
+  weekly_review_id: string;
+  project_id: string | null;
+  subtopic: string;
+  context: string | null;
   created_at: string;
 }
 
