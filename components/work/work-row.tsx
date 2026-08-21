@@ -10,9 +10,15 @@ interface Props {
   taskOptions?: { id: string; title: string }[];
   /** LA-today (YYYY-MM-DD); enables the Now/Overdue due chip. */
   today?: string;
+  /** Today view's clear numeric rank (spec §ז). */
+  rank?: number;
+  /** Derived "why this ranks now" one-liner (spec §ט). */
+  whyNow?: string | null;
+  /** Titles of open tasks this one verifiably blocks (spec §ט). */
+  unlocks?: string[];
 }
 
-export function WorkRow({ task, labels, relations, taskOptions, today }: Props) {
+export function WorkRow({ task, labels, relations, taskOptions, today, rank, whyNow, unlocks }: Props) {
   // Due urgency chip (client demo anatomy): overdue -> coral, due today -> apricot,
   // future dates keep the quiet mono date.
   const dueState = task.due && today
@@ -27,6 +33,9 @@ export function WorkRow({ task, labels, relations, taskOptions, today }: Props) 
       <details className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <summary className="min-h-11 cursor-pointer list-none sm:min-h-0">
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:items-baseline">
+            {rank != null && (
+              <span className="font-mono text-xs font-medium text-sage">{String(rank).padStart(2, '0')}</span>
+            )}
             <span aria-hidden="true" className="text-ink3">+</span>
             <span className="min-w-0 flex-1 text-sm text-ink">{task.title}</span>
             <span className="flex shrink-0 items-center gap-1.5">
@@ -54,8 +63,20 @@ export function WorkRow({ task, labels, relations, taskOptions, today }: Props) 
             </span>
           )}
         </summary>
-        <div className="ms-5 mt-1 space-y-1 text-xs text-ink2">
+        <div className="ms-5 mt-1 space-y-1.5 text-xs text-ink2">
           {task.description && <p>{task.description}</p>}
+          {whyNow && (
+            <p>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-apricot">{labels.whyNow}</span>
+              {whyNow}
+            </p>
+          )}
+          {unlocks && unlocks.length > 0 && (
+            <p>
+              <span className="block text-[10px] font-semibold uppercase tracking-wide text-sage">{labels.unlocks}</span>
+              {unlocks.join(' · ')}
+            </p>
+          )}
           {task.owner && <p>{labels.owner}: {task.owner}</p>}
           {task.source && <p>{labels.fromSource}: {task.source}</p>}
         </div>

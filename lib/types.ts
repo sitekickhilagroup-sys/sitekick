@@ -27,6 +27,8 @@ export interface Project {
   current_phase_key: PhaseKey | null;
   /** Narrative context paragraph (0006) — shown on the portfolio card + process page. */
   summary: string | null;
+  /** 0007: false = parked under "Inactive projects" (Flicker). */
+  active: boolean;
 }
 
 export interface ProjectStage {
@@ -188,6 +190,8 @@ export interface Invoice {
   created_at: string;
   invoice_url: string | null;
   receipt_url: string | null;
+  /** 0007: free-text field on the Update Invoice editor (spec §יב). */
+  notes: string | null;
 }
 
 export interface Digest {
@@ -263,7 +267,10 @@ export interface ActivityEntry {
 export type PhaseKey = 'planning' | 'plan_check' | 'bidding' | 'financing' | 'construction';
 export type SubstageKind = 'standard' | 'conditional';
 export type WorkstreamStatus = 'active' | 'done';
-export type ProjectSubstageStatus = 'upcoming' | 'active' | 'done' | 'not_applicable';
+export type ProjectSubstageStatus =
+  | 'upcoming' | 'active' | 'done' | 'not_applicable'
+  // 0007 — Noa's full sub-stage lifecycle (spec §ג):
+  | 'waiting' | 'blocked' | 'verify' | 'submitted' | 'with_city';
 
 export interface Phase {
   key: PhaseKey;

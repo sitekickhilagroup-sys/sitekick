@@ -45,10 +45,12 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
     : riskState === 'at_risk' ? labels.atRisk
     : riskState === 'waiting' ? labels.waiting
     : labels.onTrack;
+  // Spec §טז color semantics: red = verified blocker, blue = waiting on an
+  // external party, green = on track.
   const stateClass =
     riskState === 'on_hold' || riskState === 'at_risk'
       ? 'bg-coral-soft text-coral'
-      : riskState === 'waiting' ? 'bg-apricot-soft text-apricot' : 'bg-sage-soft text-sage';
+      : riskState === 'waiting' ? 'bg-mist-soft text-mist' : 'bg-sage-soft text-sage';
 
   return (
     <article className="rounded-(--radius-card) border border-line bg-card shadow-card">

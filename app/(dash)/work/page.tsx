@@ -17,10 +17,11 @@ const VIEWS: WorkView[] = ['today', 'blocking', 'followups', 'waiting', 'all'];
 function filterView(tasks: Task[], view: WorkView, today: string): Task[] {
   switch (view) {
     case 'today':
+      // Spec §ז: Today is 5-8 real actions, not every open task.
       return [...tasks]
         .filter((t) => !t.snoozed_until || t.snoozed_until <= today)
         .sort((a, b) => scoreTask(b, { today }) - scoreTask(a, { today }))
-        .slice(0, 15);
+        .slice(0, 8);
     case 'blocking':
       return tasks.filter((t) => t.priority === 'critical');
     case 'followups':
@@ -111,6 +112,30 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       .filter((t) => t.id !== task.id)
       .map((t) => ({ id: t.id, title: t.title }));
 
+  // Spec §ז+§ט: Today shows a clear numeric rank plus "Why now" and "What
+  // this unlocks" on every task — all derived from real records, no guesses.
+  const rankById = view === 'today' ? new Map(filtered.map((task, i) => [task.id, i + 1])) : null;
+  const openIds = new Set(tasks.map((task) => task.id));
+  const allRels = (relsQ.data ?? []) as Relationship[];
+  const unlocksFor = (taskId: string): string[] =>
+    allRels
+      .filter((r) => r.from_task_id === taskId && r.type === 'blocks'
+        && (r.verified_by || r.manual_override) && openIds.has(r.to_task_id))
+      .map((r) => taskTitleById.get(r.to_task_id) ?? '')
+      .filter(Boolean)
+      .slice(0, 3);
+  const whyNowFor = (task: Task): string | null => {
+    const parts: string[] = [];
+    if (task.priority === 'critical') parts.push(t('work.blocking'));
+    if (task.due && task.due < today) parts.push(t('work.due.overdue'));
+    else if (task.due === today) parts.push(t('work.due.now'));
+    if ((task.follow_up_date && task.follow_up_date <= today) || (task.check_back_on && task.check_back_on <= today)) {
+      parts.push(t('work.why.followup'));
+    }
+    if (task.waiting_for) parts.push(`${t('tasks.waiting')}: ${task.waiting_for}`);
+    return parts.length ? parts.join(' · ') : null;
+  };
+
   const rowLabels = {
     dueNow: t('work.due.now'),
     dueOverdue: t('work.due.overdue'),
@@ -129,6 +154,8 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     not_applicable: t('work.verb.not_applicable'),
     note: t('work.verb.note'),
     update: t('work.update'),
+    whyNow: t('work.why_now'),
+    unlocks: t('work.unlocks'),
     title: t('rel.title'),
     add: t('rel.add'),
     pickTask: t('rel.pick_task'),
@@ -242,7 +269,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
         orderedGroups.map(([projectId, groupTasks]) => (
           <section key={projectId ?? 'none'}>
             <h2 className="text-sm font-medium text-ink2">
-              {projectId ? (projectNames.get(projectId) ?? '') : t('common.all')}
+              {projectId ? (projectNames.get(projectId) ?? '') : t('common.general')}
             </h2>
             <ul className="mt-2 divide-y divide-line2 rounded-(--radius-card) border border-line bg-card shadow-card">
               {groupTasks.map((task) => (
@@ -251,6 +278,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                   task={task}
                   labels={rowLabels}
                   today={today}
+                  rank={rankById?.get(task.id)}
+                  whyNow={whyNowFor(task)}
+                  unlocks={unlocksFor(task.id)}
                   relations={relationsFor(task.id)}
                   taskOptions={taskOptionsFor(task)}
                 />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -13,12 +13,38 @@ function isActive(href: string, pathname: string) {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
 }
 
-// Desktop row — highlights the current page so you always know where you are
-// (nav-state-active). Hidden below lg; MobileNav takes over there.
-export function NavLinks({ links }: { links: NavLink[] }) {
+// Desktop row — the five core work areas (spec §א), with everything else
+// under a "More" dropdown. Highlights the current page (nav-state-active).
+// Hidden below lg; MobileNav takes over there.
+export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: NavLink[]; moreLabel?: string }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close the More menu on route change, Escape, and outside click.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onDown);
+    };
+  }, [open]);
+
+  const moreActive = (more ?? []).some((l) => isActive(l.href, pathname));
+
   return (
-    <nav className="hidden flex-1 items-center gap-1 overflow-x-auto text-sm lg:flex">
+    <nav className="hidden flex-1 items-center gap-1 text-sm lg:flex">
       {links.map((l) => {
         const active = isActive(l.href, pathname);
         return (
@@ -36,19 +62,60 @@ export function NavLinks({ links }: { links: NavLink[] }) {
           </Link>
         );
       })}
+      {more && more.length > 0 && (
+        <div ref={wrapRef} className="relative">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-haspopup="menu"
+            onClick={() => setOpen((v) => !v)}
+            className={`flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 transition-colors ${
+              moreActive
+                ? 'bg-sage-soft font-medium text-sage'
+                : 'text-ink2 hover:bg-card2 hover:text-ink'
+            }`}
+          >
+            {moreLabel}
+            <span aria-hidden="true" className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+          {open && (
+            <div role="menu" className="absolute start-0 top-full z-50 mt-1 min-w-40 rounded-(--radius-card) border border-line bg-card py-1 shadow-card">
+              {more.map((l) => {
+                const active = isActive(l.href, pathname);
+                return (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    role="menuitem"
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => setOpen(false)}
+                    className={`flex min-h-9 items-center px-3.5 text-sm ${
+                      active ? 'font-medium text-sage' : 'text-ink2 hover:bg-card2 hover:text-ink'
+                    }`}
+                  >
+                    {l.label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </nav>
   );
 }
 
 // Mobile drawer — hamburger under lg opens a full-width panel below the
-// header with stacked 44px link targets; `children` carries the sign-out
-// form (server action) so it stays reachable on small screens.
+// header: the five primary areas, then a quiet divider group with the
+// More links; `children` carries the sign-out form (server action).
 export function MobileNav({
   links,
+  more,
   menuLabel,
   children,
 }: {
   links: NavLink[];
+  more?: NavLink[];
   menuLabel: string;
   children?: React.ReactNode;
 }) {
@@ -67,6 +134,27 @@ export function MobileNav({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
+
+  const renderLink = (l: NavLink, quiet = false) => {
+    const active = isActive(l.href, pathname);
+    return (
+      <Link
+        key={l.href}
+        href={l.href}
+        aria-current={active ? 'page' : undefined}
+        onClick={() => setOpen(false)}
+        className={`flex min-h-11 items-center rounded-lg px-3 text-sm ${
+          active
+            ? 'bg-sage-soft font-medium text-sage'
+            : quiet
+              ? 'text-ink3 hover:bg-card2 hover:text-ink'
+              : 'text-ink2 hover:bg-card2 hover:text-ink'
+        }`}
+      >
+        {l.label}
+      </Link>
+    );
+  };
 
   return (
     <div className="lg:hidden">
@@ -96,24 +184,12 @@ export function MobileNav({
             className="fixed inset-0 top-14 z-30 cursor-default bg-ink/20"
           />
           <nav className="fixed inset-x-0 top-14 z-40 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-line bg-bg px-3 py-2 shadow-card">
-            {links.map((l) => {
-              const active = isActive(l.href, pathname);
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  aria-current={active ? 'page' : undefined}
-                  onClick={() => setOpen(false)}
-                  className={`flex min-h-11 items-center rounded-lg px-3 text-sm ${
-                    active
-                      ? 'bg-sage-soft font-medium text-sage'
-                      : 'text-ink2 hover:bg-card2 hover:text-ink'
-                  }`}
-                >
-                  {l.label}
-                </Link>
-              );
-            })}
+            {links.map((l) => renderLink(l))}
+            {more && more.length > 0 && (
+              <div className="mt-2 border-t border-line pt-2">
+                {more.map((l) => renderLink(l, true))}
+              </div>
+            )}
             {children && <div className="mt-2 border-t border-line pt-2">{children}</div>}
           </nav>
         </>

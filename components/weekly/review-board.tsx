@@ -16,10 +16,12 @@ interface Props {
 
 // Client-demo structure: mode toggle (Sunday draft = edit, Monday presentation
 // = clean read-only), 3-step explainer, save + upload cards, project -> sub-topic
-// groups, archive-semantics footer.
+// groups, archive-semantics footer. Spec §יא: each project is an accordion and
+// only one opens at a time; Completed rows collapse; status is one dropdown.
 export function ReviewBoard({ review, groups, labels }: Props) {
   const saved = review.status === 'saved';
   const [present, setPresent] = useState(false);
+  const [openProject, setOpenProject] = useState<string | null>(groups[0]?.projectName ?? null);
   const readOnly = saved || present;
   const allItems = groups.flatMap((g) => g.subtopics.flatMap((s) => s.items));
   const doneCount = allItems.filter((r) => r.item.status_snapshot === 'done').length;
@@ -68,33 +70,68 @@ export function ReviewBoard({ review, groups, labels }: Props) {
       {groups.length === 0 && labels.noItems && (
         <p className="rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{labels.noItems}</p>
       )}
-      {groups.map((group) => (
-        <section key={group.projectName} className="overflow-hidden rounded-(--radius-card) border border-line bg-card shadow-card">
-          <h2 className="border-b border-line bg-card2 px-4 py-2.5 text-sm font-semibold text-ink">{group.projectName}</h2>
-          <div className="divide-y divide-line2">
-            {group.subtopics.map((sub) => (
-              <div key={sub.name} className="px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">
-                  {labels.subTopic ? `${labels.subTopic} · ` : ''}{sub.name}
-                </p>
-                <SubtopicContext
-                  reviewId={review.id}
-                  projectId={sub.projectId ?? null}
-                  subtopic={sub.name}
-                  value={sub.context ?? null}
-                  readOnly={readOnly}
-                  placeholder={labels.contextPh}
-                />
-                <ul className="mt-2 space-y-3">
-                  {sub.items.map((row, i) => (
-                    <ReviewItemRow key={row.item.id} row={row} index={i + 1} readOnly={readOnly} labels={labels} />
-                  ))}
-                </ul>
+      {groups.map((group) => {
+        const open = openProject === group.projectName;
+        const groupRows = group.subtopics.flatMap((s) => s.items);
+        const groupDone = groupRows.filter((r) => r.item.status_snapshot === 'done').length;
+        return (
+          <section key={group.projectName} className="overflow-hidden rounded-(--radius-card) border border-line bg-card shadow-card">
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setOpenProject(open ? null : group.projectName)}
+              className={`flex min-h-11 w-full cursor-pointer items-center gap-2 px-4 py-2.5 text-start ${open ? 'border-b border-line bg-card2' : ''}`}
+            >
+              <span className="min-w-0 flex-1 text-sm font-semibold text-ink">{group.projectName}</span>
+              <span className="font-mono text-[11px] text-ink3">{groupDone}/{groupRows.length}</span>
+              <span aria-hidden="true" className={`inline-block text-ink3 transition-transform rtl:-scale-x-100 ${open ? 'rotate-90' : ''}`}>▸</span>
+            </button>
+            {open && (
+              <div className="divide-y divide-line2">
+                {group.subtopics.map((sub) => {
+                  // Completed rows collapse under a quiet details block; the
+                  // live conversation (open / blocked / waiting / decisions)
+                  // stays front and center.
+                  const liveRows = sub.items.filter((r) => r.item.status_snapshot !== 'done');
+                  const doneRows = sub.items.filter((r) => r.item.status_snapshot === 'done');
+                  return (
+                    <div key={sub.name} className="px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">
+                        {labels.subTopic ? `${labels.subTopic} · ` : ''}{sub.name}
+                      </p>
+                      <SubtopicContext
+                        reviewId={review.id}
+                        projectId={sub.projectId ?? null}
+                        subtopic={sub.name}
+                        value={sub.context ?? null}
+                        readOnly={readOnly}
+                        placeholder={labels.contextPh}
+                      />
+                      <ul className="mt-2 space-y-3">
+                        {liveRows.map((row, i) => (
+                          <ReviewItemRow key={row.item.id} row={row} index={i + 1} readOnly={readOnly} labels={labels} />
+                        ))}
+                      </ul>
+                      {doneRows.length > 0 && (
+                        <details className="mt-2">
+                          <summary className="min-h-11 cursor-pointer py-1 text-xs text-ink3 hover:text-ink sm:min-h-0">
+                            {(labels.completedN ?? '{n}').replace('{n}', String(doneRows.length))}
+                          </summary>
+                          <ul className="mt-1 space-y-3 opacity-80">
+                            {doneRows.map((row, i) => (
+                              <ReviewItemRow key={row.item.id} row={row} index={i + 1} readOnly={readOnly} labels={labels} />
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </section>
-      ))}
+            )}
+          </section>
+        );
+      })}
 
       {labels.archiveNote && (
         <p className="rounded-(--radius-card) border border-line2 bg-card2 p-4 text-xs leading-relaxed text-ink2">
@@ -144,10 +181,11 @@ function ReviewItemRow({ row, index, readOnly, labels }: { row: Row; index: numb
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState(false);
 
+  // Spec §טז: blue = waiting on external, red = blocked, green = completed.
   const statusClass =
     item.status_snapshot === 'done' ? 'bg-sage-soft text-sage'
     : item.status_snapshot === 'blocked' ? 'bg-coral-soft text-coral'
-    : item.status_snapshot === 'waiting' ? 'bg-apricot-soft text-apricot'
+    : item.status_snapshot === 'waiting' ? 'bg-mist-soft text-mist'
     : item.status_snapshot === 'carried' ? 'bg-mist-soft text-mist'
     : item.status_snapshot === 'dropped' || item.status_snapshot === 'no_update' ? 'bg-card2 text-ink3'
     : 'bg-mist-soft text-mist';
@@ -179,13 +217,26 @@ function ReviewItemRow({ row, index, readOnly, labels }: { row: Row; index: numb
     const res = await setItemSnapshot(item.id, state);
     if (res?.error) setFailed(true);
   });
-  const snapButtons: { state: SnapshotState; label: string }[] = [
-    { state: 'open', label: labels.statusOpen },
-    { state: 'carried', label: labels.stCarried },
-    { state: 'waiting', label: labels.stWaiting },
-    { state: 'blocked', label: labels.stBlocked },
-    { state: 'no_update', label: labels.stNoUpdate },
+  // Spec §יא: seven buttons become one dropdown. done/dropped route through
+  // the task-mutating verbs; everything else is a review-only snapshot.
+  const statusOptions: { value: string; label: string }[] = [
+    { value: 'open', label: labels.statusOpen },
+    { value: 'carried', label: labels.stCarried },
+    { value: 'waiting', label: labels.stWaiting },
+    { value: 'blocked', label: labels.stBlocked },
+    { value: 'no_update', label: labels.stNoUpdate },
+    { value: 'done', label: labels.completed },
+    { value: 'dropped', label: labels.notApplicable },
   ];
+  const currentStatus = statusOptions.some((o) => o.value === item.status_snapshot)
+    ? item.status_snapshot
+    : 'open';
+  const onStatusChange = (value: string) => {
+    if (value === currentStatus) return;
+    if (value === 'done') act('completed');
+    else if (value === 'dropped') act('not_applicable');
+    else snap(value as SnapshotState);
+  };
 
   return (
     <li className="flex flex-wrap items-start gap-2">
@@ -223,30 +274,21 @@ function ReviewItemRow({ row, index, readOnly, labels }: { row: Row; index: numb
               className="mt-0.5 min-h-11 w-full rounded-lg border border-line bg-card2 px-2.5 py-1.5 text-xs text-ink outline-none disabled:opacity-50 sm:min-h-0"
             />
           </span>
-          <span className="flex basis-full flex-wrap items-center gap-1.5">
-            <button type="button" disabled={pending} onClick={() => act('completed')}
-              className={`min-h-11 cursor-pointer rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50 sm:min-h-0 sm:py-1 ${
-                item.status_snapshot === 'done'
-                  ? 'bg-sage text-white'
-                  : 'border border-sage-line text-sage hover:bg-sage-soft'
-              }`}>
-              {labels.completed}
-            </button>
-            {snapButtons.map(({ state, label }) => (
-              <button key={state} type="button" disabled={pending} onClick={() => snap(state)}
-                aria-pressed={item.status_snapshot === state}
-                className={`min-h-11 cursor-pointer rounded-lg px-2.5 py-1.5 text-xs disabled:opacity-50 sm:min-h-0 sm:py-1 ${
-                  item.status_snapshot === state
-                    ? 'bg-ink text-bg'
-                    : 'border border-line text-ink2 hover:bg-card2'
-                }`}>
-                {label}
-              </button>
-            ))}
-            <button type="button" disabled={pending} onClick={() => act('not_applicable')}
-              className="min-h-11 cursor-pointer rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink3 hover:bg-card2 disabled:opacity-50 sm:min-h-0 sm:py-1">
-              {labels.notApplicable}
-            </button>
+          <span className="flex basis-full flex-wrap items-center gap-2 sm:basis-auto">
+            <label className="flex items-center gap-1.5 text-[11px] text-ink3">
+              {labels.statusLabel}
+              <select
+                disabled={pending}
+                value={currentStatus}
+                onChange={(e) => onStatusChange(e.target.value)}
+                aria-label={`${labels.statusLabel}: ${title}`}
+                className="min-h-11 cursor-pointer rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink outline-none disabled:opacity-50 sm:min-h-0"
+              >
+                {statusOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </label>
           </span>
         </>
       )}

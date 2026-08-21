@@ -31,6 +31,21 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const pName = new Map(projects.map((p) => [p.id, p.name]));
   const vName = new Map(vendors.map((v) => [v.id, v.name]));
 
+  // Spec §יב vendor hygiene: trim + collapse whitespace and merge case
+  // variants for display/grouping only — original names stay untouched in
+  // the database for audit. Deeper merges need a human-approved rule.
+  const canon = (s: string) => s.trim().replace(/\s+/g, ' ');
+  const vKey = (s: string) => canon(s).toLowerCase();
+  const canonicalByKey = new Map<string, string>();
+  for (const v of vendors) {
+    const k = vKey(v.name);
+    if (!canonicalByKey.has(k)) canonicalByKey.set(k, canon(v.name));
+  }
+  const vDisplay = (id: string | null) => {
+    const raw = id ? vName.get(id) : undefined;
+    return raw ? (canonicalByKey.get(vKey(raw)) ?? canon(raw)) : '';
+  };
+
   const tab = (typeof sp.tab === 'string' ? sp.tab : 'invoices') as InvoiceTab;
   const fProject = typeof sp.project === 'string' ? sp.project : '';
   const fEntity = typeof sp.entity === 'string' ? sp.entity : '';
@@ -41,10 +56,11 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
 
   const rows = invoices.filter((inv) => {
     if (inv.tab !== tab) return false;
-    const projLabel = inv.project_id ? (pName.get(inv.project_id) ?? '') : t('common.all');
+    // Spec §יב: no invoice belongs to "All" — unassigned rows read "General".
+    const projLabel = inv.project_id ? (pName.get(inv.project_id) ?? '') : t('common.general');
     if (fProject && projLabel !== fProject) return false;
     if (fEntity && inv.entity !== fEntity) return false;
-    if (fVendor && (inv.vendor_id ? vName.get(inv.vendor_id) : '') !== fVendor) return false;
+    if (fVendor && vKey(vDisplay(inv.vendor_id)) !== vKey(fVendor)) return false;
     if (fStatus && inv.status !== fStatus) return false;
     const d = inv.received_date ?? inv.invoice_date ?? inv.due;
     if (fFrom && (!d || d < fFrom)) return false;
@@ -63,7 +79,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const tabRows = invoices.filter((i) => i.tab === tab);
   const vendorCounts = new Map<string, number>();
   for (const inv of tabRows) {
-    const nm = inv.vendor_id ? (vName.get(inv.vendor_id) ?? '') : '';
+    const nm = vDisplay(inv.vendor_id);
     if (nm) vendorCounts.set(nm, (vendorCounts.get(nm) ?? 0) + 1);
   }
   const vendorPills = [...vendorCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
@@ -146,9 +162,9 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
 
       <FilterBar
         options={{
-          projects: [...projects.map((p) => p.name), t('common.all')].sort(),
+          projects: [...projects.map((p) => p.name), t('common.general')].sort(),
           entities: [...new Set(invoices.map((i) => i.entity).filter((e): e is string => !!e))].sort(),
-          vendors: vendors.map((v) => v.name).sort(),
+          vendors: [...new Set(vendors.map((v) => canonicalByKey.get(vKey(v.name)) ?? canon(v.name)))].sort(),
           statuses: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
         }}
         labels={{
@@ -172,7 +188,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.number')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('tasks.description')}</th>
               <th scope="col" className="px-3 py-2 text-end font-medium">{t('common.amount')}</th>
-              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.received')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.date')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.status')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.paid_date')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.transfer')}</th>
@@ -185,11 +201,14 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             )}
             {rows.map((inv) => (
               <tr key={inv.id}>
-                <td className="px-3 py-2 text-ink">{inv.vendor_id ? vName.get(inv.vendor_id) : ''}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.project_id ? pName.get(inv.project_id) : t('common.all')}</td>
+                <td className="px-3 py-2 text-ink">{vDisplay(inv.vendor_id)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.project_id ? pName.get(inv.project_id) : t('common.general')}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.entity ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{inv.number ?? ''}</td>
-                <td className="max-w-[220px] truncate px-3 py-2 text-xs text-ink2">{inv.budget_line ?? ''}</td>
+                <td className="max-w-[220px] px-3 py-2 text-xs text-ink2">
+                  <span className="block truncate">{inv.budget_line ?? ''}</span>
+                  {inv.notes && <span className="block truncate text-[11px] text-ink3" title={inv.notes}>{inv.notes}</span>}
+                </td>
                 <td className="whitespace-nowrap px-3 py-2 text-end font-mono text-ink">{money(Number(inv.amount_usd))}</td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{inv.received_date ?? inv.invoice_date ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2">
@@ -222,9 +241,13 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                     )}
                     <LinkEditor
                       invoiceId={inv.id}
+                      status={inv.status as InvoiceStatus}
+                      paidDate={inv.paid_date}
                       invoiceUrl={inv.invoice_url}
                       receiptUrl={inv.receipt_url}
-                      context={[inv.vendor_id ? vName.get(inv.vendor_id) : null, inv.number].filter(Boolean).join(' ')}
+                      notes={inv.notes ?? null}
+                      statusLabels={statusLabels}
+                      context={[vDisplay(inv.vendor_id) || null, inv.number].filter(Boolean).join(' ')}
                       labels={{
                         edit: t('invoices.edit_links'),
                         save: t('common.save'),
@@ -232,6 +255,9 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                         receipt: t('invoices.open_receipt'),
                         cancel: t('common.cancel'),
                         error: t('common.error_save'),
+                        status: t('common.status'),
+                        paidDate: t('invoices.paid_date'),
+                        notes: t('invoices.notes'),
                       }}
                     />
                   </span>
