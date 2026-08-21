@@ -49,12 +49,20 @@ export default async function OverviewPage() {
   const portfolioLabels = {
     onHold: t('rails.on_hold'),
     onTrack: t('rails.on_track'),
+    atRisk: t('portfolio.state.at_risk'),
+    waiting: t('portfolio.state.waiting'),
+    position: t('portfolio.position'),
+    blockingN: t('portfolio.blocking_n'),
+    evidence: t('portfolio.evidence'),
     next: t('portfolio.next'),
+    then: t('portfolio.then'),
     blocker: t('portfolio.blocker'),
     investigate: t('portfolio.investigate'),
     none: t('common.none'),
     expand: t('common.expand'),
     collapse: t('common.collapse'),
+    phases: (['planning', 'plan_check', 'bidding', 'financing', 'construction'] as const)
+      .map((key) => ({ key: key as string, label: t(`phase.${key}`) })),
   };
 
   return (
@@ -82,6 +90,7 @@ export default async function OverviewPage() {
 
       <section aria-labelledby="portfolio-h">
         <h2 id="portfolio-h" className="font-serif text-xl text-ink sm:text-2xl">{t('portfolio.map')}</h2>
+        <p className="mt-0.5 text-sm text-ink3">{t('portfolio.map_sub')}</p>
         <div className="mt-4 space-y-3">
           {data.portfolio.map((entry, i) => (
             <ProjectAccordion key={entry.project.id} entry={entry} defaultOpen={i === 0} labels={portfolioLabels} />
@@ -115,11 +124,39 @@ export default async function OverviewPage() {
         empty={t('decisions.empty')}
       />
 
+      {(data.insights.timeLost || data.insights.staleWait) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {data.insights.timeLost && (
+            <article className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-coral">{t('insights.time_lost')}</p>
+              <p className="mt-1 text-sm font-medium text-ink">
+                {data.insights.timeLost.project} · {data.insights.timeLost.text}
+              </p>
+              <p className="mt-1 text-xs text-ink3">
+                {t('overview.stuck_days').replace('{n}', `⁨${data.insights.timeLost.days}⁩`)}
+              </p>
+            </article>
+          )}
+          {data.insights.staleWait && (
+            <article className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-apricot">{t('insights.stale_wait')}</p>
+              <p className="mt-1 text-sm font-medium text-ink">
+                {data.insights.staleWait.project ? `${data.insights.staleWait.project} · ` : ''}{data.insights.staleWait.title}
+              </p>
+              <p className="mt-1 text-xs text-ink3">
+                {t('tasks.waiting')}: {data.insights.staleWait.who} · {t('insights.days').replace('{n}', `⁨${data.insights.staleWait.days}⁩`)}
+              </p>
+            </article>
+          )}
+        </div>
+      )}
+
       <CompareCharts
         openMoney={data.openMoney}
         tasks={data.tasks}
         projectNames={projectNames}
         title={t('overview.compare')}
+        subtitle={t('overview.compare_sub')}
         moneyLabel={t('overview.open_money')}
         loadLabel={t('overview.task_load')}
         allLabel={t('common.all')}

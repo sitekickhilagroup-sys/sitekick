@@ -21,6 +21,16 @@ export interface PortfolioEntry {
   workstreams: Workstream[];
   mainBlocker: Blocker | null;
   nextAction: Action | null;
+  /** Second-ranked action — the card's "Then" line. */
+  thenAction: Action | null;
+  /** Active blockers on this project — the "N blocking" chip. */
+  blockingCount: number;
+  /** Latest evidence date we hold for this project (newest event), or null. */
+  lastEvidence: string | null;
+  /** Phase keys lit by active parallel workstreams (rail coloring). */
+  parallelPhaseKeys: string[];
+  /** Honest derived state: on_hold > at_risk (blockers) > waiting > on_track. */
+  riskState: 'on_hold' | 'at_risk' | 'waiting' | 'on_track';
 }
 
 export interface OverviewData {
@@ -35,6 +45,11 @@ export interface OverviewData {
   rowanQueue: { count: number; total_usd: number };
   pendingProposals: number;
   portfolio: PortfolioEntry[];
+  /** Portfolio-intelligence insight cards — derived, never fabricated. */
+  insights: {
+    timeLost: { project: string; text: string; days: number } | null;
+    staleWait: { project: string; title: string; who: string; days: number } | null;
+  };
   today: string;
 }
 
@@ -150,16 +165,57 @@ export async function getOverviewData(): Promise<OverviewData> {
     list.push(w);
     workstreamsByProject.set(w.project_id, list);
   }
-  const portfolio: PortfolioEntry[] = projects.map((p) => ({
-    project: p,
-    currentPhaseLabel: p.current_phase_key ? (phaseLabelByKey.get(p.current_phase_key) ?? null) : null,
-    workstreams: workstreamsByProject.get(p.id) ?? [],
-    // blockers is already active-only, sorted by days_stuck desc — first
-    // match per project is that project's max. allRanked is score-desc and
-    // uncapped — first match is that project's genuine top-ranked action.
-    mainBlocker: blockers.find((b) => b.project_id === p.id) ?? null,
-    nextAction: allRanked.find((a) => a.project === p.name) ?? null,
-  }));
+  const portfolio: PortfolioEntry[] = projects.map((p) => {
+    const projectWorkstreams = workstreamsByProject.get(p.id) ?? [];
+    const blockingCount = blockers.filter((b) => b.project_id === p.id).length;
+    const projectEvents = events.filter((e) => e.project_id === p.id);
+    const lastEvidence = projectEvents.reduce<string | null>(
+      (max, e) => (e.event_date && (!max || e.event_date > max) ? e.event_date : max), null,
+    );
+    const hasWaiting = openTasks.some((t) => t.project_id === p.id && !!t.waiting_for);
+    return {
+      project: p,
+      currentPhaseLabel: p.current_phase_key ? (phaseLabelByKey.get(p.current_phase_key) ?? null) : null,
+      workstreams: projectWorkstreams,
+      // blockers is already active-only, sorted by days_stuck desc — first
+      // match per project is that project's max. allRanked is score-desc and
+      // uncapped — first match is that project's genuine top-ranked action.
+      mainBlocker: blockers.find((b) => b.project_id === p.id) ?? null,
+      nextAction: allRanked.find((a) => a.project === p.name) ?? null,
+      thenAction: allRanked.filter((a) => a.project === p.name)[1] ?? null,
+      blockingCount,
+      lastEvidence,
+      parallelPhaseKeys: [...new Set(projectWorkstreams.map((w) => w.phase_key))],
+      riskState: p.city_on_hold ? 'on_hold' : blockingCount > 0 ? 'at_risk' : hasWaiting ? 'waiting' : 'on_track',
+    };
+  });
+
+  // Insight cards: worst live blocker + the oldest external wait. Both come
+  // straight from records — no scoring, no guesswork.
+  const worstBlocker = blockers[0] ?? null; // already sorted days_stuck desc
+  const waitingTasks = openTasks
+    .filter((t) => !!t.waiting_for)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const oldestWait = waitingTasks[0] ?? null;
+  const daysSince = (iso: string) =>
+    Math.max(0, Math.floor((Date.parse(today) - Date.parse(iso.slice(0, 10))) / 86400000));
+  const insights = {
+    timeLost: worstBlocker
+      ? {
+          project: names.get(worstBlocker.project_id) ?? '',
+          text: worstBlocker.what,
+          days: worstBlocker.days_stuck,
+        }
+      : null,
+    staleWait: oldestWait
+      ? {
+          project: oldestWait.project_id ? (names.get(oldestWait.project_id) ?? '') : '',
+          title: oldestWait.title,
+          who: oldestWait.waiting_for ?? '',
+          days: daysSince(oldestWait.created_at),
+        }
+      : null,
+  };
 
   return {
     projects: projectViews,
@@ -175,6 +231,7 @@ export async function getOverviewData(): Promise<OverviewData> {
     rowanQueue: { count: rowanCount, total_usd: rowanTotal },
     pendingProposals,
     portfolio,
+    insights,
     today,
   };
 }

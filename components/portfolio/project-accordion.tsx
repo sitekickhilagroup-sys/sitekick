@@ -7,12 +7,20 @@ import type { PortfolioEntry } from '@/lib/queries';
 export interface AccordionLabels {
   onHold: string;
   onTrack: string;
+  atRisk: string;
+  waiting: string;
+  position: string;
+  blockingN: string;
+  evidence: string;
   next: string;
+  then: string;
   blocker: string;
   investigate: string;
   none: string;
   expand: string;
   collapse: string;
+  /** phase key -> localized label, in canonical order */
+  phases: { key: string; label: string }[];
 }
 
 interface Props {
@@ -28,7 +36,19 @@ interface Props {
 // and PhaseColumn's phase/workstream chip colors for visual continuity.
 export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
   const [open, setOpen] = useState(defaultOpen);
-  const { project, currentPhaseLabel, workstreams, mainBlocker, nextAction } = entry;
+  const {
+    project, currentPhaseLabel, workstreams, mainBlocker, nextAction, thenAction,
+    blockingCount, lastEvidence, parallelPhaseKeys, riskState,
+  } = entry;
+  const stateLabel =
+    riskState === 'on_hold' ? labels.onHold
+    : riskState === 'at_risk' ? labels.atRisk
+    : riskState === 'waiting' ? labels.waiting
+    : labels.onTrack;
+  const stateClass =
+    riskState === 'on_hold' || riskState === 'at_risk'
+      ? 'bg-coral-soft text-coral'
+      : riskState === 'waiting' ? 'bg-apricot-soft text-apricot' : 'bg-sage-soft text-sage';
 
   return (
     <article className="rounded-(--radius-card) border border-line bg-card shadow-card">
@@ -68,10 +88,15 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
           </span>
         ))}
 
-        <span className={`ms-auto whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${
-          project.city_on_hold ? 'bg-coral-soft text-coral' : 'bg-sage-soft text-sage'
-        }`}>
-          {project.city_on_hold ? labels.onHold : labels.onTrack}
+        <span className="ms-auto flex items-center gap-1.5">
+          <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${stateClass}`}>
+            {stateLabel}
+          </span>
+          {blockingCount > 0 && (
+            <span className="whitespace-nowrap rounded-full bg-coral-soft px-2 py-0.5 text-xs text-coral">
+              {labels.blockingN.replace('{n}', String(blockingCount))}
+            </span>
+          )}
         </span>
 
         <button
@@ -87,6 +112,29 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
 
       {open && (
         <div className="border-t border-line2 p-4 pt-3">
+          {/* Numbered 01-05 phase rail — current phase in sage, phases lit by an
+              active parallel workstream in mist, everything else quiet. */}
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.position}</p>
+          <ol className="mb-3 flex flex-wrap gap-1.5">
+            {labels.phases.map((ph, i) => {
+              const isCurrent = project.current_phase_key === ph.key;
+              const isParallel = !isCurrent && parallelPhaseKeys.includes(ph.key);
+              return (
+                <li
+                  key={ph.key}
+                  aria-current={isCurrent ? 'step' : undefined}
+                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ${
+                    isCurrent ? 'bg-sage text-white'
+                    : isParallel ? 'bg-mist-soft text-mist'
+                    : 'bg-card2 text-ink3'
+                  }`}
+                >
+                  <span className="font-mono">{String(i + 1).padStart(2, '0')}</span>
+                  {ph.label}
+                </li>
+              );
+            })}
+          </ol>
           <div className="space-y-2 text-sm">
             <p>
               <span className="font-medium text-ink2">{labels.next}:</span>{' '}
@@ -98,7 +146,18 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
                 {mainBlocker ? `${mainBlocker.what} · ${mainBlocker.blocked_by}` : labels.none}
               </span>
             </p>
+            {thenAction && (
+              <p>
+                <span className="font-medium text-ink2">{labels.then}:</span>{' '}
+                <span className="text-ink2">{thenAction.title}</span>
+              </p>
+            )}
           </div>
+          {lastEvidence && (
+            <p className="mt-2 text-[11px] text-ink3">
+              {labels.evidence.replace('{date}', '')}<bdi>{lastEvidence}</bdi>
+            </p>
+          )}
           <Link
             href={`/projects/${project.id}`}
             className="mt-3 inline-flex min-h-11 items-center text-sm text-mist hover:underline sm:min-h-0"

@@ -15,7 +15,8 @@ Sections in order:
 ## Follow-ups due     (tasks whose follow-up/check-back date arrived)
 ## Stage notes        (projects at risk or with slip days)
 ## Money waiting on Rowan  (invoices in for_rowan_approval, with totals)
-Skip a section entirely when it has no items. Never invent data.`;
+Skip a section entirely when it has no items. Never invent data.
+STYLE: one line per item, up to ~30 words when the detail earns it. No intro, no outro, no commentary — just the facts.`;
 
 export async function buildDigest(
   admin: SupabaseClient,

@@ -52,7 +52,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     supabase.from('projects').select('id,name'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
     supabase.from('agent_proposals').select('id', { count: 'exact', head: true }).eq('state', 'pending'),
-    supabase.from('invoices').select('amount_usd').eq('status', 'approved'),
+    supabase.from('invoices').select('amount_usd,vendor_id').eq('status', 'approved'),
     supabase.from('relationships').select('*'),
   ]);
 
@@ -60,9 +60,10 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const projects = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name'>[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const pendingCount = proposalsQ.count ?? 0;
-  const approvedInvoices = (approvedInvoicesQ.data ?? []) as Pick<Invoice, 'amount_usd'>[];
+  const approvedInvoices = (approvedInvoicesQ.data ?? []) as Pick<Invoice, 'amount_usd' | 'vendor_id'>[];
   const approvedCount = approvedInvoices.length;
   const approvedTotal = approvedInvoices.reduce((s, i) => s + Number(i.amount_usd), 0);
+  const vendorGroups = new Set(approvedInvoices.map((i) => i.vendor_id ?? '—')).size;
   const projectNames = new Map(projects.map((p) => [p.id, p.name]));
 
   const filtered = filterView(tasks, view, today);
@@ -111,6 +112,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       .map((t) => ({ id: t.id, title: t.title }));
 
   const rowLabels = {
+    dueNow: t('work.due.now'),
+    dueOverdue: t('work.due.overdue'),
+    blocking: t('work.blocking'),
     owner: t('tasks.owner'),
     fromSource: t('actions.from_source'),
     waiting: t('work.verb.waiting'),
@@ -141,12 +145,16 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     'rel.blocked_by_this': t('rel.blocked_by_this'),
   };
 
-  const viewTabs: { key: WorkView; label: string }[] = [
-    { key: 'today', label: t('work.view.today') },
-    { key: 'blocking', label: t('work.view.blocking') },
-    { key: 'followups', label: t('work.view.followups') },
-    { key: 'waiting', label: t('work.view.waiting') },
-    { key: 'all', label: t('work.view.all') },
+  // Per-view counts + one-line meaning — her demo's tab anatomy.
+  const countOf = (v: WorkView) => (v === 'blocking'
+    ? filterView(tasks, v, today).length + blockers.length
+    : filterView(tasks, v, today).length);
+  const viewTabs: { key: WorkView; label: string; sub: string; count: number }[] = [
+    { key: 'today', label: t('work.view.today'), sub: t('work.tab_sub.today'), count: countOf('today') },
+    { key: 'blocking', label: t('work.view.blocking'), sub: t('work.tab_sub.blocking'), count: countOf('blocking') },
+    { key: 'followups', label: t('work.view.followups'), sub: t('work.tab_sub.followups'), count: countOf('followups') },
+    { key: 'waiting', label: t('work.view.waiting'), sub: t('work.tab_sub.waiting'), count: countOf('waiting') },
+    { key: 'all', label: t('work.view.all'), sub: t('work.tab_sub.all'), count: countOf('all') },
   ];
 
   return (
@@ -164,16 +172,19 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       )}
 
       <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
-        {viewTabs.map(({ key, label }) => (
+        {viewTabs.map(({ key, label, sub, count }) => (
           <Link
             key={key}
             href={`/work?view=${key}`}
             aria-current={view === key ? 'page' : undefined}
-            className={`inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-4 py-1.5 text-sm sm:min-h-0 ${
+            className={`inline-flex min-h-11 shrink-0 flex-col justify-center whitespace-nowrap rounded-xl px-4 py-1.5 ${
               view === key ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
             }`}
           >
-            {label}
+            <span className="text-sm font-medium">
+              {label} <span className={view === key ? 'opacity-70' : 'text-ink3'}>{count}</span>
+            </span>
+            <span className={`text-[10px] ${view === key ? 'opacity-70' : 'text-ink3'}`}>{sub}</span>
           </Link>
         ))}
       </div>
@@ -207,12 +218,18 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
           href="/invoices?status=approved"
           className="block rounded-(--radius-card) border border-sage-line bg-sage-soft p-4 hover:opacity-90"
         >
-          <p className="text-sm font-medium text-ink">{t('work.payment_run')}</p>
-          <p className="mt-1 text-xs text-ink2">
-            {t('work.payment_run_sub')
-              .replace('{n}', String(approvedCount))
-              .replace('{total}', approvedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }))}
-          </p>
+          <div className="flex items-center gap-3">
+            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sage font-mono text-sm text-white">$</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-ink">{t('work.payment_run')}</span>
+              <span className="mt-0.5 block text-xs text-ink2">
+                {t('work.payment_run_sub')
+                  .replace('{n}', String(approvedCount))
+                  .replace('{total}', approvedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }))}
+                {' · '}{t('work.payment_groups').replace('{n}', String(vendorGroups))}
+              </span>
+            </span>
+          </div>
         </Link>
       )}
 
@@ -230,6 +247,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                   key={task.id}
                   task={task}
                   labels={rowLabels}
+                  today={today}
                   relations={relationsFor(task.id)}
                   taskOptions={taskOptionsFor(task)}
                 />

@@ -55,6 +55,19 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const rowan = invoices.filter((i) => i.status === 'for_rowan_approval');
   const rowanTotal = rowan.reduce((s, i) => s + Number(i.amount_usd), 0);
 
+  // Open-money header (client demo): everything not yet paid or on hold.
+  const openInvoices = invoices.filter((i) => ['received', 'for_rowan_approval', 'approved'].includes(i.status));
+  const openTotal = openInvoices.reduce((s, i) => s + Number(i.amount_usd), 0);
+
+  // Vendor quick-filter pills with counts, scoped to the active tab.
+  const tabRows = invoices.filter((i) => i.tab === tab);
+  const vendorCounts = new Map<string, number>();
+  for (const inv of tabRows) {
+    const nm = inv.vendor_id ? (vName.get(inv.vendor_id) ?? '') : '';
+    if (nm) vendorCounts.set(nm, (vendorCounts.get(nm) ?? 0) + 1);
+  }
+  const vendorPills = [...vendorCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
   const statusLabels: Record<string, string> = {
     received: t('invoices.st_received'),
     for_rowan_approval: t('invoices.st_for_rowan'),
@@ -71,7 +84,13 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
 
   return (
     <div className="space-y-4 pb-16">
-      <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('nav.invoices')}</h1>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className="font-serif text-2xl text-ink sm:text-3xl">{t('nav.invoices')}</h1>
+        <p className="text-sm text-ink2">
+          <span className="font-mono font-medium text-ink">{money(openTotal)}</span>
+          {' · '}{t('invoices.open_total').replace('{n}', `⁨${openInvoices.length}⁩`)}
+        </p>
+      </div>
 
       {rowan.length > 0 && (
         <p className="rounded-(--radius-card) border border-apricot/40 bg-apricot-soft px-4 py-2.5 text-sm text-ink">
@@ -96,6 +115,32 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
         ))}
       </div>
 
+      {vendorPills.length > 1 && (
+        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0 sm:pb-0">
+          <Link
+            href={`/invoices?tab=${tab}`}
+            aria-current={!fVendor ? 'page' : undefined}
+            className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs sm:min-h-0 ${
+              !fVendor ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+            }`}
+          >
+            {t('common.all')} <span className={!fVendor ? 'opacity-70' : 'text-ink3'}>{tabRows.length}</span>
+          </Link>
+          {vendorPills.map(([nm, count]) => (
+            <Link
+              key={nm}
+              href={`/invoices?tab=${tab}&vendor=${encodeURIComponent(nm)}`}
+              aria-current={fVendor === nm ? 'page' : undefined}
+              className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs sm:min-h-0 ${
+                fVendor === nm ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+              }`}
+            >
+              {nm} <span className={fVendor === nm ? 'opacity-70' : 'text-ink3'}>{count}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+
       <FilterBar
         options={{
           projects: [...projects.map((p) => p.name), t('common.all')].sort(),
@@ -115,13 +160,14 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
       />
 
       <div className="overflow-x-auto rounded-(--radius-card) border border-line bg-card shadow-card">
-        <table className="w-full min-w-[900px] text-sm">
+        <table className="w-full min-w-[1000px] text-sm">
           <thead>
             <tr className="border-b border-line text-xs text-ink3">
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.vendor')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.project')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.entity')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.number')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-medium">{t('tasks.description')}</th>
               <th scope="col" className="px-3 py-2 text-end font-medium">{t('common.amount')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('invoices.received')}</th>
               <th scope="col" className="px-3 py-2 text-start font-medium">{t('common.status')}</th>
@@ -132,7 +178,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
           </thead>
           <tbody className="divide-y divide-line2">
             {rows.length === 0 && (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-ink3">{t('invoices.empty')}</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-ink3">{t('invoices.empty')}</td></tr>
             )}
             {rows.map((inv) => (
               <tr key={inv.id}>
@@ -140,6 +186,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.project_id ? pName.get(inv.project_id) : t('common.all')}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-xs text-ink2">{inv.entity ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{inv.number ?? ''}</td>
+                <td className="max-w-[220px] truncate px-3 py-2 text-xs text-ink2">{inv.budget_line ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-end font-mono text-ink">{money(Number(inv.amount_usd))}</td>
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-ink2">{inv.received_date ?? inv.invoice_date ?? ''}</td>
                 <td className="whitespace-nowrap px-3 py-2">
