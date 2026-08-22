@@ -58,7 +58,11 @@
   --color-chart2: var(--chart2);
   --color-deep: var(--deep);
   --color-gold: var(--gold);
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  /* Her demo ships Geist but its globals.css sets `body{font-family:Arial,
+     Helvetica,sans-serif}` — so the interface Noa actually looks at is Arial.
+     Matching the reference means matching that, with Geist behind it for
+     anywhere Arial is absent. */
+  --font-sans: Arial, Helvetica, var(--font-geist-sans), system-ui, sans-serif;
   /* Her demo sets every display heading in Georgia serif (.title-row h1,
      .phase strong, .section-heading h2) — the design doc's all-Geist rule
      lost to the reference she actually loves. */

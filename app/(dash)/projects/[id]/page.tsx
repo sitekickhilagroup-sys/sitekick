@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
+import { verbResultLabels } from '@/lib/i18n/verb-labels';
 import { supabaseServer } from '@/lib/supabase/server';
 import { getProjectProcess } from '@/lib/process';
 import { ProcessExplorer, type ExplorerPhase } from '@/components/process/process-explorer';
@@ -55,6 +56,18 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     blocking: t('work.blocking'),
     waitingOn: t('tasks.waiting'),
     openRegister: t('process.open_register'),
+    // Conditional-rule explorer (her .scenario-box)
+    tryEach: t('process.try_each'),
+    addDecision: t('process.add_decision'),
+    editDecision: t('process.edit_decision'),
+    decisionKicker: t('process.decision_kicker'),
+    decisionLabelPh: t('process.decision_label_ph'),
+    decisionOptionPh: t('process.decision_option_ph'),
+    decisionResultPh: t('process.decision_result_ph'),
+    decisionNoResult: t('process.decision_no_result'),
+    remove: t('rel.remove'),
+    save: t('common.save'),
+    cancel: t('common.cancel'),
   };
 
   const rowLabels = {
@@ -74,6 +87,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     scheduled: t('work.verb.scheduled'),
     not_applicable: t('work.verb.not_applicable'),
     note: t('work.verb.note'),
+    ...verbResultLabels(t),
     update: t('work.update'),
     title: t('rel.title'),
     add: t('rel.add'),

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { Dropzone } from './dropzone';
+import { PasteUpdate } from '@/components/upload/paste-update';
 import type { DocumentRow, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +28,7 @@ export default async function UploadPage() {
     { title: t('upload.src_rec'), sub: 'MP4 · TXT · DOCX' },
     { title: t('upload.src_doc'), sub: 'PDF · XLSX · DOCX · CSV' },
     { title: t('upload.src_sheet'), sub: t('upload.src_sheet_sub') },
+    { title: t('paste.tab'), sub: t('paste.tab_sub') },
   ];
   const steps = [
     t('upload.step1'), t('upload.step2'), t('upload.step3'), t('upload.step4'), t('upload.step5'),
@@ -45,7 +47,7 @@ export default async function UploadPage() {
         </p>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {sources.map((s) => (
           <article key={s.title} className="rounded-(--radius-card) border border-line bg-card px-3.5 py-3 shadow-card">
             <p className="text-sm font-semibold text-ink">{s.title}</p>
@@ -66,6 +68,18 @@ export default async function UploadPage() {
         }}
       />
       <p className="text-xs text-ink3">{t('upload.help')}</p>
+
+      <PasteUpdate
+        labels={{
+          kicker: t('paste.kicker'), title: t('paste.title'), sub: t('paste.sub'),
+          ph: t('paste.ph'), btn: t('paste.btn'), working: t('paste.working'),
+          openReview: t('paste.open_review'),
+          resAuto: t('paste.res_auto'), resMatch: t('paste.res_match'), resNew: t('paste.res_new'),
+          errMulti: t('paste.err_multi'),
+          'err.short': t('paste.err_short'), 'err.long': t('paste.err_long'),
+          'err.no_project': t('paste.err_project'), 'err.save': t('common.error_save'),
+        }}
+      />
 
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink3">{t('upload.next')}</p>

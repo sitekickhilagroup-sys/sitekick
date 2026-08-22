@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
+import { verbResultLabels } from '@/lib/i18n/verb-labels';
 import { supabaseServer } from '@/lib/supabase/server';
 import { scoreTask } from '@/lib/priority';
 import { laToday } from '@/lib/date';
@@ -184,6 +185,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     scheduled: t('work.verb.scheduled'),
     not_applicable: t('work.verb.not_applicable'),
     note: t('work.verb.note'),
+    ...verbResultLabels(t),
     update: t('work.update'),
     whyNow: t('work.why_now'),
     unlocks: t('work.unlocks'),

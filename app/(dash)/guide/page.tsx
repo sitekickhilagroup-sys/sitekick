@@ -11,13 +11,14 @@ const EN: GuideContent = {
   intro: 'Sitekick turns your emails, meeting summaries, invoices and trackers into one operational picture: where every project stands, what is stuck, and what to do today. In the current phase you feed it by uploading files; the automatic mailbox connections are wired and will be switched on later.',
   sections: [
     {
-      title: 'Five flows you can run today',
+      title: 'Six flows you can run today',
       body: [
         '1 · Feed it mail — Upload → drop an OLM/ZIP archive (or EML/DOCX/XLSX/PDF). Tasks, blockers and decisions appear; anything that changes existing data waits in the Inbox for your approval.',
-        "2 · Run the morning — My Work → Today. Work top-down; every row updates in place (Completed, Sent email, Waiting on…, Delayed…). The Payment Run card jumps to approved invoices.",
+        "2 · Run the morning — My Work → Today. Work top-down; every row updates in place (Completed, Sent email, Waiting on…, Delayed…). Each update answers with what it meant and an Undo. The Payment Run card jumps to approved invoices.",
         '3 · Investigate a project — tap its name anywhere. Pick a phase on the rail, tick sub-stages, switch the current phase or let Claude infer it from the emails (suggestion lands in the Inbox).',
         "4 · Weekly meeting — Sunday: Prepare this week's review. Monday: switch to presentation mode, walk the list, set statuses and notes. Save, then attach the recording.",
         '5 · Pay — Invoices: watch the chain Received → For Rowan → Approved → Paid, advance with the arrow, filter by vendor pills.',
+        '6 · Paste one update — Data Inbox → "Paste one project update". Name the project in the text; Sitekick compares it with the real tasks and either attaches the evidence or sends one proposal to the review inbox. The bell in the header tells you when a decision is waiting.',
       ],
     },
     {
@@ -35,6 +36,8 @@ const EN: GuideContent = {
       body: [
         'One ranked list of everything open, in five views: Today (the top of the ranking), Blocking, Follow-ups, Waiting, All.',
         'Every row expands with its details and dependencies. Update opens the action menu: Completed, Sent email, Waiting on…, Delayed to…, Scheduled for…, Not applicable, Add note — each updates the task and writes an audit-log entry.',
+        'After an update the row answers in place: "Update recorded" with what it means for the work, and an Undo that puts the task back exactly as it was.',
+        'Add action checks first: if an open task in that project already says something similar, you are asked whether it is the same task or genuinely new, before anything is created.',
         'Pin keeps a task on top; Snooze hides it until tomorrow. A Payment Run card appears when approved invoices are ready to pay.',
       ],
     },
@@ -42,7 +45,11 @@ const EN: GuideContent = {
       title: 'The review inbox — you stay in control',
       body: [
         'Agents never change your data silently. Safe additions apply automatically; anything that updates or closes an existing item, sets a project phase, or adds a dependency waits here as a proposal, with its confidence and the evidence quote.',
-        'Accept applies the change through one audited writer; Reject dismisses it. Either way, the decision is logged.',
+        'The bell in the header counts what is waiting. When a new suggestion arrives it opens once, names the task it may duplicate, and offers Review now / Not relevant / Later.',
+        'Open a suggestion to see the two records side by side: the task already in Sitekick (status, owner, location, due, latest update) against the new information, plus why the agent thinks they are the same.',
+        'Recommended treatment is preselected but yours to change: create new task, update existing, existing is completed, merge duplicate, keep open, or information only. Edit the action, owner, due and the result note before approving.',
+        'Buttons: Apply update writes the change, Already completed closes the existing task, Not sure keeps it for later, Not relevant drops it, Agent is wrong marks the mistake. Every outcome is logged and can be undone from the toast.',
+        'Filters on the left hold the history — needs review, not sure, approved, not relevant, agent was wrong, and everything. Restore to review puts any decided item back in the queue.',
       ],
     },
     {
@@ -50,6 +57,7 @@ const EN: GuideContent = {
       body: [
         'Click a project name anywhere to open its process page. Five fixed phases — Planning, Plan Check, Bidding, Financing, Construction — each a column of sub-stages you can activate, mark done, or set N/A.',
         'Parallel workstreams (a survey running alongside, for example) show as blue chips on their phase, and both phases are lit on the overview cards.',
+        'A sub-stage can carry a conditional rule — "if the extension is denied, then…". Add the question and its outcomes once; afterwards anyone can click each outcome to see what would follow. Trying an outcome changes nothing in the project.',
         'Change the current phase with the switcher, or press "Infer from emails" — Claude reads the recent project communications in two-to-three passes and files a phase suggestion to the Inbox. It never changes the phase directly.',
         "Connected actions lists the project's open tasks grouped by phase — update them and add dependencies between tasks right there.",
       ],
@@ -66,7 +74,8 @@ const EN: GuideContent = {
     {
       title: 'Uploading documents (the main input right now)',
       body: [
-        'Upload page → drop a file. What happens depends on the type:',
+        'Data Inbox → drop a file, or paste one project update as text. What happens depends on the type:',
+        'Pasted text — name the project (or its address) in the update. Sitekick reads it, compares it with that project\'s open tasks and either attaches the evidence to the task it clearly belongs to, or raises one proposal in the review inbox naming the task it may duplicate.',
         'PDF — read as an invoice: vendor, amount, number and dates are extracted and a new invoice appears in Received status.',
         'XLSX (Excel) — the Invoices Tracker and the Operations Tracker are recognized automatically by their headers and imported: invoices update their status chain (including "For Rowan Approval"), tasks update existing rows instead of duplicating. Any other spreadsheet is read as text.',
         'DOCX / TXT — treated as a meeting summary or email: tasks, blockers, decisions and deadline changes are extracted. If an item matches an existing open task, that task is updated rather than duplicated.',
@@ -116,13 +125,14 @@ const HE: GuideContent = {
   intro: 'Sitekick הופך מיילים, סיכומי פגישות, חשבוניות וטרקרים לתמונה תפעולית אחת: איפה כל פרויקט עומד, מה תקוע, ומה עושים היום. בשלב הנוכחי מזינים אותו בהעלאת קבצים; החיבורים האוטומטיים לתיבות המייל מוכנים ויופעלו בהמשך.',
   sections: [
     {
-      title: 'חמישה פלואוים שאפשר להריץ כבר היום',
+      title: 'שישה פלואוים שאפשר להריץ כבר היום',
       body: [
         '1 · מזינים מיילים — העלאה ← גוררים ארכיון OLM/ZIP (או EML/DOCX/XLSX/PDF). משימות, חסימות והחלטות מופיעות; כל שינוי לנתון קיים ממתין לאישור בתיבת הביקורת.',
-        '2 · מריצים את הבוקר — העבודה שלי ← היום. עוברים מלמעלה למטה; כל שורה מתעדכנת במקום (בוצע, נשלח מייל, ממתין ל…, נדחה…). כרטיס סבב התשלומים קופץ לחשבוניות המאושרות.',
+        '2 · מריצים את הבוקר — העבודה שלי ← היום. עוברים מלמעלה למטה; כל שורה מתעדכנת במקום (בוצע, נשלח מייל, ממתין ל…, נדחה…). אחרי כל עדכון השורה מסבירה מה זה אומר ומציעה ביטול. כרטיס סבב התשלומים קופץ לחשבוניות המאושרות.',
         '3 · חוקרים פרויקט — לוחצים על שמו בכל מקום. בוחרים שלב במסילה, מסמנים תתי-שלבים, מחליפים שלב נוכחי או נותנים לקלוד לזהות מהמיילים (ההצעה מגיעה לתיבה).',
         '4 · הפגישה השבועית — ראשון: הכנת הסקירה. שני: עוברים למצב הצגה, עוברים על הרשימה, קובעים סטטוסים והערות. שומרים, ואז מצרפים את ההקלטה.',
         '5 · משלמים — חשבוניות: עוקבים אחרי השרשרת התקבלה ← לרואן ← מאושרת ← שולמה, מקדמים עם החץ, מסננים עם כפתורי הספקים.',
+        '6 · מדביקים עדכון — תיבת הנתונים ← "הדביקי עדכון אחד על פרויקט". מזכירים בטקסט את שם הפרויקט; Sitekick משווה למשימות האמיתיות ואז או מצרף את הראיה למשימה, או שולח הצעה אחת לתיבת הביקורת. הפעמון בכותרת מודיע כשממתינה החלטה.',
       ],
     },
     {
@@ -140,6 +150,8 @@ const HE: GuideContent = {
       body: [
         'רשימה מדורגת אחת של כל מה שפתוח, בחמש תצוגות: היום (ראש הדירוג), חוסם, פולואו-אפים, ממתין, הכול.',
         'כל שורה נפתחת עם הפרטים והתלויות שלה. כפתור "עדכון" פותח את תפריט הפעולות: בוצע, נשלח מייל, ממתין ל…, נדחה ל…, נקבע ל…, לא רלוונטי, הוספת הערה — כל פעולה מעדכנת את המשימה ונרשמת ביומן הפעילות.',
+        'אחרי עדכון השורה עונה במקום: "העדכון נרשם", מה זה אומר להמשך העבודה, וכפתור ביטול שמחזיר את המשימה בדיוק למה שהייתה.',
+        '"הוספת משימה" בודקת קודם: אם כבר קיימת בפרויקט משימה פתוחה שאומרת משהו דומה, נשאלת השאלה אם זו אותה משימה או משימה חדשה באמת — לפני שנוצר משהו.',
         'נעיצה משאירה משימה למעלה; דחייה מסתירה אותה עד מחר. כרטיס "סבב תשלומים" מופיע כשחשבוניות מאושרות מוכנות לתשלום.',
       ],
     },
@@ -147,7 +159,11 @@ const HE: GuideContent = {
       title: 'תיבת הביקורת — השליטה נשארת אצלכם',
       body: [
         'הסוכנים לא משנים נתונים בשקט. תוספות בטוחות נכנסות אוטומטית; כל מה שמעדכן או סוגר פריט קיים, קובע שלב לפרויקט או מוסיף תלות — ממתין כאן כהצעה, עם רמת הביטחון וציטוט הראיה.',
-        'אישור מחיל את השינוי דרך כותב מבוקר אחד; דחייה מבטלת. בשני המקרים ההחלטה נרשמת.',
+        'הפעמון בכותרת סופר מה ממתין. כשמגיעה הצעה חדשה הוא נפתח פעם אחת, מציין את המשימה שאולי כפולה, ומציע: לבדיקה עכשיו / לא רלוונטי / אחר כך.',
+        'פתיחת הצעה מציגה את שתי הרשומות זו מול זו: המשימה שכבר קיימת ב-Sitekick (סטטוס, אחראי, מיקום, יעד, עדכון אחרון) מול המידע החדש, ולמטה — למה הסוכן חושב שזו אותה משימה.',
+        '"הטיפול המומלץ" נבחר מראש אבל נתון לשינוי: יצירת משימה חדשה, עדכון משימה קיימת, המשימה הקיימת הושלמה, מיזוג כפילות, להשאיר פתוחה, או מידע בלבד. אפשר לערוך את שם המשימה, האחראי, היעד והתוצאה לפני האישור.',
+        'הכפתורים: "אישור ועדכון" כותב את השינוי, "כבר בוצע" סוגר את המשימה הקיימת, "לא בטוחה" שומר להמשך, "לא רלוונטי" מוריד מהתור, "הסוכן טועה" מסמן טעות. כל תוצאה נרשמת וניתנת לביטול מההודעה שקופצת.',
+        'המסננים בצד מחזיקים את ההיסטוריה — ממתין לבדיקה, לא בטוחה, אושר, לא רלוונטי, הסוכן טעה, והכול. "החזרה לבדיקה" מחזירה כל פריט שכבר הוכרע אל התור.',
       ],
     },
     {
@@ -155,6 +171,7 @@ const HE: GuideContent = {
       body: [
         'לחיצה על שם פרויקט בכל מקום פותחת את עמוד התהליך שלו. חמישה שלבים קבועים — Planning, Plan Check, Bidding, Financing, Construction — כל אחד עמודה של תתי-שלבים שאפשר להפעיל, לסמן כבוצעו או כלא רלוונטיים.',
         'מסלולים מקבילים (למשל סקר שרץ במקביל) מוצגים כתגיות כחולות על השלב שלהם, ושני השלבים נצבעים בכרטיסי המבט-על.',
+        'לתת-שלב אפשר לצרף כלל מותנה — "אם ההארכה נדחית, אז…". מגדירים פעם אחת את השאלה ואת האפשרויות, ומאז כל אחד יכול ללחוץ על אפשרות ולראות מה יקרה. לחיצה על תרחיש לא משנה שום דבר בפרויקט.',
         'מחליפים שלב נוכחי עם הבורר, או לוחצים "זיהוי שלב מהמיילים" — קלוד קורא את התקשורת האחרונה של הפרויקט בשתיים-שלוש איטרציות ושולח הצעת שלב לתיבת הביקורת. הוא לעולם לא משנה שלב ישירות.',
         'פעולות מקושרות — המשימות הפתוחות של הפרויקט מקובצות לפי שלב; מעדכנים ומוסיפים תלויות בין משימות ישר משם.',
       ],
@@ -171,7 +188,8 @@ const HE: GuideContent = {
     {
       title: 'העלאת מסמכים (הקלט המרכזי כרגע)',
       body: [
-        'עמוד ההעלאה ← גוררים קובץ. מה שקורה תלוי בסוג:',
+        'תיבת הנתונים ← גוררים קובץ, או מדביקים עדכון אחד כטקסט. מה שקורה תלוי בסוג:',
+        'טקסט מודבק — מזכירים בעדכון את שם הפרויקט (או הכתובת). Sitekick קורא, משווה למשימות הפתוחות של אותו פרויקט, ואז או מצרף את הראיה למשימה שברור שהיא שייכת אליה, או מעלה הצעה אחת לתיבת הביקורת עם שם המשימה שאולי כפולה.',
         'PDF — נקרא כחשבונית: ספק, סכום, מספר ותאריכים מחולצים, וחשבונית חדשה מופיעה בסטטוס "התקבלה".',
         'XLSX (אקסל) — טרקר החשבוניות וטרקר התפעול מזוהים אוטומטית לפי הכותרות ומיובאים: חשבוניות מתעדכנות בשרשרת הסטטוסים (כולל "לאישור רואן"), ומשימות מעדכנות שורות קיימות במקום לשכפל. כל גיליון אחר נקרא כטקסט.',
         'DOCX / TXT — מטופל כסיכום פגישה או מייל: משימות, חסימות, החלטות ושינויי דד-ליין מחולצים. פריט שמתאים למשימה פתוחה קיימת מעדכן אותה במקום ליצור כפילות.',

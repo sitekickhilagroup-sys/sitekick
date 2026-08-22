@@ -57,6 +57,40 @@ export async function setSubstageNote(projectId: string, projectSubstageId: stri
   return { ok: true };
 }
 
+/**
+ * The conditional rule attached to a sub-stage (spec §ד): "IF the extension is
+ * denied THEN …". It is stored so the outcomes can be explored, never applied —
+ * choosing an option in the UI changes nothing about project state.
+ */
+export async function setSubstageDecision(
+  projectId: string,
+  projectSubstageId: string,
+  decision: { label: string; options: string[]; results: string[] } | null,
+) {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  let value: { label: string; options: string[]; results: string[] } | null = null;
+  if (decision) {
+    const label = decision.label.trim();
+    const pairs = decision.options
+      .map((option, i) => ({ option: option.trim(), result: (decision.results[i] ?? '').trim() }))
+      .filter((p) => p.option);
+    if (!label || pairs.length < 2) return { error: 'a decision needs a question and at least two outcomes' };
+    value = { label, options: pairs.map((p) => p.option), results: pairs.map((p) => p.result) };
+  }
+  const { error } = await admin.from('project_substages').update({ decision: value }).eq('id', projectSubstageId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'project_substage',
+    entity_id: projectSubstageId,
+    actor: user.email ?? user.id,
+    action: value ? 'set_decision' : 'clear_decision',
+    after: value,
+  });
+  revalidatePath('/projects/' + projectId);
+  return { ok: true };
+}
+
 export async function activateSubstage(projectId: string, substageTemplateId: string, workstreamId: string | null) {
   const user = await requireUser();
   const admin = supabaseAdmin();
