@@ -105,11 +105,49 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
       {open && (
         <div className="border-t border-line2 p-4 pt-3">
           {project.summary && (
-            <p className="mb-3 max-w-2xl text-sm leading-relaxed text-ink2">{project.summary}</p>
+            <p className="max-w-3xl text-xs leading-relaxed text-ink2">{project.summary}</p>
           )}
+
+          {/* Her .portfolio-story: three equal boxes, not stacked rows. */}
+          <div className="my-4 grid gap-2.5 sm:grid-cols-3">
+            <div className="rounded-[11px] border border-line bg-inset p-3">
+              <p className="text-[8px] font-semibold uppercase tracking-[0.08em] text-ink3">{labels.next}</p>
+              <p className="mt-1.5 text-xs font-semibold leading-[1.35] text-ink">
+                {nextAction ? nextAction.title : labels.none}
+              </p>
+            </div>
+            <div className="rounded-[11px] border border-line bg-inset p-3">
+              <p className="text-[8px] font-semibold uppercase tracking-[0.08em] text-ink3">{labels.blocker}</p>
+              <p className="mt-1.5 text-xs font-semibold leading-[1.35] text-ink">
+                {mainBlocker ? `${mainBlocker.what} · ${mainBlocker.blocked_by}` : labels.none}
+              </p>
+            </div>
+            <div className="rounded-[11px] border border-line bg-inset p-3">
+              <p className="text-[8px] font-semibold uppercase tracking-[0.08em] text-ink3">{labels.then}</p>
+              <p className="mt-1.5 text-xs font-semibold leading-[1.35] text-ink">
+                {thenAction ? thenAction.title : labels.none}
+              </p>
+            </div>
+          </div>
+
+          {/* Her .project-position: one tinted strip, the two tracks joined by +. */}
+          <div className="flex items-center gap-2.5 rounded-[9px] bg-inset p-2.5">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[8px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.primaryPhase}</span>
+              <span className="mt-1 block truncate text-[11px] font-semibold text-ink">{currentPhaseLabel ?? '—'}</span>
+            </span>
+            <span aria-hidden="true" className="text-sm text-ink3">+</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[8px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.parallelWs}</span>
+              <span className="mt-1 block truncate text-[11px] font-semibold text-ink">
+                {workstreams.length > 0 ? workstreams.map((w) => w.name).join(', ') : labels.none}
+              </span>
+            </span>
+          </div>
+
           {/* Her .drop-phases rail: 5 top-border strips — sage current,
               apricot parallel, quiet line otherwise. */}
-          <ol className="mb-3 grid grid-cols-5 gap-1">
+          <ol className="mt-3 grid grid-cols-5 gap-1">
             {labels.phases.map((ph, i) => {
               const isCurrent = project.current_phase_key === ph.key;
               const isParallel = !isCurrent && parallelPhaseKeys.includes(ph.key);
@@ -129,39 +167,6 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
               );
             })}
           </ol>
-          <div className="space-y-2.5 text-sm">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-sage">{labels.next}</p>
-              <p className="mt-0.5 text-ink">{nextAction ? nextAction.title : labels.none}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-coral">{labels.blocker}</p>
-              <p className="mt-0.5 text-ink">
-                {mainBlocker ? `${mainBlocker.what} · ${mainBlocker.blocked_by}` : labels.none}
-              </p>
-            </div>
-            {thenAction && (
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.then}</p>
-                <p className="mt-0.5 text-ink2">{thenAction.title}</p>
-              </div>
-            )}
-            {/* Her PRIMARY PHASE / PARALLEL WORKSTREAM pair above the rail. */}
-            <div className="flex flex-wrap gap-x-8 gap-y-2">
-              {currentPhaseLabel && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.primaryPhase}</p>
-                  <p className="mt-0.5 font-medium text-ink">{currentPhaseLabel}</p>
-                </div>
-              )}
-              {workstreams.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.parallelWs}</p>
-                  <p className="mt-0.5 font-medium text-ink">{workstreams.map((w) => w.name).join(', ')}</p>
-                </div>
-              )}
-            </div>
-          </div>
           {/* Her .portfolio-actions row: evidence line + solid green button. */}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line2 pt-3">
             <p className="text-[11px] text-ink3">
