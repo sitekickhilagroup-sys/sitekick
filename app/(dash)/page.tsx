@@ -54,14 +54,15 @@ export default async function OverviewPage() {
           <h1 className="mt-1 font-serif text-2xl text-ink sm:text-4xl">{t('overview.statement')}</h1>
           <p className="mt-1 text-sm text-ink3">{t('overview.sub_line')}</p>
         </div>
+        {/* Her .morning-cta: white card, sage rule, the count in Georgia green. */}
         <Link
           href="/work"
-          className="flex items-center gap-3 rounded-[14px] bg-sage px-5 py-3 text-white shadow-card hover:opacity-95"
+          className="flex items-center gap-2.5 rounded-[14px] border border-sage-line bg-card px-4 py-3 hover:border-sage"
         >
-          <span className="font-serif text-3xl">{data.tasks.length}</span>
+          <span className="font-serif text-3xl text-sage">{data.tasks.length}</span>
           <span className="min-w-0">
-            <span className="block text-sm font-semibold">{t('portfolio.open_plan')}</span>
-            <span className="block text-[11px] opacity-80">
+            <span className="block text-[13px] font-bold text-ink">{t('portfolio.open_plan')}</span>
+            <span className="block text-[10px] text-ink3">
               {t('overview.cta_sub')} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
             </span>
           </span>
