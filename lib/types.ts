@@ -232,8 +232,14 @@ export interface Action {
 }
 
 // Agent proposals + audit trail (lib/types.ts mirrors supabase/migrations/0002_proposals_activity.sql)
-export type ProposalType = 'task_update' | 'task_done' | 'blocker_create' | 'decision_create' | 'deadline_update' | 'phase_set' | 'relationship_create';
-export type ProposalState = 'pending' | 'accepted' | 'rejected' | 'auto_applied';
+export type ProposalType = 'task_update' | 'task_done' | 'task_create' | 'blocker_create' | 'decision_create' | 'deadline_update' | 'phase_set' | 'relationship_create';
+export type ProposalState = 'pending' | 'accepted' | 'rejected' | 'auto_applied' | 'ignored' | 'not_sure';
+
+// What Noa decides the suggestion actually is, chosen in the Import Review
+// drawer before it is applied (her "RECOMMENDED TREATMENT" select).
+export type ChangeType =
+  | 'new_task' | 'update_existing' | 'complete_existing'
+  | 'merge_duplicate' | 'keep_open' | 'information_only';
 
 export interface AgentProposal {
   id: string;
@@ -249,6 +255,11 @@ export interface AgentProposal {
   decided_by: string | null;
   decided_at: string | null;
   created_at: string;
+  title: string | null;
+  change_type: ChangeType | null;
+  result_note: string | null;
+  match_score: number | null;   // 0-100, how well it matched target_task_id
+  match_reason: string | null;
 }
 
 export interface ActivityEntry {
@@ -294,6 +305,14 @@ export interface Workstream {
   status: WorkstreamStatus;
 }
 
+// A conditional rule shown as an explorable outcome, never applied on its own:
+// "IF the extension is denied THEN …". Options and results are index-aligned.
+export interface SubstageDecision {
+  label: string;
+  options: string[];
+  results: string[];
+}
+
 export interface ProjectSubstage {
   id: string;
   project_id: string;
@@ -301,6 +320,7 @@ export interface ProjectSubstage {
   workstream_id: string | null;
   status: ProjectSubstageStatus;
   note: string | null;
+  decision: SubstageDecision | null;
   activated_at: string | null;
   completed_at: string | null;
 }

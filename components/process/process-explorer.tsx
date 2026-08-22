@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { activateSubstage, setSubstageNote, setSubstageStatus } from '@/app/actions/process';
+import { ScenarioBox } from '@/components/process/scenario-box';
 import { VerbMenu } from '@/components/work/verb-menu';
 import type { ProjectSubstage, ProjectSubstageStatus, SubstageTemplate, Workstream } from '@/lib/types';
 
@@ -295,6 +296,20 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
         ))}
       </div>
       {failed && <p role="alert" className="mt-2 text-xs text-coral">{labels.error}</p>}
+
+      {/* Conditional rule (spec §ד) — outcomes to try, never to apply. */}
+      <ScenarioBox
+        projectId={projectId}
+        substageId={instance?.id ?? null}
+        decision={instance?.decision ?? null}
+        labels={{
+          tryEach: labels.tryEach, add: labels.addDecision, edit: labels.editDecision,
+          editKicker: labels.decisionKicker, labelPh: labels.decisionLabelPh,
+          optionPh: labels.decisionOptionPh, resultPh: labels.decisionResultPh,
+          noResult: labels.decisionNoResult, remove: labels.remove,
+          save: labels.save, cancel: labels.cancel, error: labels.error,
+        }}
+      />
 
       <div className="mt-4 border-t border-line2 pt-3">
         <div className="flex items-center justify-between gap-2">

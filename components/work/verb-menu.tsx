@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { applyWorkVerb } from '@/app/actions/work';
+import { applyWorkVerb, undoWorkVerb } from '@/app/actions/work';
 import type { WorkVerb } from '@/lib/work-verbs';
 
 const NEEDS_TEXT: WorkVerb[] = ['waiting', 'note'];
@@ -13,14 +13,43 @@ export function VerbMenu({ taskId, labels }: { taskId: string; labels: Record<st
   const [askInput, setAskInput] = useState<WorkVerb | null>(null);
   const [draft, setDraft] = useState('');
   const [failed, setFailed] = useState(false);
+  // What the update meant, in Noa's words, plus the audit row that reverses it.
+  const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
   const [pending, start] = useTransition();
 
   const run = (verb: WorkVerb, input: string | null) => start(async () => {
     setFailed(false);
     const res = await applyWorkVerb(taskId, verb, input);
-    if (res?.error) { setFailed(true); return; }
+    if ('error' in res) { setFailed(true); return; }
     setOpen(false); setAskInput(null); setDraft('');
+    setResult({ message: labels[`msg.${verb}`] ?? labels.recorded, undoId: res.undoId });
   });
+
+  const undo = () => start(async () => {
+    if (!result?.undoId) { setResult(null); return; }
+    const res = await undoWorkVerb(result.undoId);
+    if ('error' in res) { setFailed(true); return; }
+    setResult(null);
+  });
+
+  if (result) {
+    return (
+      <span role="status" className="inline-flex max-w-72 items-start gap-2 rounded-lg bg-sage-soft px-2.5 py-1.5 text-start">
+        <span className="min-w-0">
+          <strong className="block text-[11px] font-semibold text-sage">{labels.recorded}</strong>
+          <span className="mt-0.5 block text-[10px] leading-relaxed text-ink2">{result.message}</span>
+        </span>
+        {result.undoId && (
+          <button type="button" disabled={pending} onClick={undo}
+            className="min-h-11 shrink-0 rounded-full border border-sage-line px-2 py-0.5 text-[10px] font-semibold text-sage disabled:opacity-50 sm:min-h-0">
+            {labels.undo}
+          </button>
+        )}
+        <button type="button" onClick={() => setResult(null)} aria-label={labels.cancel}
+          className="min-h-11 shrink-0 text-[11px] text-ink3 hover:text-ink sm:min-h-0">✕</button>
+      </span>
+    );
+  }
 
   if (askInput) {
     return (

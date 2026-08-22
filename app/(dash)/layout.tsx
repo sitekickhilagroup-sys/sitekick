@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { signOut } from '@/app/actions/auth';
 import { Logo } from '@/components/logo';
 import { MobileNav, NavLinks } from '@/components/nav-links';
+import { NotificationBell } from '@/components/inbox/notification-bell';
 
 export default async function DashLayout({ children }: { children: React.ReactNode }) {
   const store = await cookies();
@@ -68,6 +69,13 @@ export default async function DashLayout({ children }: { children: React.ReactNo
           </Link>
           <NavLinks links={links} more={moreLinks} moreLabel={t('nav.more')} />
           <div className="ms-auto flex items-center gap-1 lg:ms-0 lg:gap-2">
+            <NotificationBell labels={{
+              aria: t('bell.aria'), title: t('bell.title'), waiting: t('bell.waiting'),
+              newSuggestion: t('bell.new'), dup: t('bell.dup'), dupShort: t('bell.dup_short'),
+              already: t('bell.already'), maybeNew: t('bell.maybe_new'), empty: t('bell.empty'),
+              later: t('bell.later'), notRelevant: t('bell.not_relevant'), reviewNow: t('bell.review_now'),
+              openReview: t('bell.open_review'), general: t('common.general'), close: t('common.close'),
+            }} />
             <LocaleToggle locale={locale} label={t('lang.toggle')} />
             <ThemeToggle theme={theme} label={t('theme.toggle')} />
             <form action={signOut} className="hidden lg:block">

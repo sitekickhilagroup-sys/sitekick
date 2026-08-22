@@ -24,7 +24,7 @@ describe('groupProcess', () => {
   it('shows a conditional substage only once activated', () => {
     const inst: ProjectSubstage[] = [{
       id: 'i1', project_id: 'p1', substage_template_id: 's2', workstream_id: null,
-      status: 'active', note: null, activated_at: '2026-08-01', completed_at: null,
+      status: 'active', note: null, decision: null, activated_at: '2026-08-01', completed_at: null,
     }];
     const out = groupProcess({ phases, templates, instances: inst, workstreams: ws });
     expect(out[0].substages.map((s) => s.template.id)).toEqual(['s1', 's2']);
@@ -55,14 +55,14 @@ describe('unactivatedConditionals', () => {
   it('excludes a conditional template once it has an instance past "upcoming"', () => {
     const inst: ProjectSubstage[] = [{
       id: 'i1', project_id: 'p1', substage_template_id: 's2', workstream_id: null,
-      status: 'active', note: null, activated_at: '2026-08-01', completed_at: null,
+      status: 'active', note: null, decision: null, activated_at: '2026-08-01', completed_at: null,
     }];
     expect(unactivatedConditionals(templates, inst).has('planning')).toBe(false);
   });
   it('a conditional template with an "upcoming" instance is still unactivated — true complement of groupProcess', () => {
     const inst: ProjectSubstage[] = [{
       id: 'i1', project_id: 'p1', substage_template_id: 's2', workstream_id: null,
-      status: 'upcoming', note: null, activated_at: null, completed_at: null,
+      status: 'upcoming', note: null, decision: null, activated_at: null, completed_at: null,
     }];
     const byPhase = unactivatedConditionals(templates, inst);
     expect(byPhase.get('planning')?.map((t) => t.id)).toEqual(['s2']);

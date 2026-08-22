@@ -3,15 +3,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { matchExistingTask } from './dedup.ts';
 import type { AgentProposal, Task } from './types.ts';
 
+/** Returns the audit row id, which is what Undo needs to restore the snapshot. */
 export async function logActivity(
   admin: SupabaseClient,
   entry: { entity_type: string; entity_id: string; actor: string; action: string; before?: unknown; after?: unknown },
-): Promise<void> {
-  await admin.from('activity_log').insert({
+): Promise<string | null> {
+  const { data } = await admin.from('activity_log').insert({
     entity_type: entry.entity_type, entity_id: entry.entity_id,
     actor: entry.actor, action: entry.action,
     before_json: entry.before ?? null, after_json: entry.after ?? null,
-  });
+  }).select('id').single();
+  return (data?.id as string | undefined) ?? null;
 }
 
 export async function applyProposal(
