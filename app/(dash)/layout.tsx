@@ -61,10 +61,12 @@ export default async function DashLayout({ children }: { children: React.ReactNo
               <span className="mt-0.5 block font-serif text-base font-semibold text-ink">Sitekick</span>
             </span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
+            {/* Square mark (450×444) — small on tablet, near full header
+                height on desktop, where there is room for it to read. */}
             <img
               src="/hilla-group-logo.png"
               alt="Hilla Group"
-              className="ms-1 hidden h-6 w-auto sm:block"
+              className="ms-1 hidden h-8 w-auto sm:block lg:h-10"
             />
           </Link>
           <NavLinks links={links} more={moreLinks} moreLabel={t('nav.more')} />
