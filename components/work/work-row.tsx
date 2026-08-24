@@ -1,4 +1,5 @@
 import type { Task } from '@/lib/types';
+import { isBlockingTask } from '@/lib/blockers';
 import { WaitingEditor } from '@/components/overview/waiting-editor';
 import { VerbMenu } from './verb-menu';
 import { RelationEditor, type RelationRow } from './relation-editor';
@@ -24,7 +25,8 @@ export function WorkRow({ task, labels, relations, taskOptions, today, rank, why
   const dueState = task.due && today
     ? task.due < today ? 'overdue' : task.due === today ? 'now' : 'future'
     : task.due ? 'future' : null;
-  const blocking = task.priority === 'critical';
+  // Impact on process, not urgency — same rule as the work table row.
+  const blocking = isBlockingTask(task);
 
   return (
     // Mobile: title block, then a controls row — never squeeze the title.

@@ -1,4 +1,22 @@
-import type { Blocker, BlockerKind } from './types';
+import type { Blocker, BlockerKind, ProcessImpact, Task } from './types';
+
+/**
+ * Does this task actually stop a stage from advancing?
+ *
+ * My Work derived Blocking from `priority === 'critical'`, so every urgent task
+ * read as a blocker — the audit's "an urgent task that does not stop a stage is
+ * not a Main Blocker", applied to the task list rather than the Portfolio card.
+ *
+ * Once a task carries an explicit impact, the answer comes from that field. The
+ * priority heuristic survives only for tasks nobody has classified yet, so
+ * nothing silently stops being Blocking the day the column ships.
+ */
+const BLOCKING_IMPACTS: ProcessImpact[] = ['primary_blocker', 'workstream_blocker'];
+
+export function isBlockingTask(task: Pick<Task, 'process_impact' | 'priority'>): boolean {
+  if (task.process_impact) return BLOCKING_IMPACTS.includes(task.process_impact);
+  return task.priority === 'critical';
+}
 
 /**
  * Portfolio card blocker derivation, from the client doc's "Blocker Audit and

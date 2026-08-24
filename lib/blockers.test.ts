@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { selectBlockerView } from './blockers';
+import { isBlockingTask, selectBlockerView } from './blockers';
 import type { Blocker, BlockerKind } from './types';
 
 // Synthetic rows — the audit's rules are about classification and evidence,
@@ -32,6 +32,30 @@ function blocker(over: Partial<Blocker> & { id: string }): Blocker {
 }
 
 const AT_PLANNING = { currentPhaseKey: 'planning', activeSubstages: ['hold_letter'] };
+
+describe('isBlockingTask', () => {
+  // "Task status and impact type are two different fields. A task can be
+  // Waiting without being Blocking."
+  it('uses the explicit impact when the task has one', () => {
+    expect(isBlockingTask({ process_impact: 'primary_blocker', priority: 'normal' })).toBe(true);
+    expect(isBlockingTask({ process_impact: 'workstream_blocker', priority: 'normal' })).toBe(true);
+  });
+
+  it('does not call an urgent task blocking when it stops no stage', () => {
+    // The whole point of the field: critical priority no longer implies
+    // Blocking once someone has actually classified the task.
+    expect(isBlockingTask({ process_impact: 'not_blocking', priority: 'critical' })).toBe(false);
+    expect(isBlockingTask({ process_impact: 'external_gate', priority: 'critical' })).toBe(false);
+    expect(isBlockingTask({ process_impact: 'future_gate', priority: 'critical' })).toBe(false);
+    expect(isBlockingTask({ process_impact: 'verify', priority: 'critical' })).toBe(false);
+  });
+
+  it('falls back to priority only while the task is unclassified', () => {
+    // So nothing silently stops being Blocking the day the column ships.
+    expect(isBlockingTask({ process_impact: null, priority: 'critical' })).toBe(true);
+    expect(isBlockingTask({ process_impact: null, priority: 'normal' })).toBe(false);
+  });
+});
 
 describe('selectBlockerView — Main Blocker selection', () => {
   it('picks a primary blocker that targets the current phase', () => {

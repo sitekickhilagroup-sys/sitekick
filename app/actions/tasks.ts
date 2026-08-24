@@ -6,7 +6,7 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { logActivity } from '@/lib/state-writer';
 import { planMerge } from '@/lib/merge';
-import type { Task } from '@/lib/types';
+import type { ProcessImpact, Task } from '@/lib/types';
 
 export async function createTask(formData: FormData) {
   const user = await requireUser();
@@ -54,6 +54,46 @@ export interface DuplicateCandidate {
   owner: string | null;
   due: string | null;
   waiting_for: string | null;
+}
+
+const PROCESS_IMPACTS: ProcessImpact[] = [
+  'primary_blocker', 'workstream_blocker', 'future_gate',
+  'external_gate', 'not_blocking', 'verify',
+];
+
+/**
+ * Set a task's effect on the process.
+ *
+ * The field the reviewed work map asks for: separate from status, because "a
+ * task can be Waiting without being Blocking". Until a task carries one, My
+ * Work falls back to the old priority heuristic — which is exactly why every
+ * urgent item currently reads as a blocker.
+ *
+ * A human setting this outranks the agent. Recorded with before and after so
+ * it stays auditable and reversible.
+ */
+export async function setProcessImpact(taskId: string, impact: ProcessImpact | null) {
+  const user = await requireUser();
+  if (impact !== null && !PROCESS_IMPACTS.includes(impact)) return { error: 'invalid impact' };
+  const admin = supabaseAdmin();
+  const actor = user.email ?? user.id;
+
+  const { data: prior, error: loadError } = await admin
+    .from('tasks').select('process_impact').eq('id', taskId).single();
+  if (loadError) return { error: loadError.message };
+
+  const { error } = await admin
+    .from('tasks').update({ process_impact: impact, last_touched: laToday() }).eq('id', taskId);
+  if (error) return { error: error.message };
+
+  await logActivity(admin, {
+    entity_type: 'task', entity_id: taskId, actor, action: 'process_impact',
+    before: { process_impact: (prior as { process_impact: ProcessImpact | null }).process_impact },
+    after: { process_impact: impact },
+  });
+
+  revalidatePath('/'); revalidatePath('/work'); revalidatePath('/projects'); revalidatePath('/weekly');
+  return { ok: true };
 }
 
 /** Guards the one place a client-supplied id is interpolated into a filter. */

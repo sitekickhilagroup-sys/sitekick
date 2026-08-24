@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Task } from '@/lib/types';
+import { isBlockingTask } from '@/lib/blockers';
 import { WaitingEditor } from '@/components/overview/waiting-editor';
 import { VerbMenu } from './verb-menu';
 import { RelationEditor, type RelationRow } from './relation-editor';
@@ -46,7 +47,9 @@ export function WorkTableRow({ task, labels, relations, taskOptions, today, rank
   const dueState = task.due && today
     ? task.due < today ? 'overdue' : task.due === today ? 'now' : 'future'
     : task.due ? 'future' : null;
-  const blocking = task.priority === 'critical';
+  // Impact on process, not urgency. Falls back to priority only while the task
+  // is unclassified — see isBlockingTask.
+  const blocking = isBlockingTask(task);
 
   // Her task-context derivations — verified relationships only; anything
   // unverified is presented as a suggestion, never as fact.

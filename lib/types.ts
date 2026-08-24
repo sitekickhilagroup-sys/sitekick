@@ -10,6 +10,12 @@ export type TaskPriority = 'critical' | 'high' | 'normal';
 /** 'merged' (0010) marks a duplicate folded into a Master Action. Rows in that
  *  state are kept for history and filtered out of every list. */
 export type TaskStatus = 'open' | 'done' | 'dropped' | 'merged';
+
+/** 0013 — a task's effect on the process, separate from its status. A task can
+ *  be Waiting without being Blocking. Null means nobody has classified it. */
+export type ProcessImpact =
+  | 'primary_blocker' | 'workstream_blocker' | 'future_gate'
+  | 'external_gate' | 'not_blocking' | 'verify';
 export type DocKind = 'email' | 'transcript' | 'invoice_pdf' | 'sheet' | 'other';
 export type DocSource = 'forward' | 'gmail' | 'outlook' | 'upload' | 'sheets' | 'zimas' | 'manual';
 export type DraftStatus = 'proposed' | 'approved' | 'sent' | 'dismissed';
@@ -119,6 +125,9 @@ export interface Task {
   created_at: string;
   manual_priority: number | null;
   snoozed_until: string | null;
+  /** 0013 — effect on the process, independent of `status`. Null = not yet
+   *  classified, and the legacy priority heuristic still applies. */
+  process_impact: ProcessImpact | null;
   /** 0010 — set when this row was folded into a Master Action. */
   merged_into: string | null;
   merged_at: string | null;
