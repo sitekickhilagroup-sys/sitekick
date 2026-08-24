@@ -24,6 +24,11 @@ export async function setSubstageStatus(
   if (!VALID_SUBSTAGE_STATUSES.includes(status)) return { error: 'invalid status' };
   const admin = supabaseAdmin();
   const completed_at = status === 'done' ? laToday() : null;
+  // Snapshot the prior values first. The spec counts a sub-stage change as
+  // material and requires every material change to support undo — and undo
+  // restores from before_json, which this used to leave null.
+  const { data: prior } = await admin
+    .from('project_substages').select('status,completed_at').eq('id', projectSubstageId).maybeSingle();
   const { error } = await admin.from('project_substages').update({ status, completed_at }).eq('id', projectSubstageId);
   if (error) return { error: error.message };
   await logActivity(admin, {
@@ -31,7 +36,8 @@ export async function setSubstageStatus(
     entity_id: projectSubstageId,
     actor: user.email ?? user.id,
     action: `status:${status}`,
-    after: { status },
+    before: prior ?? undefined,
+    after: { status, completed_at },
   });
   revalidatePath('/projects/' + projectId);
   revalidatePath('/');
@@ -125,6 +131,10 @@ export async function setCurrentPhase(projectId: string, phaseKey: PhaseKey) {
   const user = await requireUser();
   if (!VALID_PHASES.includes(phaseKey)) return { error: 'invalid phase' };
   const admin = supabaseAdmin();
+  // Changing the current phase is the first item on the spec's material-change
+  // list, so it has to be reversible — which means capturing the prior value.
+  const { data: prior } = await admin
+    .from('projects').select('current_phase_key').eq('id', projectId).maybeSingle();
   const { error } = await admin.from('projects').update({ current_phase_key: phaseKey }).eq('id', projectId);
   if (error) return { error: error.message };
   await logActivity(admin, {
@@ -132,7 +142,8 @@ export async function setCurrentPhase(projectId: string, phaseKey: PhaseKey) {
     entity_id: projectId,
     actor: user.email ?? user.id,
     action: 'set_phase',
-    after: { phaseKey },
+    before: prior ?? undefined,
+    after: { current_phase_key: phaseKey },
   });
   revalidatePath('/projects/' + projectId);
   revalidatePath('/');

@@ -7,7 +7,7 @@ import { laToday } from '@/lib/date';
 import { buildReviewItems, nextMonday } from '@/lib/weekly';
 import { verbToPatch } from '@/lib/work-verbs';
 import { logActivity } from '@/lib/state-writer';
-import type { Task, WeeklyReviewItem } from '@/lib/types';
+import type { Task, TaskPriority, WeeklyReviewItem } from '@/lib/types';
 
 type ReviewVerb = 'completed' | 'not_applicable' | 'sent_email';
 const REVIEW_VERBS: ReviewVerb[] = ['completed', 'not_applicable', 'sent_email'];
@@ -224,9 +224,14 @@ export async function saveSubtopicContext(
   return { ok: true };
 }
 
-// Meeting annotations (client demo's status set): review-only snapshot values
-// that do NOT mutate the canonical task — Completed / Not applicable keep the
-// task-mutating path above. 'open' resets the annotation.
+// Meeting annotations. These were review-only: they wrote status_snapshot and
+// nothing else, so Waiting or Blocked set during a Monday meeting never
+// reached My Work or Project Process — the "three different statuses for the
+// same task on three screens" the corrections doc calls out.
+//
+// Blocked and open now write through to the canonical task, because the
+// Blocking signal My Work reads is task.priority. Carried and no_update stay
+// review-only: they describe the meeting, not the work.
 const SNAPSHOT_STATES = ['open', 'carried', 'waiting', 'blocked', 'no_update'] as const;
 export type SnapshotState = (typeof SNAPSHOT_STATES)[number];
 
@@ -234,16 +239,47 @@ export async function setItemSnapshot(itemId: string, snapshot: SnapshotState) {
   const user = await requireUser();
   if (!SNAPSHOT_STATES.includes(snapshot)) return { error: 'invalid status' };
   const admin = supabaseAdmin();
+  const actor = user.email ?? user.id;
+
+  const { data: itemRow, error: itemError } = await admin
+    .from('weekly_review_items').select('task_id,status_snapshot').eq('id', itemId).single();
+  if (itemError) return { error: itemError.message };
+
   const { error } = await admin
     .from('weekly_review_items')
     .update({ status_snapshot: snapshot })
     .eq('id', itemId);
   if (error) return { error: error.message };
   await logActivity(admin, {
-    entity_type: 'weekly_review_item', entity_id: itemId, actor: user.email ?? user.id,
-    action: 'snapshot', after: { status_snapshot: snapshot },
+    entity_type: 'weekly_review_item', entity_id: itemId, actor,
+    action: 'snapshot',
+    before: { status_snapshot: itemRow.status_snapshot },
+    after: { status_snapshot: snapshot },
   });
-  revalidatePath('/weekly');
+
+  // Propagate to the one canonical record every screen reads.
+  if (itemRow.task_id && (snapshot === 'blocked' || snapshot === 'open')) {
+    const { data: taskRow } = await admin
+      .from('tasks').select('priority,manual_priority').eq('id', itemRow.task_id).maybeSingle();
+    const task = taskRow as { priority: TaskPriority; manual_priority: number | null } | null;
+    // Noa's manual ranking always wins — the agent and the meeting may inform
+    // it, never overwrite it.
+    if (task && task.manual_priority === null) {
+      const next: TaskPriority = snapshot === 'blocked' ? 'critical' : 'normal';
+      if (task.priority !== next) {
+        const { error: taskError } = await admin
+          .from('tasks').update({ priority: next, last_touched: laToday() }).eq('id', itemRow.task_id);
+        if (taskError) return { error: taskError.message };
+        await logActivity(admin, {
+          entity_type: 'task', entity_id: itemRow.task_id, actor,
+          action: `weekly:${snapshot}`,
+          before: { priority: task.priority }, after: { priority: next },
+        });
+      }
+    }
+  }
+
+  revalidatePath('/weekly'); revalidatePath('/'); revalidatePath('/work'); revalidatePath('/projects');
   return { ok: true };
 }
 
