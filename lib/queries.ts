@@ -1,8 +1,9 @@
 import { supabaseServer } from './supabase/server.ts';
 import { followUpAlerts, topActions } from './priority.ts';
 import { laToday } from './date.ts';
+import { selectBlockerView, type BlockerCounts } from './blockers.ts';
 import type {
-  Action, Blocker, Decision, Invoice, Phase, Project, ProjectEvent, ProjectStage,
+  Action, Blocker, BlockerKind, Decision, Invoice, Phase, Project, ProjectEvent, ProjectStage,
   Relationship, StageRequirement, SubstageCatalogRow, Task, Vendor, Workstream,
 } from './types.ts';
 
@@ -19,12 +20,24 @@ export interface PortfolioEntry {
   project: Project;
   currentPhaseLabel: string | null;
   workstreams: Workstream[];
+  /** Primary Blocker per the blocker audit — or, when none qualifies, the
+   *  strongest external gate / workstream blocker. Read `primaryBlockerKind`
+   *  before labelling it: a fallback must never be called project-wide. */
   mainBlocker: Blocker | null;
+  /** What `mainBlocker` actually is, so the card can label it honestly. */
+  primaryBlockerKind: BlockerKind | null;
+  /** Second line on the card when a parallel workstream is independently
+   *  blocked. Never the same record as `mainBlocker`. */
+  technicalBlocker: Blocker | null;
   nextAction: Action | null;
   /** Second-ranked action — the card's "Then" line. */
   thenAction: Action | null;
-  /** Active blockers on this project — the "N blocking" chip. */
+  /** Confirmed blockers (primary + workstream) — the "N blocking" chip.
+   *  External waits, urgent actions and Verify items are counted separately in
+   *  `blockerCounts` and must not be folded into this number. */
   blockingCount: number;
+  /** The full split: blocking / waiting / verify / futureGate / urgent. */
+  blockerCounts: BlockerCounts;
   /** Latest evidence date we hold for this project (newest event), or null. */
   lastEvidence: string | null;
   /** Phase keys lit by active parallel workstreams (rail coloring). */
@@ -187,7 +200,17 @@ export async function getOverviewData(): Promise<OverviewData> {
   }
   const portfolio: PortfolioEntry[] = projects.map((p) => {
     const projectWorkstreams = workstreamsByProject.get(p.id) ?? [];
-    const blockingCount = blockers.filter((b) => b.project_id === p.id).length;
+    // Blocker audit: only items that name the stage they prevent, carry
+    // evidence, and are classified primary/workstream count as blocking.
+    // External waits and unverified items get their own counts.
+    const activeSubstages = (stagesByProject.get(p.id) ?? [])
+      .filter((s) => s.substage && (s.status === 'current' || s.also_active))
+      .map((s) => s.substage as string);
+    const blockerView = selectBlockerView(
+      blockers.filter((b) => b.project_id === p.id),
+      { currentPhaseKey: p.current_phase_key, activeSubstages },
+    );
+    const blockingCount = blockerView.counts.blocking;
     const projectEvents = events.filter((e) => e.project_id === p.id);
     const lastEvidence = projectEvents.reduce<string | null>(
       (max, e) => (e.event_date && (!max || e.event_date > max) ? e.event_date : max), null,
@@ -197,13 +220,15 @@ export async function getOverviewData(): Promise<OverviewData> {
       project: p,
       currentPhaseLabel: p.current_phase_key ? (phaseLabelByKey.get(p.current_phase_key) ?? null) : null,
       workstreams: projectWorkstreams,
-      // blockers is already active-only, sorted by days_stuck desc — first
-      // match per project is that project's max. allRanked is score-desc and
-      // uncapped — first match is that project's genuine top-ranked action.
-      mainBlocker: blockers.find((b) => b.project_id === p.id) ?? null,
+      // allRanked is score-desc and uncapped — first match is that project's
+      // genuine top-ranked action.
+      mainBlocker: blockerView.primary,
+      primaryBlockerKind: blockerView.primaryKind,
+      technicalBlocker: blockerView.technical,
       nextAction: allRanked.find((a) => a.project === p.name) ?? null,
       thenAction: allRanked.filter((a) => a.project === p.name)[1] ?? null,
       blockingCount,
+      blockerCounts: blockerView.counts,
       lastEvidence,
       parallelPhaseKeys: [...new Set(projectWorkstreams.map((w) => w.phase_key))],
       riskState: p.city_on_hold ? 'on_hold' : blockingCount > 0 ? 'at_risk' : hasWaiting ? 'waiting' : 'on_track',

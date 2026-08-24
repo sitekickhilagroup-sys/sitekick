@@ -12,6 +12,16 @@ export type DocKind = 'email' | 'transcript' | 'invoice_pdf' | 'sheet' | 'other'
 export type DocSource = 'forward' | 'gmail' | 'outlook' | 'upload' | 'sheets' | 'zimas' | 'manual';
 export type DraftStatus = 'proposed' | 'approved' | 'sent' | 'dismissed';
 export type BlockerStatus = 'active' | 'released';
+/** 0009 — blocker audit classification. A task can be important, urgent or
+ *  waiting on someone without being a true blocker. */
+export type BlockerKind =
+  | 'primary'
+  | 'workstream'
+  | 'future_gate'
+  | 'external_gate'
+  | 'urgent_action'
+  | 'verify'
+  | 'information_only';
 export type EventKind = 'history' | 'forecast';
 
 export interface Project {
@@ -112,6 +122,7 @@ export interface Task {
 export interface Blocker {
   id: string;
   project_id: string;
+  /** The doc's `source_evidence_id` — the record proving the dependency. */
   document_id: string | null;
   what: string;
   blocked_by: string;
@@ -121,6 +132,23 @@ export interface Blocker {
   suggested_action: string | null;
   status: BlockerStatus;
   created_at: string;
+  /** 0009 — classification from the blocker audit. Only 'primary' and
+   *  'workstream' count toward a project's blocking count. */
+  kind: BlockerKind;
+  /** Which phase this prevents. Null means the mandatory test cannot be
+   *  answered, so the item can never qualify as a Primary Blocker. */
+  blocks_phase: string | null;
+  blocks_substage: string | null;
+  blocked_deliverable: string | null;
+  relationship_reason: string | null;
+  confidence: number;
+  effective_from: string | null;
+  last_verified_at: string | null;
+  release_condition: string | null;
+  /** Set when a human fixes the classification; agents must not overwrite it
+   *  without new contradicting evidence and approval. */
+  manually_corrected_by: string | null;
+  undo_event_id: string | null;
 }
 
 export interface Decision {
