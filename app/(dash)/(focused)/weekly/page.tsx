@@ -37,7 +37,7 @@ export default async function WeeklyPage() {
   const embedded = reviewData as EmbeddedReview | null;
 
   return (
-    <div>
+    <div className="mx-auto max-w-[1400px] px-4 py-4 sm:py-6">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('weekly.title')}</p>
       <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('weekly.sub')}</h1>
       {!embedded ? (

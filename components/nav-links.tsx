@@ -55,10 +55,10 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
             key={l.href}
             href={l.href}
             aria-current={active ? 'page' : undefined}
-            className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 transition-colors ${
+            className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] leading-none transition-colors ${
               active
-                ? 'bg-sage-soft font-medium text-sage'
-                : 'text-ink2 hover:bg-card2 hover:text-ink'
+                ? 'bg-sk-green-soft font-[650] text-sk-green'
+                : 'font-[450] text-sk-muted hover:bg-sk-surface-soft hover:text-sk-ink'
             }`}
           >
             {l.label}
@@ -77,10 +77,10 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
             aria-expanded={open}
             aria-haspopup="menu"
             onClick={() => setOpen((v) => !v)}
-            className={`flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 transition-colors ${
+            className={`flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] leading-none transition-colors ${
               moreActive
-                ? 'bg-sage-soft font-medium text-sage'
-                : 'text-ink2 hover:bg-card2 hover:text-ink'
+                ? 'bg-sk-green-soft font-[650] text-sk-green'
+                : 'font-[450] text-sk-muted hover:bg-sk-surface-soft hover:text-sk-ink'
             }`}
           >
             {moreLabel}
@@ -194,9 +194,9 @@ export function MobileNav({
             type="button"
             aria-label={menuLabel}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 top-14 z-30 cursor-default bg-ink/20"
+            className="fixed inset-0 top-16 z-30 cursor-default bg-ink/20"
           />
-          <nav className="fixed inset-x-0 top-14 z-40 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-line bg-bg px-3 py-2 shadow-card">
+          <nav className="fixed inset-x-0 top-16 z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-line bg-bg px-3 py-2 shadow-card">
             {links.map((l) => renderLink(l))}
             {more && more.length > 0 && (
               <div className="mt-2 border-t border-line pt-2">

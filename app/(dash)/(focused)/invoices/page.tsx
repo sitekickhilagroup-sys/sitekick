@@ -99,7 +99,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   ];
 
   return (
-    <div className="space-y-4 pb-16">
+    <div className="mx-auto max-w-[1400px] space-y-4 px-4 pt-4 pb-16 sm:pt-6">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('invoices.kicker')}</p>

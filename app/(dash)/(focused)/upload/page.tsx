@@ -35,7 +35,7 @@ export default async function UploadPage() {
   ];
 
   return (
-    <div className="space-y-5 pb-16">
+    <div className="mx-auto max-w-[1400px] space-y-5 px-4 pt-4 pb-16 sm:pt-6">
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('upload.kicker')}</p>
         <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('upload.statement')}</h1>
