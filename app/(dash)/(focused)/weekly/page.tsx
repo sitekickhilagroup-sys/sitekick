@@ -3,7 +3,7 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { laToday } from '@/lib/date';
 import { nextMonday } from '@/lib/weekly';
-import { AppHeader } from '@/components/chrome/app-header';
+import { WeeklyHeader } from '@/components/chrome/weekly-header';
 import { PrepareButton } from '@/components/weekly/prepare-button';
 import { ReviewBoard } from '@/components/weekly/review-board';
 import type { WeeklyReview, WeeklyReviewItem, WeeklyReviewSubtopic } from '@/lib/types';
@@ -38,12 +38,13 @@ export default async function WeeklyPage() {
   const embedded = reviewData as EmbeddedReview | null;
 
   return (
-    // Keeps the standard header until the Weekly Review phase replaces it.
     <>
-      <AppHeader />
-      <div className="mx-auto max-w-[1400px] px-4 py-4 sm:py-6">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('weekly.title')}</p>
-      <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('weekly.sub')}</h1>
+      <WeeklyHeader />
+      <div className="sk-page mx-auto max-w-[1040px] px-4 pt-6 pb-16 sm:px-6">
+      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{t('weekly.title')}</p>
+      <h1 className="mt-1 text-[clamp(26px,2.6vw,30px)] font-[650] leading-[1.1] tracking-[-0.035em] text-sk-ink">
+        {t('weekly.sub')}
+      </h1>
       {!embedded ? (
         <div className="mt-6 rounded-(--radius-card) border border-line bg-card p-6">
           <PrepareButton label={t('weekly.prepare')} error={t('common.error_save')} />
@@ -86,6 +87,15 @@ export default async function WeeklyPage() {
               statusLabel: t('weekly.status_label'),
               completedN: t('weekly.completed_n'),
               actionsN: t('weekly.actions_n'),
+              actions1: t('weekly.actions_1'),
+              // Was never passed, so the SUB-TOPIC eyebrow the spec requires
+              // silently never rendered.
+              subTopic: t('weekly.sub_topic'),
+              noSubtopics: t('weekly.no_subtopics'),
+              noActions: t('weekly.no_actions'),
+              modeNoteDraft: t('weekly.mode_note_draft'),
+              modeNoteMeeting: t('weekly.mode_note_meeting'),
+              uploadKickerDraft: t('weekly.upload_kicker_draft'),
             }} />
           );
         })()
@@ -121,6 +131,11 @@ function buildGroups(items: EmbeddedItem[], contexts: WeeklyReviewSubtopic[], t:
     if (!rows) { rows = []; group.subtopics.set(subtopicName, rows); }
     rows.push({ item, title: task?.title ?? '', owner: task?.owner ?? null, due: task?.due ?? null });
   }
+
+  // Spec §14: General renders last. First-encountered order could otherwise
+  // drop it in the middle of the real projects.
+  const general = t('common.general');
+  order.sort((a, b) => (a === general ? 1 : 0) - (b === general ? 1 : 0));
 
   return order.map((projectName): { projectName: string; subtopics: SubtopicGroup[] } => {
     const group = byProject.get(projectName)!;
