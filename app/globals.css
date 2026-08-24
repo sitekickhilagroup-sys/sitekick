@@ -33,6 +33,77 @@
   --shadow-soft: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -18px rgba(0,0,0,.5);
 }
 
+/* Redesign palette from the client's "UX/UI version fixing" spec. Most of it is
+   the palette above under different names, so alias those — dark theme then
+   follows the live tokens for free. Only genuinely new colours carry a literal
+   value, and each of those gets a dark counterpart below.
+   Radii are deliberately absent: Portfolio/Process/Inbox/Invoices/Weekly use
+   8/11/15 while My Work's spec sets 6/10/14 under the same names, so each page
+   declares its own inside its own scope. */
+:root {
+  --sk-page: var(--bg);
+  --sk-surface: var(--card);
+  --sk-surface-soft: #fafbf8;
+  --sk-ink: var(--ink);
+  --sk-text: #26332f;
+  --sk-muted: var(--ink2);
+  --sk-muted-light: #8b9692;
+  --sk-line: var(--line);
+  --sk-line-strong: #b8cec4;
+
+  --sk-green: var(--sage);
+  --sk-green-hover: #285b4d;
+  --sk-green-soft: #e7f0eb;
+  --sk-green-soft-strong: var(--sage-soft);
+  --sk-green-dark: #143128;
+
+  --sk-cream: #fff7e9;
+  --sk-cream-border: #ecd9b8;
+  --sk-amber: var(--apricot);
+  --sk-amber-dot: #d99a45;
+  --sk-amber-halo: #faead2;
+
+  --sk-salmon: var(--coral-soft);
+  --sk-salmon-text: var(--coral);
+  --sk-salmon-surface: #fff8f6;
+  --sk-salmon-border: #edcbc5;
+  --sk-red-dot: #b94f45;
+  --sk-red-halo: #f8e3df;
+
+  --sk-blue: var(--mist);
+  --sk-blue-soft: var(--mist-soft);
+
+  --sk-surface-header: #f3f5f1;
+  --sk-upload-surface: #f7fbf8;
+  --sk-detail-surface: #f7f8f4;
+
+  --sk-shadow: rgba(37, 58, 50, 0.05);
+  --sk-panel-shadow: 0 8px 24px rgba(37, 58, 50, 0.05);
+}
+
+[data-theme="dark"] {
+  --sk-surface-soft: #212c27;
+  --sk-text: #d3dad7;
+  --sk-muted-light: #7e8a85;
+  --sk-line-strong: #3a5648;
+  --sk-green-hover: #9bcbb6;
+  --sk-green-soft: #23372f;
+  --sk-green-dark: #0f241d;
+  --sk-cream: #2c2519;
+  --sk-cream-border: #4a3e28;
+  --sk-amber-dot: #c08a4a;
+  --sk-amber-halo: #3b2f1f;
+  --sk-salmon-surface: #2b1f1d;
+  --sk-salmon-border: #4a332e;
+  --sk-red-dot: #c97267;
+  --sk-red-halo: #402a27;
+  --sk-surface-header: #212c27;
+  --sk-upload-surface: #1a241f;
+  --sk-detail-surface: #18211d;
+  --sk-shadow: rgba(0, 0, 0, 0.35);
+  --sk-panel-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-card: var(--card);
@@ -58,6 +129,39 @@
   --color-chart2: var(--chart2);
   --color-deep: var(--deep);
   --color-gold: var(--gold);
+  /* Redesign palette, exposed as utilities (bg-sk-cream, text-sk-muted, …).
+     `inline` emits the var() reference rather than a resolved colour, so these
+     keep following the theme at runtime. */
+  --color-sk-page: var(--sk-page);
+  --color-sk-surface: var(--sk-surface);
+  --color-sk-surface-soft: var(--sk-surface-soft);
+  --color-sk-surface-header: var(--sk-surface-header);
+  --color-sk-ink: var(--sk-ink);
+  --color-sk-text: var(--sk-text);
+  --color-sk-muted: var(--sk-muted);
+  --color-sk-muted-light: var(--sk-muted-light);
+  --color-sk-line: var(--sk-line);
+  --color-sk-line-strong: var(--sk-line-strong);
+  --color-sk-green: var(--sk-green);
+  --color-sk-green-hover: var(--sk-green-hover);
+  --color-sk-green-soft: var(--sk-green-soft);
+  --color-sk-green-soft-strong: var(--sk-green-soft-strong);
+  --color-sk-green-dark: var(--sk-green-dark);
+  --color-sk-cream: var(--sk-cream);
+  --color-sk-cream-border: var(--sk-cream-border);
+  --color-sk-amber: var(--sk-amber);
+  --color-sk-amber-dot: var(--sk-amber-dot);
+  --color-sk-amber-halo: var(--sk-amber-halo);
+  --color-sk-salmon: var(--sk-salmon);
+  --color-sk-salmon-text: var(--sk-salmon-text);
+  --color-sk-salmon-surface: var(--sk-salmon-surface);
+  --color-sk-salmon-border: var(--sk-salmon-border);
+  --color-sk-red-dot: var(--sk-red-dot);
+  --color-sk-red-halo: var(--sk-red-halo);
+  --color-sk-blue: var(--sk-blue);
+  --color-sk-blue-soft: var(--sk-blue-soft);
+  --color-sk-upload-surface: var(--sk-upload-surface);
+  --color-sk-detail-surface: var(--sk-detail-surface);
   /* Her demo ships Geist but its globals.css sets `body{font-family:Arial,
      Helvetica,sans-serif}` — so the interface Noa actually looks at is Arial.
      Matching the reference means matching that, with Geist behind it for
@@ -101,3 +205,26 @@ body {
 
 /* Georgia display headings (her demo: font 600, tight natural tracking). */
 .font-serif { font-weight: 600; letter-spacing: 0; }
+
+/* Route-scoped redesign typography. Only pages that opt in by putting .sk-page
+   on their root get Geist-first type and the spec's 11px body; More pages never
+   carry the class, so their approved Arial/Georgia treatment is untouched.
+   Selectors stay class-based — the spec forbids bare element selectors that
+   could leak into More. */
+.sk-page {
+  font-family: "Geist", var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--sk-text);
+}
+
+/* Safety net for any .font-serif left behind mid-migration; each page task
+   still strips the class itself, since the spec forbids leaving a mixture. */
+.sk-page .font-serif {
+  font-family: inherit;
+  font-weight: 650;
+}
+
+.sk-page .font-mono {
+  font-family: "Geist Mono", var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}
