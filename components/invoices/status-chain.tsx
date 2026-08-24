@@ -13,46 +13,39 @@ interface Props {
   advanceLabel: string;
 }
 
-// Item 3d: 4-state chain, "For Rowan approval" visually loud — that's where
-// things get stuck.
+// Spec §12 badge palette, mapped onto the five values the invoice_status enum
+// actually has. The spec's list also names Processing and Rejected; neither
+// exists in the enum and the same spec forbids schema changes, so they are
+// reported as unmatched rather than invented.
+//
+// Every badge carries its text label — the spec forbids communicating status
+// through colour alone.
+const BADGE: Record<InvoiceStatus, string> = {
+  received: 'bg-sk-amber-halo text-sk-amber',
+  for_rowan_approval: 'bg-sk-cream text-sk-amber',
+  approved: 'bg-sk-green-soft-strong text-sk-green',
+  paid: 'bg-sk-green-soft-strong font-[650] text-sk-green',
+  on_hold: 'bg-sk-salmon text-sk-salmon-text',
+};
+
 export function StatusChain({ invoiceId, status, labels, advanceLabel }: Props) {
   const [pending, start] = useTransition();
   const idx = CHAIN.indexOf(status);
 
-  if (status === 'on_hold') {
-    return <span className="rounded-full bg-inset px-2 py-0.5 text-[11px] text-ink3">{labels.on_hold}</span>;
-  }
-
   return (
-    <span className="flex items-center gap-1">
-      {CHAIN.map((s, i) => {
-        const active = i === idx;
-        const past = i < idx;
-        const rowan = s === 'for_rowan_approval';
-        return (
-          <span
-            key={s}
-            title={labels[s]}
-            className={`h-2 w-2 rounded-full ${
-              active
-                ? rowan ? 'h-2.5 w-2.5 bg-apricot ring-2 ring-apricot/30' : 'bg-sage'
-                : past ? 'bg-sage-line' : 'bg-line'
-            }`}
-          />
-        );
-      })}
-      <span className={`ms-1 text-[11px] ${
-        status === 'for_rowan_approval' ? 'rounded-full bg-apricot-soft px-2 py-0.5 font-medium text-apricot' : 'text-ink2'
-      }`}>
+    <span className="flex flex-wrap items-center gap-1.5">
+      <span className={`whitespace-nowrap rounded-[6px] px-2 py-1 text-[9px] font-[650] uppercase leading-none tracking-[0.06em] ${BADGE[status]}`}>
         {labels[status]}
       </span>
-      {idx < CHAIN.length - 1 && (
+      {/* On hold stays a separate track with no advance control: it is
+          terminal in this UI, and returning from it goes through the editor. */}
+      {status !== 'on_hold' && idx < CHAIN.length - 1 && (
         <button
           type="button"
           disabled={pending}
           onClick={() => start(async () => { await advanceInvoice(invoiceId); })}
           aria-label={`${advanceLabel}: ${labels[status]}`}
-          className="ms-1 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-full border border-line px-1.5 py-0.5 text-[10px] text-ink3 hover:bg-card2 hover:text-ink disabled:opacity-50 sm:min-h-6 sm:min-w-6"
+          className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-[6px] border border-sage-line px-1.5 py-0.5 text-[10px] text-sk-green hover:bg-sk-green-soft disabled:opacity-50 sm:min-h-6 sm:min-w-6"
           title={advanceLabel}
         >
           <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>

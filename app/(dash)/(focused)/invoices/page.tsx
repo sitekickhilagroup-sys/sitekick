@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
-import { AppHeader } from '@/components/chrome/app-header';
+import { FinancialHeader } from '@/components/chrome/financial-header';
+import { PaymentSummary } from '@/components/invoices/payment-summary';
 import { FilterBar } from '@/components/invoices/filter-bar';
 import { StatusChain } from '@/components/invoices/status-chain';
 import { LinkEditor } from '@/components/invoices/link-editor';
@@ -10,8 +11,14 @@ import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/
 
 export const dynamic = 'force-dynamic';
 
+// Headline figures round; row amounts must not. Spec §10 requires decimals
+// preserved on the individual invoice, and a rounded $181 for an invoice of
+// $181.30 is a wrong number on a financial screen.
 const money = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+const moneyExact = (n: number) =>
+  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
 // Item 3a: tabs mirror the Excel — Invoices / Payment Summary / David.
 export default async function InvoicesPage({ searchParams }: PageProps<'/invoices'>) {
@@ -29,6 +36,10 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const invoices = (invoicesQ.data ?? []) as Invoice[];
   const projects = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name'>[];
   const vendors = (vendorsQ.data ?? []) as Pick<Vendor, 'id' | 'name'>[];
+  // A failed query used to fall through to `?? []`, rendering an empty table
+  // indistinguishable from "no invoices". Spec §14: do not hide financial-data
+  // failures.
+  const loadFailed = !!(invoicesQ.error || projectsQ.error || vendorsQ.error);
   const pName = new Map(projects.map((p) => [p.id, p.name]));
   const vName = new Map(vendors.map((v) => [v.id, v.name]));
 
@@ -93,51 +104,97 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     on_hold: t('invoices.st_on_hold'),
   };
 
-  const tabs: { key: InvoiceTab; label: string }[] = [
+  // Spec §6: two primary views. `david` is a real workbook tab and the spec
+  // forbids deleting secondary views, so it is demoted, not removed.
+  const primaryTabs: { key: InvoiceTab; label: string }[] = [
     { key: 'invoices', label: t('invoices.tab_invoices') },
     { key: 'payment_summary', label: t('invoices.tab_payment_summary') },
-    { key: 'david', label: t('invoices.tab_david') },
   ];
 
   return (
-    // Keeps the standard header until the Invoices phase replaces it with the
-    // spec's Financial Control header.
     <>
-      <AppHeader />
-      <div className="mx-auto max-w-[1400px] space-y-4 px-4 pt-4 pb-16 sm:pt-6">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('invoices.kicker')}</p>
-          <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('invoices.statement')}</h1>
+      <FinancialHeader sourceLabel={t('invoices.open_total').replace('{n}', `⁨${invoices.length}⁩`)} />
+      <div className="sk-page mx-auto max-w-[980px] space-y-4 px-4 pt-6 pb-16 sm:px-6">
+        {loadFailed && (
+          <p role="alert" className="rounded-[9px] border border-coral/40 bg-sk-salmon px-4 py-2.5 text-[11px] text-sk-salmon-text">
+            {t('invoices.error_load')}
+          </p>
+        )}
+
+        {/* Intro + the dark-green financial summary card (spec §4-§5). */}
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{t('invoices.kicker')}</p>
+            <h1 className="mt-1 text-[clamp(26px,2.6vw,30px)] font-[650] leading-[1.1] tracking-[-0.035em] text-sk-ink">
+              {t('invoices.statement')}
+            </h1>
+            {/* Demoted from a full-width amber banner, which §7 rejects. */}
+            {rowan.length > 0 && (
+              <p className="mt-1.5 text-[11px] leading-[1.5] text-sk-amber">
+                {/* FSI/PDI marks bidi-isolate the LTR number/amount inside the Hebrew sentence */}
+                {t('invoices.waiting_rowan')
+                  .replace('{n}', `⁨${rowan.length}⁩`)
+                  .replace('{total}', `⁨${money(rowanTotal)}⁩`)}
+              </p>
+            )}
+          </div>
+          <section className="rounded-[9px] bg-sk-green-dark px-5 py-4">
+            <p className="font-mono text-[26px] font-[650] leading-none tabular-nums text-white">{money(openTotal)}</p>
+            <p className="mt-1 text-[10px] text-white/70">
+              {t('invoices.open_total').replace('{n}', `⁨${openInvoices.length}⁩`)}
+            </p>
+          </section>
         </div>
-        <p className="text-sm text-ink2">
-          <span className="font-mono font-medium text-ink">{money(openTotal)}</span>
-          {' · '}{t('invoices.open_total').replace('{n}', `⁨${openInvoices.length}⁩`)}
-        </p>
-      </div>
 
-      {rowan.length > 0 && (
-        <p className="rounded-(--radius-card) border border-apricot/40 bg-apricot-soft px-4 py-2.5 text-sm text-ink">
-          {/* FSI/PDI marks bidi-isolate the LTR number/amount inside the Hebrew sentence */}
-          {t('invoices.waiting_rowan')
-            .replace('{n}', `⁨${rowan.length}⁩`)
-            .replace('{total}', `⁨${money(rowanTotal)}⁩`)}
-        </p>
-      )}
+        <div className="flex flex-wrap items-center gap-1">
+          {primaryTabs.map(({ key, label }) => (
+            <Link
+              key={key}
+              href={`/invoices?tab=${key}`}
+              aria-current={tab === key ? 'page' : undefined}
+              className={`inline-flex min-h-11 items-center rounded-[8px] px-4 py-1.5 text-[11px] font-[650] sm:min-h-0 ${
+                tab === key ? 'bg-sk-green-dark text-white' : 'bg-sk-surface-soft text-sk-muted hover:text-sk-ink'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+          <details className="relative ms-auto">
+            <summary className="min-h-11 cursor-pointer list-none px-2 py-1.5 text-[10px] text-sk-muted hover:text-sk-ink sm:min-h-0">
+              {t('invoices.more_views')}
+            </summary>
+            <Link
+              href="/invoices?tab=david"
+              aria-current={tab === 'david' ? 'page' : undefined}
+              className={`absolute end-0 z-10 mt-1 block whitespace-nowrap rounded-[8px] border border-line bg-sk-surface px-3 py-2 text-[10px] shadow-card ${
+                tab === 'david' ? 'font-[650] text-sk-green' : 'text-sk-muted hover:text-sk-ink'
+              }`}
+            >
+              {t('invoices.tab_david')}
+            </Link>
+          </details>
+        </div>
 
-      <div className="flex flex-wrap gap-1">
-        {tabs.map(({ key, label }) => (
-          <Link
-            key={key}
-            href={`/invoices?tab=${key}`}
-            className={`inline-flex min-h-11 items-center rounded-full px-4 py-1.5 text-sm sm:min-h-0 ${
-              tab === key ? 'bg-ink text-bg' : 'bg-card2 text-ink3 hover:text-ink'
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-      </div>
+        {/* Additive: the aggregation renders above the tab-filtered rows so no
+            workbook record disappears from the view. */}
+        {tab === 'payment_summary' && (
+          <PaymentSummary
+            invoices={invoices}
+            projectName={(id) => (id ? (pName.get(id) ?? '') : '')}
+            vendorName={vDisplay}
+            statusLabels={statusLabels}
+            money={money}
+            labels={{
+              due: t('invoices.amount_due'),
+              byEntity: t('invoices.by_entity'),
+              byProject: t('invoices.by_project'),
+              byStatus: t('invoices.by_status'),
+              byVendor: t('common.vendor'),
+              general: t('common.general'),
+              count: t('invoices.open_total'),
+            }}
+          />
+        )}
 
       {vendorPills.length > 1 && (
         <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0 sm:pb-0">
@@ -145,7 +202,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             href={`/invoices?tab=${tab}`}
             aria-current={!fVendor ? 'page' : undefined}
             className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs sm:min-h-0 ${
-              !fVendor ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+              !fVendor ? 'bg-sk-green-soft font-[650] text-sk-green' : 'bg-sk-surface-soft text-sk-muted hover:text-sk-ink'
             }`}
           >
             {t('common.all')} <span className={!fVendor ? 'opacity-70' : 'text-ink3'}>{tabRows.length}</span>
@@ -156,7 +213,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
               href={`/invoices?tab=${tab}&vendor=${encodeURIComponent(nm)}`}
               aria-current={fVendor === nm ? 'page' : undefined}
               className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs sm:min-h-0 ${
-                fVendor === nm ? 'bg-ink text-bg' : 'bg-card2 text-ink2 hover:text-ink'
+                fVendor === nm ? 'bg-sk-green-soft font-[650] text-sk-green' : 'bg-sk-surface-soft text-sk-muted hover:text-sk-ink'
               }`}
             >
               {nm} <span className={fVendor === nm ? 'opacity-70' : 'text-ink3'}>{count}</span>
@@ -180,15 +237,28 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
           status: t('common.status'),
           from: t('invoices.from_date'),
           to: t('invoices.to_date'),
+          advanced: t('invoices.filters_advanced'),
+          active: t('invoices.filters_active'),
+          reset: t('invoices.filters_reset'),
         }}
       />
 
       {/* Her invoices table: VENDOR / INVOICE (with links + Update inside) |
           PROJECT / ENTITY | DESCRIPTION | DATE | STATUS | AMOUNT. */}
-      <div className="overflow-x-auto rounded-(--radius-card) border border-line bg-card shadow-card">
-        <table className="w-full min-w-[900px] text-sm">
+      {/* Table semantics are kept (spec §20) — the spec's column proportions
+          ride on a colgroup rather than a conversion to grid divs. */}
+      <div className="overflow-x-auto rounded-[15px] border border-line bg-sk-surface shadow-card">
+        <table className="w-full min-w-[900px] table-fixed text-[11px]">
+          <colgroup>
+            <col className="w-[27%]" />
+            <col className="w-[22%]" />
+            <col className="w-[19%]" />
+            <col className="w-[12%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+          </colgroup>
           <thead>
-            <tr className="border-b border-line bg-card2/60 text-[10px] uppercase tracking-[0.08em] text-ink3">
+            <tr className="border-b border-line bg-sk-surface-header text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted">
               <th scope="col" className="px-3 py-2 text-start font-bold">{t('invoices.col_vendor')}</th>
               <th scope="col" className="px-3 py-2 text-start font-bold">{t('invoices.col_project')}</th>
               <th scope="col" className="px-3 py-2 text-start font-bold">{t('tasks.description')}</th>
@@ -203,22 +273,26 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             )}
             {rows.map((inv) => (
               <tr key={inv.id}>
-                <td className="px-3 py-2.5">
-                  <span className="block font-medium text-ink">{vDisplay(inv.vendor_id)}</span>
-                  {inv.number && <span className="block font-mono text-[11px] text-ink3">{t('invoices.number')} {inv.number}</span>}
+                <td className="px-3 py-2.5 align-top">
+                  <span className="block font-[650] text-sk-ink">{vDisplay(inv.vendor_id)}</span>
+                  {inv.number && <span className="block font-mono text-[10px] text-sk-muted">{t('invoices.number')} {inv.number}</span>}
                   <span className="mt-1 flex flex-wrap items-center gap-2">
-                    {inv.invoice_url && (
-                      <a href={inv.invoice_url} target="_blank" rel="noreferrer" className="text-[11px] text-mist underline">
+                    {inv.invoice_url ? (
+                      <a href={inv.invoice_url} target="_blank" rel="noreferrer" className="text-[10px] font-[650] text-sk-green hover:underline">
                         {t('invoices.open_invoice')} <span aria-hidden="true">↗</span>
                       </a>
+                    ) : (
+                      // Spec §8: say the link is missing rather than showing
+                      // nothing, which reads as though one exists elsewhere.
+                      <span className="text-[10px] text-sk-muted-light">{t('invoices.missing_link')}</span>
                     )}
                     {inv.receipt_url && (
-                      <a href={inv.receipt_url} target="_blank" rel="noreferrer" className="text-[11px] text-mist underline">
+                      <a href={inv.receipt_url} target="_blank" rel="noreferrer" className="text-[10px] text-sk-muted hover:underline">
                         {t('invoices.open_receipt')} <span aria-hidden="true">↗</span>
                       </a>
                     )}
                     {inv.transfer_confirmation_url && (
-                      <a href={inv.transfer_confirmation_url} target="_blank" rel="noreferrer" className="text-[11px] text-mist underline">
+                      <a href={inv.transfer_confirmation_url} target="_blank" rel="noreferrer" className="text-[10px] text-sk-muted hover:underline">
                         {t('invoices.transfer')} <span aria-hidden="true">↗</span>
                       </a>
                     )}
@@ -265,7 +339,9 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                     advanceLabel={t('invoices.advance')}
                   />
                 </td>
-                <td className="whitespace-nowrap px-3 py-2.5 text-end font-mono text-ink">{money(Number(inv.amount_usd))}</td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-end align-top font-mono text-[11px] tabular-nums text-sk-ink">
+                  {moneyExact(Number(inv.amount_usd))}
+                </td>
               </tr>
             ))}
           </tbody>
