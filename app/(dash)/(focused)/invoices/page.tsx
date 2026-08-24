@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
+import { AppHeader } from '@/components/chrome/app-header';
 import { FilterBar } from '@/components/invoices/filter-bar';
 import { StatusChain } from '@/components/invoices/status-chain';
 import { LinkEditor } from '@/components/invoices/link-editor';
@@ -99,7 +100,11 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   ];
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-4 px-4 pt-4 pb-16 sm:pt-6">
+    // Keeps the standard header until the Invoices phase replaces it with the
+    // spec's Financial Control header.
+    <>
+      <AppHeader />
+      <div className="mx-auto max-w-[1400px] space-y-4 px-4 pt-4 pb-16 sm:pt-6">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('invoices.kicker')}</p>
@@ -265,7 +270,8 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             ))}
           </tbody>
         </table>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

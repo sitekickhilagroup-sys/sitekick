@@ -48,7 +48,7 @@ export function PasteUpdate({ labels }: { labels: Record<string, string> }) {
   return (
     <section className="rounded-(--radius-card) border border-line bg-card p-4 shadow-card">
       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sage">{labels.kicker}</p>
-      <h2 className="mt-1 font-serif text-lg text-ink">{labels.title}</h2>
+      <h2 className="mt-1 text-[15px] font-[650] leading-[1.25] text-sk-ink">{labels.title}</h2>
       <p className="mt-1 max-w-2xl text-xs text-ink2">{labels.sub}</p>
       <textarea
         value={text}

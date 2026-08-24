@@ -3,6 +3,7 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { laToday } from '@/lib/date';
 import { nextMonday } from '@/lib/weekly';
+import { AppHeader } from '@/components/chrome/app-header';
 import { PrepareButton } from '@/components/weekly/prepare-button';
 import { ReviewBoard } from '@/components/weekly/review-board';
 import type { WeeklyReview, WeeklyReviewItem, WeeklyReviewSubtopic } from '@/lib/types';
@@ -37,7 +38,10 @@ export default async function WeeklyPage() {
   const embedded = reviewData as EmbeddedReview | null;
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-4 sm:py-6">
+    // Keeps the standard header until the Weekly Review phase replaces it.
+    <>
+      <AppHeader />
+      <div className="mx-auto max-w-[1400px] px-4 py-4 sm:py-6">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('weekly.title')}</p>
       <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('weekly.sub')}</h1>
       {!embedded ? (
@@ -86,7 +90,8 @@ export default async function WeeklyPage() {
           );
         })()
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

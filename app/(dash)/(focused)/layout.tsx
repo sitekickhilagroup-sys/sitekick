@@ -1,21 +1,11 @@
-import { AppHeader } from '@/components/chrome/app-header';
-
-// Data Inbox, Invoices and Weekly Review each get a route-specific header in
-// Phases 4-6 of the redesign, which is why they live in their own group: a
-// layout at the (dash) level would reach every route including More.
+// Data Inbox, Invoices and Weekly Review each get a route-specific header,
+// which is why they live in their own group: a layout at the (dash) level
+// would reach every route including the protected More section.
 //
-// Until each page's own header lands they keep the standard one rather than
-// rendering with no chrome at all. The group split is what makes that swap
-// possible one page at a time.
-//
-// <main> carries no width here — each of the three pages owns its container,
-// because the spec gives them different widths (Invoices ~900-980px, Weekly
-// ~980-1040px) and Data Inbox needs a full-bleed banner.
+// The header is rendered by each page rather than here, because the three
+// differ — Data Inbox has its own, and Invoices and Weekly Review still use
+// the standard one until their phases land. One shared layout cannot express
+// that, and a full-bleed banner cannot live inside a width-capped <main>.
 export default function FocusedLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <AppHeader />
-      <main id="main">{children}</main>
-    </>
-  );
+  return <main id="main">{children}</main>;
 }
