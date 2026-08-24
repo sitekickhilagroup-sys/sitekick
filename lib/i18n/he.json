@@ -282,6 +282,7 @@
   "process.connected": "פעולות מקושרות",
   "process.unmapped": "עוד לא שויך לשלב",
   "process.activate": "הפעלת תת-שלב",
+  "process.status.not_activated": "לא הופעל",
   "process.status.upcoming": "בהמשך",
   "process.status.active": "פעיל",
   "process.status.done": "הושלם",

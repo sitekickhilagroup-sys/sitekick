@@ -3,7 +3,10 @@ import type { Phase, PhaseKey, Project, ProjectSubstage, SubstageTemplate, Task,
 
 export interface PhaseView {
   phase: Phase;
-  substages: { template: SubstageTemplate; instance: ProjectSubstage | null }[];
+  /** `activated` is false when this project has no instance for the template:
+   *  nothing has been decided about the stage, which is not the same as it
+   *  being planned and upcoming. */
+  substages: { template: SubstageTemplate; instance: ProjectSubstage | null; activated: boolean }[];
   workstreams: Workstream[];
 }
 
@@ -18,7 +21,14 @@ export function groupProcess(input: {
       substages: input.templates
         .filter((tp) => tp.phase_key === phase.key)
         .sort((a, b) => a.position - b.position)
-        .map((template) => ({ template, instance: byTemplate.get(template.id) ?? null }))
+        .map((template) => {
+          const instance = byTemplate.get(template.id) ?? null;
+          // A template with no instance is not "Upcoming" — nothing has been
+          // decided about it for this project. The spec forbids presenting
+          // every possible stage as planned ("that creates false certainty"),
+          // so the view renders these as not activated instead.
+          return { template, instance, activated: !!instance };
+        })
         .filter((s) => s.template.kind === 'standard' || (s.instance && s.instance.status !== 'upcoming')),
       workstreams: input.workstreams.filter((w) => w.phase_key === phase.key),
     }));

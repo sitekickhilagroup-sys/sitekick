@@ -42,6 +42,9 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     emptyPhase: t('process.empty_phase'),
     error: t('common.error_save'),
     'status.upcoming': t('process.status.upcoming'),
+    // Shown instead of a status when this project has no instance of the
+    // template — nothing decided, rather than planned-and-upcoming.
+    notActivated: t('process.status.not_activated'),
     'status.active': t('process.status.active'),
     'status.done': t('process.status.done'),
     'status.not_applicable': t('process.status.not_applicable'),

@@ -282,6 +282,7 @@
   "process.connected": "Connected actions",
   "process.unmapped": "Not yet mapped to a phase",
   "process.activate": "Activate sub-stage",
+  "process.status.not_activated": "Not activated",
   "process.status.upcoming": "Upcoming",
   "process.status.active": "Active",
   "process.status.done": "Done",

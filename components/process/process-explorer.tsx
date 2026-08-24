@@ -21,7 +21,9 @@ export interface ExplorerPhase {
   state: string;
   isCurrent: boolean;
   isParallel: boolean;
-  substages: { template: SubstageTemplate; instance: ProjectSubstage | null }[];
+  /** `activated` false = this project has no instance of the template, so
+   *  nothing has been decided about the stage. */
+  substages: { template: SubstageTemplate; instance: ProjectSubstage | null; activated: boolean }[];
   unactivated: SubstageTemplate[];
   workstreams: Workstream[];
   /** Open tasks mapped to this phase — the "Connected actions" panel. */
@@ -159,8 +161,12 @@ export function ProcessExplorer({ projectId, phases, labels }: Props) {
             <p className="mt-3 text-xs text-ink3">{labels.emptyPhase}</p>
           ) : (
             <ul className="mt-3">
-              {selected.substages.map(({ template, instance }, idx) => {
+              {selected.substages.map(({ template, instance, activated }, idx) => {
                 const status: ProjectSubstageStatus = instance?.status ?? 'upcoming';
+                // Spec §14: never present every possible stage as Upcoming.
+                // With no instance nothing has been decided for this project,
+                // so it reads as not activated rather than as a planned step.
+                const label = activated ? labels['status.' + status] : labels.notActivated;
                 const active = selectedSub?.template.id === template.id;
                 return (
                   <li key={template.id}>
@@ -183,8 +189,10 @@ export function ProcessExplorer({ projectId, phases, labels }: Props) {
                           <span className="block text-[8px] leading-[1.35] text-sk-muted">{instance.note}</span>
                         )}
                       </span>
-                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-[650] ${CHIP[status]}`}>
-                        {labels['status.' + status]}
+                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-[650] ${
+                        activated ? CHIP[status] : 'bg-sk-surface-soft text-sk-muted-light'
+                      }`}>
+                        {label}
                       </span>
                       <span aria-hidden="true" className="text-sk-muted rtl:-scale-x-100">›</span>
                     </button>
