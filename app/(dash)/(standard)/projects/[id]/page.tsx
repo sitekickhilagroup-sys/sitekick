@@ -35,6 +35,9 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
 
   const labels: Record<string, string> = {
     parallel: t('process.parallel'),
+    // Rendered by ProcessExplorer, below the phase rail (spec §7).
+    parallelNoteTitle: t('process.parallel_note_title'),
+    parallelNote: t('process.parallel_note'),
     activate: t('process.activate'),
     emptyPhase: t('process.empty_phase'),
     error: t('common.error_save'),
@@ -124,19 +127,20 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     : '—';
 
   return (
-    <div className="space-y-5 pb-16">
-      {/* Project switcher — her demo's top pills (active = white + sage ring). */}
+    <div className="sk-page space-y-5 pb-16">
+      {/* Project switcher. Spec §3 inverts what was here: the active pill is
+          the pale-green one, not the white one. */}
       <nav aria-label={t('process.project')} className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
-        <span className="me-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink3">{t('process.project')}</span>
+        <span className="me-1 text-[9px] font-bold uppercase tracking-[0.13em] text-sk-muted">{t('process.project')}</span>
         {allProjects.map((p) => (
           <Link
             key={p.id}
             href={`/projects/${p.id}`}
             aria-current={p.id === project.id ? 'page' : undefined}
-            className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full border px-3.5 py-1 text-xs sm:min-h-0 ${
+            className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full border px-3.5 py-1 text-[11px] sm:min-h-0 ${
               p.id === project.id
-                ? 'border-sage bg-card font-medium text-sage shadow-card'
-                : 'border-line bg-card2 text-ink2 hover:text-ink'
+                ? 'border-sage-line bg-sk-green-soft font-[650] text-sk-green'
+                : 'border-line bg-sk-surface text-sk-muted hover:text-sk-ink'
             }`}
           >
             {p.name}
@@ -148,9 +152,9 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
           summary line, with the Current-position card floated at the end. */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('process.control_center')}</p>
+          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{t('process.control_center')}</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
-            <h1 className="font-serif text-3xl text-ink sm:text-4xl">{project.name}</h1>
+            <h1 className="text-[clamp(27px,3vw,32px)] font-[650] leading-[1.08] tracking-[-0.035em] text-sk-ink">{project.name}</h1>
             {project.city_case && (
               <span className={`rounded-full px-2.5 py-1 font-mono text-[11px] ${
                 project.city_on_hold ? 'bg-coral-soft text-coral' : 'bg-card2 text-ink3'
@@ -188,30 +192,26 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
             />
           </div>
         </div>
-        {/* Her .health-card: pulse dot with a soft halo; hidden on small screens. */}
-        <aside className="hidden items-center gap-3 rounded-[14px] border border-line bg-card px-4.5 py-3.5 shadow-card md:flex">
+        {/* .health-card: pulse dot with a soft halo. It used to be md:flex-only,
+            which hid the project's current position on phones — spec §16 wants
+            it beneath the summary on mobile, not gone. */}
+        <aside className="flex items-center gap-3 rounded-[15px] border border-line bg-sk-surface px-4.5 py-3.5 shadow-card">
           <span aria-hidden="true" className={`h-2.5 w-2.5 flex-none rounded-full ${
             activeWorkstreams.length > 0
-              ? 'bg-apricot shadow-[0_0_0_5px_var(--color-apricot-soft)]'
+              ? 'bg-sk-amber-dot shadow-[0_0_0_5px_var(--color-sk-amber-halo)]'
               : 'bg-sage shadow-[0_0_0_5px_var(--color-sage-soft)]'
           }`} />
           <span>
-            <span className="block text-[9px] font-semibold uppercase tracking-[0.12em] text-ink3">{t('portfolio.position')}</span>
-            <span className="mt-0.5 block text-[13px] font-semibold text-ink">{positionText}</span>
+            <span className="block text-[9px] font-bold uppercase tracking-[0.13em] text-sk-muted">{t('portfolio.position')}</span>
+            <span className="mt-0.5 block text-[10px] font-[650] leading-[1.35] text-sk-ink">{positionText}</span>
           </span>
         </aside>
       </div>
 
-      {activeWorkstreams.length > 0 && (
-        <div className="flex items-start gap-2.5 rounded-(--radius-card) border border-apricot/30 bg-apricot-soft p-3.5">
-          <span aria-hidden="true" className="mt-0.5 text-apricot">↔</span>
-          <p className="text-sm text-ink">
-            <span className="font-medium">{t('process.parallel_note_title')}</span>
-            <span className="block text-xs text-ink2">{t('process.parallel_note')}</span>
-          </p>
-        </div>
-      )}
-
+      {/* The parallel-workstream notice used to render here, above the phase
+          rail. Spec §7 puts it below the rail — "this order is important" —
+          and the rail lives inside ProcessExplorer, so the notice moved there
+          with it. Only its two strings travel via labels. */}
       <ProcessExplorer
         projectId={project.id}
         labels={{ ...rowLabels, ...labels }}

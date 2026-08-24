@@ -43,7 +43,7 @@ export function ScenarioBox({
 
   if (editing) {
     return (
-      <section className="mt-4 rounded-[13px] border border-line bg-apricot-soft/30 p-3.5">
+      <section className="mt-4 rounded-[10px] border border-sk-cream-border bg-sk-cream p-3.5">
         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-apricot">{labels.editKicker}</p>
         <input
           value={draft.label}
@@ -112,7 +112,7 @@ export function ScenarioBox({
   const safeIndex = Math.min(picked, decision.options.length - 1);
 
   return (
-    <section className="mt-4 rounded-[13px] border border-line bg-apricot-soft/30 p-3.5">
+    <section className="mt-4 rounded-[10px] border border-sk-cream-border bg-sk-cream p-3.5">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-apricot">{decision.label}</p>
         <span className="text-[10px] text-ink3">{labels.tryEach}</span>

@@ -95,7 +95,9 @@ export function ProcessExplorer({ projectId, phases, labels }: Props) {
       {/* Phase rail — her .phase cards: number beside a serif name, state
           line, and an always-visible bottom strip (gray -> green current /
           amber parallel), with a soft ring on the selected card. */}
-      <ol className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:px-0 lg:grid-cols-5">
+      {/* Spec §6 wants the five phases in one horizontal row; sm:grid-cols-3
+          was breaking them onto two rows on tablet. */}
+      <ol className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-5 sm:px-0">
         {phases.map((p, i) => {
           const active = p.key === selectedKey;
           return (
@@ -105,19 +107,19 @@ export function ProcessExplorer({ projectId, phases, labels }: Props) {
                 onClick={() => pickPhase(p.key)}
                 aria-current={p.isCurrent ? 'step' : undefined}
                 aria-expanded={active}
-                className={`relative flex min-h-[78px] w-full cursor-pointer items-center gap-3 overflow-hidden rounded-[13px] border bg-card px-4 py-3.5 text-start transition-shadow ${
+                className={`relative flex min-h-[78px] w-full cursor-pointer items-center gap-3 overflow-hidden rounded-[10px] border bg-sk-surface px-4 py-3.5 text-start transition-shadow ${
                   active ? 'border-sage-line shadow-[0_0_0_2px_var(--color-sage-soft)]' : 'border-line hover:border-line2'
                 }`}
               >
-                <span className="font-mono text-[11px] font-semibold text-ink3">{String(i + 1).padStart(2, '0')}</span>
+                <span className="font-mono text-[11px] font-semibold text-sk-muted">{String(i + 1).padStart(2, '0')}</span>
                 <span className="min-w-0">
-                  <span className="block truncate font-serif text-[15px] text-ink">{p.label}</span>
-                  <span className={`mt-1 block text-[10px] ${
-                    p.isCurrent ? 'text-sage' : p.isParallel ? 'text-apricot' : 'text-ink3'
+                  <span className="block truncate text-[12px] font-[650] leading-[1.25] text-sk-ink">{p.label}</span>
+                  <span className={`mt-1 block text-[8px] leading-[1.35] ${
+                    p.isCurrent ? 'text-sage' : p.isParallel ? 'text-sk-amber' : 'text-sk-muted'
                   }`}>{p.state}</span>
                 </span>
                 <span aria-hidden="true" className={`absolute bottom-0 start-3 end-3 h-[3px] rounded-t ${
-                  p.isCurrent ? 'bg-sage' : p.isParallel ? 'bg-apricot' : 'bg-line'
+                  p.isCurrent ? 'bg-sage' : p.isParallel ? 'bg-sk-amber-dot' : 'bg-line'
                 }`} />
               </button>
             </li>
@@ -125,12 +127,25 @@ export function ProcessExplorer({ projectId, phases, labels }: Props) {
         })}
       </ol>
 
-      {/* Master-detail — her .workspace: ONE joined card, sub-stage list on
-          the start side, detail panel on a tinted ground with a divider. */}
-      <div className="grid overflow-hidden rounded-2xl border border-line bg-card shadow-card lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+      {/* Parallel-workstream notice. Spec §7 places it below the rail and
+          above the workspace — "this order is important" — with a circular
+          directional badge on the cream ground. */}
+      {phases.some((p) => p.isParallel) && labels.parallelNoteTitle && (
+        <div className="flex items-start gap-3 rounded-[10px] border border-sk-cream-border bg-sk-cream p-3.5">
+          <span aria-hidden="true" className="grid h-8 w-8 flex-none place-items-center rounded-full bg-sk-amber-halo text-sk-amber">↔</span>
+          <p className="text-[11px] leading-[1.5] text-sk-ink">
+            <span className="font-[650]">{labels.parallelNoteTitle}</span>
+            <span className="mt-0.5 block text-sk-muted">{labels.parallelNote}</span>
+          </p>
+        </div>
+      )}
+
+      {/* Master-detail — .workspace: ONE joined card, sub-stage list on the
+          start side, detail panel on a tinted ground with a divider. */}
+      <div className="grid overflow-hidden rounded-[15px] border border-line bg-sk-surface shadow-card lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
         <div className="p-5 sm:p-6">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink3">{selected.label}</p>
-          <h2 className="mt-0.5 font-serif text-2xl text-ink">{labels.substages}</h2>
+          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{selected.label}</p>
+          <h2 className="mt-0.5 text-[22px] font-[650] leading-[1.2] tracking-[-0.025em] text-sk-ink">{labels.substages}</h2>
           {selected.workstreams.length > 0 && (
             <p className="mt-1 flex flex-wrap gap-1.5">
               {selected.workstreams.map((w) => (
@@ -153,23 +168,25 @@ export function ProcessExplorer({ projectId, phases, labels }: Props) {
                       type="button"
                       onClick={() => setSelectedSubId(template.id)}
                       aria-expanded={active}
-                      className={`mb-1.5 flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-[11px] border px-3 py-3 text-start transition-colors ${
-                        active ? 'border-sage-line bg-sage-soft' : 'border-transparent bg-card2/60 hover:bg-sage-soft/60'
+                      className={`mb-1.5 flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-[9px] border px-3 py-3 text-start transition-colors ${
+                        active ? 'border-sage-line bg-sk-green-soft' : 'border-transparent bg-sk-surface-soft hover:bg-sk-green-soft/60'
                       }`}
                     >
                       <span aria-hidden="true" className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-[11px] font-bold ${DOT[status]}`}>
                         {status === 'done' ? '✓' : idx + 1}
                       </span>
+                      {/* Spec §9: allow natural wrapping. These were truncated,
+                          so a long sub-stage name or note was unreadable. */}
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-ink">{template.name}</span>
+                        <span className="block text-[10px] font-[550] leading-[1.35] text-sk-ink">{template.name}</span>
                         {instance?.note && (
-                          <span className="block truncate text-[11px] text-ink3">{instance.note}</span>
+                          <span className="block text-[8px] leading-[1.35] text-sk-muted">{instance.note}</span>
                         )}
                       </span>
-                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${CHIP[status]}`}>
+                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-[650] ${CHIP[status]}`}>
                         {labels['status.' + status]}
                       </span>
-                      <span aria-hidden="true" className="text-ink3 rtl:-scale-x-100">›</span>
+                      <span aria-hidden="true" className="text-sk-muted rtl:-scale-x-100">›</span>
                     </button>
                   </li>
                 );
@@ -251,14 +268,14 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
   return (
     // Her .detail-panel: tinted ground + start-side divider inside the
     // joined workspace card.
-    <div className="border-t border-line bg-inset p-5 sm:p-6 lg:border-s lg:border-t-0">
+    <div className="border-t border-line bg-sk-detail-surface p-5 sm:p-6 lg:border-s lg:border-t-0">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink3">{labels.selectedSub}</p>
-        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${CHIP[status]}`}>
+        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.selectedSub}</p>
+        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-[650] ${CHIP[status]}`}>
           {labels['status.' + status]}
         </span>
       </div>
-      <h2 className="mt-2 font-serif text-2xl text-ink">{template.name}</h2>
+      <h2 className="mt-2 text-[22px] font-[650] leading-[1.2] tracking-[-0.025em] text-sk-ink">{template.name}</h2>
 
       {instance ? (
         <textarea
@@ -287,8 +304,11 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
             disabled={pending}
             aria-pressed={status === s}
             onClick={() => setStatus(s)}
-            className={`min-h-11 cursor-pointer rounded-full px-2.5 py-1 text-xs transition-shadow disabled:opacity-50 sm:min-h-0 ${
-              status === s ? `${CHIP[s]} ring-1 ring-current` : 'bg-card2 text-ink3 hover:text-ink'
+            // Spec §10: small segmented chips that do not overpower the panel.
+            // All nine states stay — none is dropped for being absent from a
+            // screenshot — and aria-pressed carries the selection.
+            className={`min-h-11 cursor-pointer rounded-[7px] px-2 py-1 text-[8px] font-[650] leading-none transition-shadow disabled:opacity-50 sm:min-h-0 ${
+              status === s ? `${CHIP[s]} ring-1 ring-current` : 'bg-sk-surface text-sk-muted hover:text-sk-ink'
             }`}
           >
             {labels['status.' + s]}
@@ -313,16 +333,19 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
 
       <div className="mt-4 border-t border-line2 pt-3">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink3">{labels.connectedActions}</p>
-          <a href="/work?view=all" className="text-[11px] text-mist hover:underline">
+          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.connectedActions}</p>
+          <a href="/work?view=all" className="text-[10px] font-[650] text-sk-green hover:underline">
             {labels.viewRegister} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
           </a>
         </div>
         {tasks.length === 0 ? (
-          <p className="mt-2 text-xs text-ink3">{labels.noTasksPhase}</p>
+          // Spec §11: a compact dashed empty-state panel, not a bare line.
+          <p className="mt-2 rounded-[9px] border border-dashed border-line bg-sk-surface px-4 py-4 text-center text-[10px] leading-[1.5] text-sk-muted">
+            {labels.noTasksPhase}
+          </p>
         ) : (
           <ul className="mt-2 space-y-2">
-            {tasks.slice(0, 4).map((task) => (
+            {tasks.map((task) => (
               // Her .mini-task: status icon square, title, owner · waiting,
               // register link + inline Update, blocking chip at the end.
               <li key={task.id} className="grid grid-cols-[27px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-[10px] border border-line bg-card p-3">
