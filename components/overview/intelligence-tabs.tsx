@@ -27,7 +27,7 @@ export function IntelligenceTabs({ timeLost, staleWait, consultants, budget, for
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink3">{labels.kicker}</p>
-          <h2 className="mt-1 font-serif text-xl text-ink sm:text-2xl">{labels.title}</h2>
+          <h2 className="mt-1 text-[22px] font-[650] leading-[1.2] tracking-[-0.025em] text-sk-ink">{labels.title}</h2>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {tabs.map((x) => (

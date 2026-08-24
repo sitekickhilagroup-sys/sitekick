@@ -15,6 +15,13 @@ export interface AccordionLabels {
   next: string;
   then: string;
   blocker: string;
+  /** Used instead of `blocker` when the headline is only a workstream or
+   *  external-gate fallback — the audit forbids calling those project-wide. */
+  blockerWorkstream: string;
+  blockerExternal: string;
+  blockerTechnical: string;
+  waitingN: string;
+  verifyN: string;
   investigate: string;
   none: string;
   expand: string;
@@ -39,9 +46,16 @@ interface Props {
 export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const {
-    project, currentPhaseLabel, workstreams, mainBlocker, nextAction, thenAction,
-    blockingCount, lastEvidence, parallelPhaseKeys, riskState,
+    project, currentPhaseLabel, workstreams, mainBlocker, primaryBlockerKind,
+    technicalBlocker, nextAction, thenAction, blockingCount, blockerCounts,
+    lastEvidence, parallelPhaseKeys, riskState,
   } = entry;
+  // Blocker audit: a fallback headline must say what it actually is. Only a
+  // true primary blocker may read as the project's main blocker.
+  const blockerHeading =
+    primaryBlockerKind === 'workstream' ? labels.blockerWorkstream
+    : primaryBlockerKind === 'external_gate' ? labels.blockerExternal
+    : labels.blocker;
   const stateLabel =
     riskState === 'on_hold' ? labels.onHold
     : riskState === 'at_risk' ? labels.atRisk
@@ -74,7 +88,7 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
           <Link
             href={`/projects/${project.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="block truncate font-serif text-[15px] text-ink hover:underline"
+            className="block truncate text-[14px] font-[650] leading-[1.25] text-sk-ink hover:underline"
           >
             {project.name}
           </Link>
@@ -85,8 +99,8 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
           )}
         </h3>
         <span className="hidden min-w-0 sm:block">
-          <span className="block text-[8px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.position}</span>
-          <span className="mt-0.5 block truncate text-xs font-semibold text-ink">{currentPhaseLabel ?? '—'}</span>
+          <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.position}</span>
+          <span className="mt-0.5 block truncate text-[11px] font-[650] text-sk-ink">{currentPhaseLabel ?? '—'}</span>
         </span>
         <span className={`justify-self-end whitespace-nowrap rounded-[10px] px-2 py-1 text-center text-[10px] ${stateClass}`}>
           {stateLabel}{blockingCount > 0 ? ` · ${labels.blockingN.replace('{n}', String(blockingCount))}` : ''}
@@ -96,7 +110,7 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
           onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
           aria-expanded={open}
           aria-label={open ? labels.collapse : labels.expand}
-          className="inline-flex min-h-11 min-w-11 flex-none items-center justify-center font-serif text-lg text-sage sm:min-h-0 sm:min-w-0"
+          className="inline-flex min-h-11 min-w-11 flex-none items-center justify-center text-[16px] font-[650] leading-none text-sage sm:min-h-0 sm:min-w-0"
         >
           {open ? '−' : '+'}
         </button>
@@ -108,38 +122,58 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
             <p className="max-w-3xl text-xs leading-relaxed text-ink2">{project.summary}</p>
           )}
 
-          {/* Her .portfolio-story: three equal boxes, not stacked rows. */}
-          <div className="my-4 grid gap-2.5 sm:grid-cols-3">
-            <div className="rounded-[11px] border border-line bg-inset p-3">
-              <p className="text-[8px] font-semibold uppercase tracking-[0.08em] text-ink3">{labels.next}</p>
-              <p className="mt-1.5 text-xs font-semibold leading-[1.35] text-ink">
+          {/* .portfolio-story: three equal boxes, not stacked rows. */}
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-[11px] border border-line bg-sk-surface-soft p-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.next}</p>
+              <p className="mt-1.5 text-[11px] leading-[1.5] text-sk-ink">
                 {nextAction ? nextAction.title : labels.none}
               </p>
             </div>
-            <div className="rounded-[11px] border border-line bg-inset p-3">
-              <p className="text-[8px] font-semibold uppercase tracking-[0.08em] text-ink3">{labels.blocker}</p>
-              <p className="mt-1.5 text-xs font-semibold leading-[1.35] text-ink">
+            <div className="rounded-[11px] border border-line bg-sk-surface-soft p-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{blockerHeading}</p>
+              <p className="mt-1.5 text-[11px] leading-[1.5] text-sk-ink">
                 {mainBlocker ? `${mainBlocker.what} · ${mainBlocker.blocked_by}` : labels.none}
               </p>
+              {/* Two independently blocked workstreams show separately. */}
+              {technicalBlocker && (
+                <p className="mt-1.5 border-t border-line pt-1.5 text-[11px] leading-[1.5] text-sk-muted">
+                  <span className="font-[650] text-sk-ink">{labels.blockerTechnical}: </span>
+                  {technicalBlocker.what}
+                </p>
+              )}
             </div>
-            <div className="rounded-[11px] border border-line bg-inset p-3">
-              <p className="text-[8px] font-semibold uppercase tracking-[0.08em] text-ink3">{labels.then}</p>
-              <p className="mt-1.5 text-xs font-semibold leading-[1.35] text-ink">
+            <div className="rounded-[11px] border border-line bg-sk-surface-soft p-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.then}</p>
+              <p className="mt-1.5 text-[11px] leading-[1.5] text-sk-ink">
                 {thenAction ? thenAction.title : labels.none}
               </p>
             </div>
           </div>
 
-          {/* Her .project-position: one tinted strip, the two tracks joined by +. */}
-          <div className="flex items-center gap-2.5 rounded-[9px] bg-inset p-2.5">
+          {/* External waits and unverified items get their own labels — the
+              audit forbids folding either into the blocker count. */}
+          {(blockerCounts.waiting > 0 || blockerCounts.verify > 0) && (
+            <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-bold uppercase tracking-[0.12em]">
+              {blockerCounts.waiting > 0 && (
+                <span className="text-sk-blue">{labels.waitingN.replace('{n}', `⁨${blockerCounts.waiting}⁩`)}</span>
+              )}
+              {blockerCounts.verify > 0 && (
+                <span className="text-sk-amber">{labels.verifyN.replace('{n}', `⁨${blockerCounts.verify}⁩`)}</span>
+              )}
+            </p>
+          )}
+
+          {/* .project-position: one tinted strip, the two tracks joined by +. */}
+          <div className="mt-4 flex items-center gap-2.5 rounded-[8px] bg-sk-surface-soft p-2.5">
             <span className="min-w-0 flex-1">
-              <span className="block text-[8px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.primaryPhase}</span>
-              <span className="mt-1 block truncate text-[11px] font-semibold text-ink">{currentPhaseLabel ?? '—'}</span>
+              <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.primaryPhase}</span>
+              <span className="mt-1 block truncate text-[11px] font-[650] text-sk-ink">{currentPhaseLabel ?? '—'}</span>
             </span>
-            <span aria-hidden="true" className="text-sm text-ink3">+</span>
+            <span aria-hidden="true" className="text-[13px] text-sk-muted-light">+</span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[8px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.parallelWs}</span>
-              <span className="mt-1 block truncate text-[11px] font-semibold text-ink">
+              <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.parallelWs}</span>
+              <span className="mt-1 block truncate text-[11px] font-[650] text-sk-ink">
                 {workstreams.length > 0 ? workstreams.map((w) => w.name).join(', ') : labels.none}
               </span>
             </span>
@@ -169,12 +203,12 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
           </ol>
           {/* Her .portfolio-actions row: evidence line + solid green button. */}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line2 pt-3">
-            <p className="text-[11px] text-ink3">
+            <p className="text-[11px] leading-[1.5] text-sk-muted">
               {lastEvidence ? <>{labels.evidence.replace('{date}', '')}<bdi>{lastEvidence}</bdi></> : null}
             </p>
             <Link
               href={`/projects/${project.id}`}
-              className="inline-flex min-h-11 items-center rounded-[9px] bg-sage px-3.5 py-2 text-xs font-semibold text-white hover:opacity-90 sm:min-h-0"
+              className="inline-flex min-h-11 items-center rounded-[8px] bg-sage px-3.5 py-2 text-[10px] font-[650] leading-none text-white hover:opacity-90 sm:min-h-0"
             >
               {labels.investigate} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
             </Link>
