@@ -71,7 +71,7 @@ export function VerbMenu({ taskId, labels }: { taskId: string; labels: Record<st
   return (
     <span className="relative inline-block" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}>
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu"
-        className="min-h-11 rounded-full border border-line bg-card px-3 py-1 text-xs text-ink2 hover:bg-card2 sm:min-h-0">
+        className="min-h-11 rounded-[6px] bg-sage px-2.5 py-1 text-[9px] font-[650] leading-none text-white hover:opacity-90 sm:min-h-0">
         {labels.update}
       </button>
       {open && (

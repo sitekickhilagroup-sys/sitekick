@@ -145,7 +145,7 @@ export function AddAction({ projects, labels }: Props) {
             {/* Reconciliation step — her Task Reconciliation contract:
                 upsert or deduplicate before a new record exists. */}
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-apricot">{labels.dupKicker}</p>
-            <h2 className="mt-1 font-serif text-lg text-ink">{labels.dupTitle}</h2>
+            <h2 className="mt-1 text-[15px] font-[650] leading-[1.25] text-sk-ink">{labels.dupTitle}</h2>
             <p className="mt-1 text-xs text-ink2">{labels.dupSub.replace('{title}', title.trim())}</p>
             <ul className="mt-3 space-y-2">
               {duplicates.map((d) => (

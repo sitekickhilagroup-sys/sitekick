@@ -5,7 +5,7 @@ import { verbResultLabels } from '@/lib/i18n/verb-labels';
 import { supabaseServer } from '@/lib/supabase/server';
 import { scoreTask } from '@/lib/priority';
 import { laToday } from '@/lib/date';
-import { WorkTableRow } from '@/components/work/work-table-row';
+import { WORK_COLS, WorkTableRow } from '@/components/work/work-table-row';
 import { AddAction } from '@/components/work/add-action';
 import type { RelationRow } from '@/components/work/relation-editor';
 import type { Blocker, Invoice, Phase, Project, Relationship, Task, Vendor } from '@/lib/types';
@@ -172,6 +172,11 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     dueNow: t('work.due.now'),
     dueOverdue: t('work.due.overdue'),
     blocking: t('work.blocking'),
+    // Reused as the per-cell labels below lg, where the column header row is
+    // hidden and each field has to name itself.
+    colPhase: t('work.col_phase'),
+    colOwner: t('work.col_owner'),
+    colDue: t('work.col_due'),
     owner: t('tasks.owner'),
     fromSource: t('actions.from_source'),
     waiting: t('work.verb.waiting'),
@@ -236,12 +241,14 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const activeTab = viewTabs.find((v) => v.key === view);
 
   return (
-    <div className="space-y-4 pb-16">
-      {/* Her register-hero (centered) + the Add-action button. */}
+    <div className="sk-page mx-auto w-full max-w-[1060px] space-y-4 px-2 pb-16 sm:px-4">
+      {/* register-hero (centered) + the Add-action button. */}
       <div className="relative pt-2 text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink3">{t('work.title')}</p>
-        <h1 className="mt-1 font-serif text-2xl text-ink sm:text-3xl">{t('work.statement')}</h1>
-        <p className="mx-auto mt-1 max-w-xl text-sm text-ink3">{t('work.sub')}</p>
+        <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-sk-muted">{t('work.title')}</p>
+        <h1 className="mt-1 text-[clamp(26px,2.6vw,30px)] font-[650] leading-[1.1] tracking-[-0.035em] text-sk-ink">
+          {t('work.statement')}
+        </h1>
+        <p className="mx-auto mt-1.5 max-w-xl text-[11px] leading-[1.5] text-sk-muted">{t('work.sub')}</p>
         <div className="mt-3 flex justify-center sm:absolute sm:end-0 sm:top-2 sm:mt-0">
           <AddAction
             projects={projects.filter((p) => p.active !== false).map((p) => ({ id: p.id, name: p.name }))}
@@ -283,25 +290,27 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
             key={key}
             href={`/work?view=${key}`}
             aria-current={view === key ? 'page' : undefined}
-            className={`rounded-[13px] border px-3.5 py-3 transition-colors ${
+            className={`rounded-[14px] border px-3.5 py-3 transition-colors ${
               view === key
-                ? 'border-sage-line bg-sage-soft shadow-[0_0_0_2px_var(--color-sage-soft)]'
-                : 'border-line bg-card hover:border-line2'
+                ? 'border-sage-line bg-sk-green-soft-strong shadow-[0_0_0_2px_var(--color-sage-soft)]'
+                : 'border-line bg-sk-surface hover:border-line2'
             }`}
           >
-            <span className={`block font-serif text-2xl ${view === key ? 'text-sage' : 'text-ink'}`}>{count}</span>
-            <span className="mt-0.5 block text-sm font-medium text-ink">{label}</span>
-            <span className="block text-[10px] text-ink3">{sub}</span>
+            <span className={`block text-[23px] font-[650] leading-none tracking-[-0.02em] ${view === key ? 'text-sage' : 'text-sk-ink'}`}>
+              {count}
+            </span>
+            <span className="mt-1 block text-[10px] font-[650] text-sk-ink">{label}</span>
+            <span className="mt-0.5 block text-[10px] leading-[1.4] text-sk-muted">{sub}</span>
           </Link>
         ))}
       </div>
 
       {/* Her .register-context strip. */}
       {activeTab && (
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[11px] bg-card2/70 px-4 py-2.5">
-          <span className="font-serif text-sm text-ink">{activeTab.label}</span>
-          <span className="text-xs text-ink3">{activeTab.sub}</span>
-          <span className="ms-auto text-[11px] text-ink3">{t('work.one_record')}</span>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[10px] bg-sk-surface-soft px-4 py-2.5">
+          <span className="text-[13px] font-[650] text-sk-ink">{activeTab.label}</span>
+          <span className="text-[11px] leading-[1.5] text-sk-muted">{activeTab.sub}</span>
+          <span className="ms-auto text-[11px] leading-[1.5] text-sk-muted">{t('work.one_record')}</span>
         </div>
       )}
 
@@ -332,19 +341,27 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       {view === 'today' && approvedCount > 0 && (
         // Her .payment-run: collapsible aggregate with per-vendor rows
         // linking into Invoices — one payment task, full detail behind it.
-        <details className="rounded-(--radius-card) border border-sage-line bg-sage-soft">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 p-4">
-            <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sage font-mono text-sm text-white">$</span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-ink">{t('work.payment_run')}</span>
-              <span className="mt-0.5 block text-xs text-ink2">
+        <details className="rounded-[10px] border border-sage-line bg-sk-green-soft-strong">
+          {/* Spec §6: circular icon, name and metadata, then the amount in its
+              own cell toward the end, expand control last. */}
+          <summary className="grid min-h-11 cursor-pointer list-none grid-cols-[36px_minmax(0,1fr)_auto_20px] items-center gap-3 p-4">
+            <span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-sage font-mono text-sm text-white">$</span>
+            <span className="min-w-0">
+              <span className="block text-[13px] font-[650] text-sk-ink">{t('work.payment_run')}</span>
+              <span className="mt-0.5 block text-[10px] leading-[1.4] text-sk-muted">
                 {t('work.payment_run_sub')
                   .replace('{n}', String(approvedCount))
                   .replace('{total}', approvedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }))}
                 {' · '}{t('work.payment_groups').replace('{n}', String(vendorGroups))}
               </span>
             </span>
-            <span aria-hidden="true" className="font-serif text-lg text-sage">+</span>
+            <b className="whitespace-nowrap font-mono text-[13px] font-[650] text-sk-ink">
+              {t('work.payment_open_total').replace(
+                '{total}',
+                approvedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }),
+              )}
+            </b>
+            <span aria-hidden="true" className="justify-self-end text-[16px] font-[650] leading-none text-sage">+</span>
           </summary>
           <div className="space-y-1.5 border-t border-sage-line/50 p-3">
             {paymentGroups.map((g) => (
@@ -379,23 +396,28 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
           const project = projectId ? projectById.get(projectId) : null;
           const phaseLabel = project?.current_phase_key ? phaseLabelByKey.get(project.current_phase_key) : null;
           return (
-            <section key={projectId ?? 'none'}>
-              {/* Her group header: name + phase · case + count. */}
+            // Spec §7-§8: each project is its own bordered section on a warm
+            // salmon tint, with a compact count badge.
+            <section key={projectId ?? 'none'} className="rounded-[14px] border border-sk-salmon-border bg-sk-salmon-surface p-3.5">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
-                <h2 className="text-sm font-semibold text-ink">
+                <h2 className="text-[13px] font-[650] leading-[1.25] text-sk-ink">
                   {project?.name ?? t('common.general')}
                 </h2>
                 {(phaseLabel || project?.city_case) && (
-                  <span className="font-mono text-[11px] text-ink3">
-                    {[phaseLabel, project?.city_case].filter(Boolean).join(' · ')}
+                  <span className="text-[10px] leading-[1.35] text-sk-muted">
+                    {phaseLabel}
+                    {phaseLabel && project?.city_case ? ' · ' : ''}
+                    {project?.city_case && <span className="font-mono">{project.city_case}</span>}
                   </span>
                 )}
-                <span className="ms-auto text-[11px] text-ink3">
-                  {t('work.today_n').replace('{n}', String(groupTasks.length))}
+                <span className="ms-auto rounded-[6px] bg-coral-soft px-2 py-1 text-[10px] font-[650] leading-none text-coral">
+                  {groupTasks.length === 1
+                    ? t('work.tasks_today_one')
+                    : t('work.tasks_today_other').replace('{n}', `⁨${groupTasks.length}⁩`)}
                 </span>
               </div>
-              <div className="mt-2 rounded-(--radius-card) border border-line bg-card shadow-card">
-                <div className="hidden grid-cols-[minmax(0,2.1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.1fr)] gap-x-4 border-b border-line bg-card2/60 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.08em] text-ink3 lg:grid">
+              <div className="mt-2 overflow-hidden rounded-[10px] border border-line bg-sk-surface">
+                <div className={`hidden ${WORK_COLS} gap-x-4 border-b border-line bg-sk-surface-header px-3 py-2 text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted lg:grid`}>
                   <span>{t('work.col_what')}</span>
                   <span>{t('work.col_phase')}</span>
                   <span>{t('work.col_owner')}</span>

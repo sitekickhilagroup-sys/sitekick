@@ -6,6 +6,17 @@ import { WaitingEditor } from '@/components/overview/waiting-editor';
 import { VerbMenu } from './verb-menu';
 import { RelationEditor, type RelationRow } from './relation-editor';
 
+/**
+ * Spec §9 column proportions: What must move | Phase / sub-stage |
+ * Owner / waiting on | Due | Status & update.
+ *
+ * Exported because the header row in work/page.tsx and every data row here
+ * must stay in lockstep — they were two separate literals before, which is a
+ * silent misalignment waiting to happen.
+ */
+export const WORK_COLS =
+  'lg:grid-cols-[minmax(240px,2.2fr)_minmax(130px,1.15fr)_minmax(150px,1.25fr)_minmax(70px,0.55fr)_minmax(120px,0.9fr)]';
+
 interface Props {
   task: Task;
   labels: Record<string, string>;
@@ -55,7 +66,7 @@ export function WorkTableRow({ task, labels, relations, taskOptions, today, rank
 
   return (
     <li className="border-b border-line2 px-3 py-3 last:border-b-0">
-      <div className="grid gap-x-4 gap-y-2 lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,1.1fr)] lg:items-start">
+      <div className={`grid gap-x-4 gap-y-2 ${WORK_COLS} lg:items-start`}>
         {/* What must move — her .action-name: a state dot (red halo when
             blocking) beside the title. */}
         <div className="flex min-w-0 items-start gap-2.5">
@@ -65,23 +76,30 @@ export function WorkTableRow({ task, labels, relations, taskOptions, today, rank
           <span className="min-w-0">
             <span className="flex items-baseline gap-2">
               {rank != null && (
-                <span className="font-mono text-xs font-medium text-sage">{String(rank).padStart(2, '0')}</span>
+                <span className="font-mono text-[11px] font-medium text-sage">{String(rank).padStart(2, '0')}</span>
               )}
-              <span className="min-w-0 text-sm font-medium text-ink">{task.title}</span>
+              <span className="min-w-0 text-[11px] font-[650] leading-[1.4] text-sk-ink">{task.title}</span>
             </span>
-            {task.source && <span className="mt-0.5 block truncate text-[11px] text-ink3">{task.source}</span>}
+            {task.source && <span className="mt-0.5 block truncate text-[10px] text-sk-muted">{task.source}</span>}
           </span>
         </div>
 
-        {/* Phase / sub-stage */}
-        <div className="min-w-0 text-xs">
-          {phaseLabel && <p className="text-ink2">{phaseLabel}</p>}
-          {stageLabel && <p className="truncate text-ink3">{stageLabel}</p>}
+        {/* Phase / sub-stage. The column headers are hidden below lg, so each
+            cell names itself there — spec §15 wants labelled mobile fields. */}
+        <div className="min-w-0 text-[10px]">
+          <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted-light lg:hidden">
+            {labels.colPhase}
+          </span>
+          {phaseLabel && <p className="text-sk-text">{phaseLabel}</p>}
+          {stageLabel && <p className="truncate text-sk-muted">{stageLabel}</p>}
         </div>
 
         {/* Owner / waiting on */}
-        <div className="min-w-0 text-xs">
-          {task.owner && <p className="truncate text-ink2">{task.owner}</p>}
+        <div className="min-w-0 text-[10px]">
+          <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted-light lg:hidden">
+            {labels.colOwner}
+          </span>
+          {task.owner && <p className="truncate text-sk-text">{task.owner}</p>}
           <div className="mt-0.5">
             <WaitingEditor taskId={task.id} value={task.waiting_for} label={labels.waiting}
               editTitle={labels.editWaiting} saveLabel={labels.save} cancelLabel={labels.cancel} errorLabel={labels.errorSave} />
@@ -90,22 +108,33 @@ export function WorkTableRow({ task, labels, relations, taskOptions, today, rank
 
         {/* Due */}
         <div>
+          <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted-light lg:hidden">
+            {labels.colDue}
+          </span>
           {dueState === 'overdue' && (
-            <span className="rounded-full bg-coral-soft px-2 py-0.5 font-mono text-[11px] text-coral">{labels.dueOverdue ?? task.due}</span>
+            <span className="rounded-[6px] bg-sk-salmon px-2 py-0.5 font-mono text-[10px] text-sk-salmon-text">{labels.dueOverdue ?? task.due}</span>
           )}
           {dueState === 'now' && (
-            <span className="rounded-full bg-apricot-soft px-2 py-0.5 font-mono text-[11px] text-apricot">{labels.dueNow ?? task.due}</span>
+            <span className="rounded-[6px] bg-sk-amber-halo px-2 py-0.5 font-mono text-[10px] text-sk-amber">{labels.dueNow ?? task.due}</span>
           )}
           {dueState === 'future' && (
-            <span className="whitespace-nowrap font-mono text-xs text-ink2">{task.due}</span>
+            <span className="whitespace-nowrap font-mono text-[10px] text-sk-text">{task.due}</span>
           )}
         </div>
 
-        {/* Status & update */}
+        {/* Status & update. Spec §10 asks for varied treatments rather than one
+            red BLOCKING on everything — but TaskStatus is only open/done/dropped,
+            so Verify, In Progress and With the City have no source here. Only
+            what the data actually proves is rendered. */}
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           {blocking && labels.blocking && (
-            <span className="rounded-full bg-coral-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-coral">
+            <span className="rounded-[6px] bg-sk-salmon px-2 py-1 text-[9px] font-[650] uppercase tracking-[0.06em] leading-none text-sk-salmon-text">
               {labels.blocking}
+            </span>
+          )}
+          {!blocking && task.waiting_for && labels.waiting && (
+            <span className="rounded-[6px] bg-sk-blue-soft px-2 py-1 text-[9px] font-[650] uppercase tracking-[0.06em] leading-none text-sk-blue">
+              {labels.waiting}
             </span>
           )}
           <VerbMenu taskId={task.id} labels={labels} />
@@ -113,7 +142,7 @@ export function WorkTableRow({ task, labels, relations, taskOptions, today, rank
             type="button"
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className="min-h-11 cursor-pointer rounded-full px-2 py-0.5 text-xs text-ink3 hover:text-ink sm:min-h-7"
+            className="min-h-11 cursor-pointer rounded-[6px] border border-sage-line px-2 py-1 text-[9px] font-[650] leading-none text-sage hover:bg-sk-green-soft sm:min-h-7"
           >
             {labels.details} <span aria-hidden="true" className={`inline-block transition-transform ${open ? 'rotate-90' : ''} rtl:-scale-x-100`}>›</span>
           </button>
