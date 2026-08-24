@@ -43,3 +43,6 @@ next-env.d.ts
 # never commit ad-hoc temp/secret scratch files
 *.tmp
 *.stackdump
+
+# supabase cli scratch (version marker, cached credentials)
+supabase/.temp/
