@@ -7,7 +7,9 @@ export type StageStatus = 'done' | 'current' | 'upcoming' | 'skipped';
 export type InvoiceStatus = 'received' | 'for_rowan_approval' | 'approved' | 'paid' | 'on_hold';
 export type InvoiceTab = 'invoices' | 'payment_summary' | 'david';
 export type TaskPriority = 'critical' | 'high' | 'normal';
-export type TaskStatus = 'open' | 'done' | 'dropped';
+/** 'merged' (0010) marks a duplicate folded into a Master Action. Rows in that
+ *  state are kept for history and filtered out of every list. */
+export type TaskStatus = 'open' | 'done' | 'dropped' | 'merged';
 export type DocKind = 'email' | 'transcript' | 'invoice_pdf' | 'sheet' | 'other';
 export type DocSource = 'forward' | 'gmail' | 'outlook' | 'upload' | 'sheets' | 'zimas' | 'manual';
 export type DraftStatus = 'proposed' | 'approved' | 'sent' | 'dismissed';
@@ -117,6 +119,10 @@ export interface Task {
   created_at: string;
   manual_priority: number | null;
   snoozed_until: string | null;
+  /** 0010 — set when this row was folded into a Master Action. */
+  merged_into: string | null;
+  merged_at: string | null;
+  merged_by: string | null;
 }
 
 export interface Blocker {
@@ -267,7 +273,11 @@ export type ProposalState = 'pending' | 'accepted' | 'rejected' | 'auto_applied'
 // drawer before it is applied (her "RECOMMENDED TREATMENT" select).
 export type ChangeType =
   | 'new_task' | 'update_existing' | 'complete_existing'
-  | 'merge_duplicate' | 'keep_open' | 'information_only';
+  // 'keep_both_linked' is the option the corrections doc asks for and the
+  // drawer was missing: the two items are genuinely different work in one
+  // chain, so both survive and a relationship records the dependency.
+  // 'keep_open' leaves both records and links nothing.
+  | 'merge_duplicate' | 'keep_both_linked' | 'keep_open' | 'information_only';
 
 export interface AgentProposal {
   id: string;

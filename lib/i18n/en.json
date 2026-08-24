@@ -514,6 +514,7 @@
   "review.ct.update_existing": "Update existing task",
   "review.ct.complete_existing": "Existing task is completed",
   "review.ct.merge_duplicate": "Merge duplicate",
+  "review.ct.keep_both_linked": "Keep both and link them",
   "review.ct.keep_open": "Keep existing task open",
   "review.ct.information_only": "Information only",
   "bell.aria": "{n} agent suggestions",

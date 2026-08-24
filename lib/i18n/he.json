@@ -514,6 +514,7 @@
   "review.ct.update_existing": "עדכון משימה קיימת",
   "review.ct.complete_existing": "המשימה הקיימת הושלמה",
   "review.ct.merge_duplicate": "מיזוג כפילות",
+  "review.ct.keep_both_linked": "להשאיר את שתיהן ולקשר ביניהן",
   "review.ct.keep_open": "להשאיר את המשימה פתוחה",
   "review.ct.information_only": "מידע בלבד",
   "bell.aria": "{n} הצעות מהסוכן",

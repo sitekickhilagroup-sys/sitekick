@@ -5,6 +5,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { logActivity } from '@/lib/state-writer';
+import { planMerge } from '@/lib/merge';
+import type { Task } from '@/lib/types';
 
 export async function createTask(formData: FormData) {
   const user = await requireUser();
@@ -56,6 +58,90 @@ export interface DuplicateCandidate {
 
 /** Guards the one place a client-supplied id is interpolated into a filter. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Fold a duplicate task into a Master Action.
+ *
+ * The losing row is never deleted — it is marked merged and keeps its own
+ * fields, so the history survives and undo only has to clear three columns.
+ * Both sides are written to the activity log with before and after, which is
+ * what makes the change auditable and reversible.
+ */
+export async function mergeTasks(masterId: string, duplicateId: string) {
+  const user = await requireUser();
+  if (masterId === duplicateId) return { error: 'cannot merge a task into itself' };
+  const admin = supabaseAdmin();
+  const actor = user.email ?? user.id;
+
+  const { data: rows, error: loadError } = await admin
+    .from('tasks').select('*').in('id', [masterId, duplicateId]);
+  if (loadError) return { error: loadError.message };
+
+  const master = (rows ?? []).find((r) => r.id === masterId) as Task | undefined;
+  const duplicate = (rows ?? []).find((r) => r.id === duplicateId) as Task | undefined;
+  if (!master || !duplicate) return { error: 'task not found' };
+  if (duplicate.merged_into) return { error: 'already merged' };
+  // Merging a master into something else would orphan everything pointing at
+  // it, so the chain is kept one level deep.
+  if (master.merged_into) return { error: 'master is itself merged' };
+
+  const patch = planMerge(master, duplicate, { actor, now: new Date().toISOString() });
+
+  if (Object.keys(patch.master).length > 0) {
+    const { error } = await admin.from('tasks').update(patch.master).eq('id', masterId);
+    if (error) return { error: error.message };
+  }
+  const { error: loserError } = await admin.from('tasks').update(patch.loser).eq('id', duplicateId);
+  if (loserError) return { error: loserError.message };
+
+  await logActivity(admin, {
+    entity_type: 'task', entity_id: duplicateId, actor, action: 'merge',
+    before: duplicate, after: { ...duplicate, ...patch.loser },
+  });
+  await logActivity(admin, {
+    entity_type: 'task', entity_id: masterId, actor, action: 'merge:absorb',
+    before: master, after: { ...master, ...patch.master },
+  });
+
+  revalidatePath('/');
+  revalidatePath('/work');
+  revalidatePath('/inbox');
+  return { ok: true };
+}
+
+/**
+ * Reverse a merge. The duplicate kept every field it had, so restoring it is a
+ * matter of clearing the merge columns and putting its status back.
+ *
+ * What this does not do is unpick the values the master absorbed: those were
+ * gap-fills, and removing them could delete a value a human has since edited.
+ * The activity log holds the master's before-state for anyone who needs it.
+ */
+export async function undoMerge(duplicateId: string) {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const actor = user.email ?? user.id;
+
+  const { data: row, error: loadError } = await admin
+    .from('tasks').select('*').eq('id', duplicateId).single();
+  if (loadError) return { error: loadError.message };
+  const duplicate = row as Task;
+  if (!duplicate.merged_into) return { error: 'not merged' };
+
+  const restored = { status: 'open' as const, merged_into: null, merged_at: null, merged_by: null };
+  const { error } = await admin.from('tasks').update(restored).eq('id', duplicateId);
+  if (error) return { error: error.message };
+
+  await logActivity(admin, {
+    entity_type: 'task', entity_id: duplicateId, actor, action: 'merge:undo',
+    before: duplicate, after: { ...duplicate, ...restored },
+  });
+
+  revalidatePath('/');
+  revalidatePath('/work');
+  revalidatePath('/inbox');
+  return { ok: true };
+}
 
 export async function createTaskChecked(input: {
   projectId: string | null;

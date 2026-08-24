@@ -35,7 +35,10 @@ const FILTERS: { key: string; labelKey: string }[] = [
 ];
 
 const TREATMENTS: ChangeType[] = [
-  'new_task', 'update_existing', 'complete_existing', 'merge_duplicate', 'keep_open', 'information_only',
+  'new_task', 'update_existing', 'complete_existing', 'merge_duplicate',
+  // The corrections doc asks for this and the drawer did not offer it: keep
+  // both records and record the dependency between them.
+  'keep_both_linked', 'keep_open', 'information_only',
 ];
 
 // Her confidence chip: colour is the claim's strength, never the decision.

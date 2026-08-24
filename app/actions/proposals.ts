@@ -123,6 +123,46 @@ export async function decideProposal(
       entity_type: 'task', entity_id: created.id, actor,
       action: 'review:new_task', after: { proposal_id: id, created: true },
     });
+  } else if (changeType === 'keep_both_linked') {
+    // Not a duplicate: two steps of one chain, like Soils Addendum → LADBS
+    // Review → Soil Approval Letter. The corrections doc is explicit that
+    // these must not be merged into a single task — both records survive and
+    // the dependency is recorded instead.
+    if (!title) return { error: 'a new task needs a title' };
+    if (!p.target_task_id) return { error: 'linking needs an existing task' };
+    const { data: created, error } = await admin.from('tasks').insert({
+      project_id: p.project_id,
+      document_id: p.document_id,
+      title,
+      description: note,
+      owner,
+      due,
+      stage_key: typeof p.payload.stage_key === 'string' ? p.payload.stage_key : null,
+      status: 'open',
+      source: 'agent review',
+      last_touched: today,
+    }).select('id').single();
+    if (error) return { error: error.message };
+
+    const { error: relError } = await admin.from('relationships').insert({
+      project_id: p.project_id,
+      from_task_id: p.target_task_id,
+      to_task_id: created.id,
+      type: 'blocks',
+      reason: note,
+      evidence_document_id: p.document_id,
+      // A human chose this in the review drawer, so the link is verified —
+      // it is not an agent inference.
+      verified_by: actor,
+      verified_at: new Date().toISOString(),
+    });
+    if (relError) return { error: relError.message };
+
+    undoId = await logActivity(admin, {
+      entity_type: 'task', entity_id: created.id, actor,
+      action: 'review:keep_both_linked',
+      after: { proposal_id: id, created: true, linked_to: p.target_task_id },
+    });
   } else if (changeType === 'information_only') {
     undoId = await logActivity(admin, {
       entity_type: 'proposal', entity_id: id, actor,
