@@ -78,6 +78,20 @@ describe('selectBlockerView — Main Blocker selection', () => {
     expect(view.primaryKind).toBe('external_gate');
   });
 
+  it('leads with an external gate over a longer-stuck workstream blocker', () => {
+    // Alta Mesa's card is a City confirmation with the LID workstream blocker
+    // below it. Ranking both kinds together by days_stuck let whichever had
+    // sat longer take the headline, which inverted that card.
+    const rows = [
+      blocker({ id: 'lid', kind: 'workstream', days_stuck: 40 }),
+      blocker({ id: 'deemed-complete', kind: 'external_gate', days_stuck: 5 }),
+    ];
+    const view = selectBlockerView(rows, AT_PLANNING);
+    expect(view.primary?.id).toBe('deemed-complete');
+    expect(view.primaryKind).toBe('external_gate');
+    expect(view.technical?.id).toBe('lid');
+  });
+
   it('reports a technical blocker separately from the primary one', () => {
     // "If two independent workstreams are blocked, show Primary Blocker and
     // Technical Blocker separately."

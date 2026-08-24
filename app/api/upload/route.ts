@@ -24,6 +24,20 @@ export const maxDuration = 300;
 //   .csv            -> text -> comms agent
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // zip-based formats can inflate — cap the input
 
+/**
+ * Sort key for an email's own Date header.
+ *
+ * These were compared as strings, which is not chronological for RFC-822 —
+ * "Mon, 14 Jul 2026" sorts above "Fri, 22 Aug 2026" because M precedes F. With
+ * a processing budget of ten messages, that meant the "newest ten" were an
+ * effectively arbitrary ten. Undated messages sort last rather than first.
+ */
+function emailTime(date: string | null | undefined): number {
+  if (!date) return 0;
+  const t = Date.parse(date);
+  return Number.isNaN(t) ? 0 : t;
+}
+
 export async function POST(req: NextRequest) {
   try {
     await requireUser();
@@ -109,7 +123,7 @@ export async function POST(req: NextRequest) {
       let stored = 0, deduped = 0, processed = 0;
       const PROCESS_CAP = 10;
       // newest first so the cap spends agent budget on recent mail
-      const sorted = [...emails].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      const sorted = [...emails].sort((a, b) => emailTime(b.date) - emailTime(a.date));
       for (const email of sorted) {
         const { documentId, deduped: dup } = await ingestDocument(admin, {
           kind: 'email', source: 'upload', external_id: email.externalId,
@@ -147,7 +161,7 @@ export async function POST(req: NextRequest) {
       let stored = 0, deduped = 0, processed = 0;
       const PROCESS_CAP = 10;
       // newest first so the cap spends agent budget on recent mail (same as .jsonl branch)
-      const sorted = [...emails].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      const sorted = [...emails].sort((a, b) => emailTime(b.date) - emailTime(a.date));
       for (let i = 0; i < sorted.length; i++) {
         const email = sorted[i];
         const { documentId, deduped: dup } = await ingestDocument(admin, {

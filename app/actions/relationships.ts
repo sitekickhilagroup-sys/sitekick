@@ -6,7 +6,10 @@ import { requireUser } from '@/lib/auth';
 import { logActivity } from '@/lib/state-writer';
 import type { RelationshipType } from '@/lib/types';
 
-const VALID_TYPES: RelationshipType[] = ['blocks', 'supports', 'parallel', 'unrelated', 'needs_verification'];
+const VALID_TYPES: RelationshipType[] = [
+  'blocks', 'supports', 'parallel', 'unrelated', 'needs_verification',
+  'required_for', 'affects', 'related', 'independent', 'conditional',
+];
 
 export async function saveRelationship(fromTaskId: string, toTaskId: string, type: RelationshipType, reason: string) {
   const user = await requireUser();

@@ -1,6 +1,8 @@
 // The only module that commits agent proposals (client handoff: "one service writes").
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { matchExistingTask } from './dedup.ts';
+import { BLOCKER_KINDS } from './blockers.ts';
+import type { BlockerKind } from './types.ts';
 import type { AgentProposal, Task } from './types.ts';
 
 /** Returns the audit row id, which is what Undo needs to restore the snapshot. */
@@ -37,11 +39,30 @@ export async function applyProposal(
     return { ok: true };
   }
   if (p.type === 'blocker_create') {
+    // Carry the classification through from the proposal. Without this an
+    // accepted blocker landed on the 0009 defaults — kind 'verify',
+    // confidence 0.50 — which the derivation can never promote to Primary, so
+    // an agent could raise a blocker that was structurally invisible.
+    //
+    // Anything the proposal cannot evidence stays null, which is the honest
+    // outcome: the mandatory test asks which stage cannot advance and what
+    // releases it, and an item answering neither is not Blocking.
+    const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    const proposedKind = str(pay.kind);
     const { data, error } = await admin.from('blockers').insert({
       project_id: p.project_id, document_id: p.document_id,
       what: pay.what, blocked_by: pay.blocked_by,
       days_at_risk: pay.days_at_risk ?? 0, downstream: pay.downstream ?? [],
       suggested_action: pay.suggested_action ?? null,
+      kind: proposedKind && BLOCKER_KINDS.includes(proposedKind as BlockerKind) ? proposedKind : 'verify',
+      blocks_phase: str(pay.blocks_phase),
+      blocks_substage: str(pay.blocks_substage),
+      blocked_deliverable: str(pay.blocked_deliverable),
+      relationship_reason: str(pay.relationship_reason) ?? str(pay.reasoning),
+      release_condition: str(pay.release_condition),
+      confidence: typeof p.confidence === 'number' ? p.confidence : 0.5,
+      effective_from: today,
+      last_verified_at: new Date().toISOString(),
     }).select('id').single();
     if (error) return { error: error.message };
     await logActivity(admin, { entity_type: 'blocker', entity_id: data.id, actor, action: 'accept:blocker_create', after: pay });

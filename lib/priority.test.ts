@@ -19,7 +19,9 @@ function blocker(over: Partial<Blocker>): Blocker {
   return {
     id: 'b1', project_id: 'p1', document_id: null, what: 'Stuck thing',
     blocked_by: 'Someone', days_at_risk: 0, days_stuck: 0, downstream: [],
-    suggested_action: null, status: 'active', created_at: '', ...over,
+    // Ranking weight now depends on classification, so the fixture has to
+    // state one. 'primary' keeps these cases at the old full weight.
+    suggested_action: null, status: 'active', kind: 'primary', created_at: '', ...over,
   } as Blocker;
 }
 
@@ -62,6 +64,24 @@ describe('scoreTask', () => {
   it('manual_priority pins above everything', () => {
     const pinned = task({ manual_priority: 5 });
     expect(scoreTask(pinned, { today: TODAY })).toBe(1005);
+  });
+});
+
+describe('scoreBlocker weights by classification', () => {
+  // An external wait or an unverified claim must not outrank real blocked work
+  // — the audit's "an urgent task that does not stop a stage is not a Main
+  // Blocker" applies to Today's ranking too.
+  it('ranks a primary blocker above every other kind', () => {
+    const stuck = { days_stuck: 10 };
+    const primary = scoreBlocker(blocker({ ...stuck, kind: 'primary' }));
+    expect(primary).toBeGreaterThan(scoreBlocker(blocker({ ...stuck, kind: 'workstream' })));
+    expect(primary).toBeGreaterThan(scoreBlocker(blocker({ ...stuck, kind: 'external_gate' })));
+    expect(primary).toBeGreaterThan(scoreBlocker(blocker({ ...stuck, kind: 'verify' })));
+    expect(primary).toBeGreaterThan(scoreBlocker(blocker({ ...stuck, kind: 'future_gate' })));
+  });
+
+  it('scores information_only at zero so it never ranks at all', () => {
+    expect(scoreBlocker(blocker({ days_stuck: 30, kind: 'information_only' }))).toBe(0);
   });
 });
 

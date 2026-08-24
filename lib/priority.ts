@@ -1,4 +1,4 @@
-import type { Action, Blocker, ProjectStage, Relationship, Task } from './types.ts';
+import type { Action, Blocker, BlockerKind, ProjectStage, Relationship, Task } from './types.ts';
 
 // Deterministic priority engine — no LLM. Drives Top Actions + digest.
 
@@ -40,8 +40,29 @@ export function scoreTask(t: Task, ctx: ScoreContext): number {
   return score;
 }
 
+/**
+ * Weight by classification, not just by existence.
+ *
+ * This was a flat +50 for every active blocker, so an external wait or an
+ * unverified claim outranked real work — the audit's point that "an urgent task
+ * that does not stop a stage is not a Main Blocker" applies to ranking too.
+ * Only primary and workstream items are genuine blockers; the rest still
+ * surface, lower down.
+ */
+const KIND_WEIGHT: Record<BlockerKind, number> = {
+  primary: 50,
+  workstream: 35,
+  external_gate: 15,   // someone else owes us a response; chasing is an action
+  future_gate: 5,      // will matter later, does not stop today
+  urgent_action: 20,   // needs attention, prevents no stage
+  verify: 10,          // a claim without evidence should not outrank proven work
+  information_only: 0,
+};
+
 export function scoreBlocker(b: Blocker): number {
-  return 50 + Math.min(b.days_stuck, 30) + (b.downstream.length >= 2 ? 15 : 0);
+  const base = KIND_WEIGHT[b.kind] ?? 10;
+  if (base === 0) return 0;
+  return base + Math.min(b.days_stuck, 30) + (b.downstream.length >= 2 ? 15 : 0);
 }
 
 export function followUpAlerts(tasks: Task[], today: string): Task[] {

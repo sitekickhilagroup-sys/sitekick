@@ -364,7 +364,13 @@ export interface ProjectSubstage {
 }
 
 // Relationships: typed task dependencies with evidence (lib/types.ts mirrors supabase/migrations/0004_relationships.sql)
-export type RelationshipType = 'blocks' | 'supports' | 'parallel' | 'unrelated' | 'needs_verification';
+/** 0011 adds the five the process spec requires. `supports` and `unrelated`
+ *  stay: the spec's `required_for` is a stronger claim than "supports", and
+ *  `independent` is narrower than "unrelated" (same project, different causal
+ *  chain), so neither pair collapses into one value. */
+export type RelationshipType =
+  | 'blocks' | 'supports' | 'parallel' | 'unrelated' | 'needs_verification'
+  | 'required_for' | 'affects' | 'related' | 'independent' | 'conditional';
 
 export interface Relationship {
   id: string;
