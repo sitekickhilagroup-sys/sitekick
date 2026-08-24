@@ -40,12 +40,22 @@ export function matchExistingTask(candidate: TaskCandidate, open: Task[]): Task 
   let best: Task | null = null;
   let bestScore = 0;
   for (const t of open) {
-    if (t.project_id !== candidate.project_id) continue;
+    // Two *known* projects are still never conflated. But an unassigned row —
+    // the one that renders as "General" — has to be comparable to the same work
+    // filed against a project: every duplicate group in the audit was exactly
+    // that pair, and skipping it meant they could never be found.
+    const sameProject = t.project_id === candidate.project_id;
+    const oneUnassigned = t.project_id === null || candidate.project_id === null;
+    if (!sameProject && !oneUnassigned) continue;
+
     const tTokens = tokenize(t.title);
     let score = Math.max(jaccard(cTokens, tTokens), containment(cTokens, tTokens) - 0.2);
     if (candidate.stage_key && t.stage_key && candidate.stage_key !== t.stage_key) {
       score -= 0.15;
     }
+    // When a General twin and a properly filed row score alike, prefer the one
+    // already attached to the project.
+    if (!sameProject) score -= 0.01;
     if (score > bestScore) {
       bestScore = score;
       best = t;

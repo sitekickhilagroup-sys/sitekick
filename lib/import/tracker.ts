@@ -20,6 +20,27 @@ function matchProject(name: string | null, projects: Pick<Project, 'id' | 'name'
   return hit?.id ?? null;
 }
 
+/**
+ * Identity key for a vendor name.
+ *
+ * The vendors table is unique on the exact string, so "Thang Le & Associates"
+ * and "Thang le& Associates" became two rows with two ids — and because the
+ * invoice upsert keys on (vendor_id, number), the same invoice could then never
+ * collide with itself. That is how one $5,250 invoice became several.
+ *
+ * Differences in case, spacing, periods and hyphens are collapsed, and a
+ * trailing corporate suffix is dropped so "PREMISE" and "PREMISE LLC" resolve
+ * together — both cases the audit names explicitly.
+ */
+export function vendorKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.\-_/&,]/g, ' ')
+    .replace(/\b(llc|inc|ltd|corp|co|company|associates|assoc)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, '')
+    .trim();
+}
+
 export async function applyInvoiceRows(
   admin: SupabaseClient,
   docId: string,
@@ -28,16 +49,26 @@ export async function applyInvoiceRows(
 ): Promise<{ upserted: number; failed: number }> {
   let upserted = 0, failed = 0;
   const vendorIds = new Map<string, string>();
+
+  // Load the existing vendors once and index them by identity key, so a name
+  // that differs only in punctuation reuses the row instead of creating a twin.
+  const { data: existingVendors } = await admin.from('vendors').select('id,name');
+  for (const v of (existingVendors ?? []) as { id: string; name: string }[]) {
+    const k = vendorKey(v.name);
+    if (k && !vendorIds.has(k)) vendorIds.set(k, v.id);
+  }
+
   for (const row of rows) {
     if (!row.vendor && !row.number) continue;
     let vendorId: string | null = null;
     if (row.vendor) {
-      vendorId = vendorIds.get(row.vendor) ?? null;
+      const key = vendorKey(row.vendor);
+      vendorId = vendorIds.get(key) ?? null;
       if (!vendorId) {
         const { data } = await admin.from('vendors')
           .upsert({ name: row.vendor }, { onConflict: 'name' }).select('id').single();
         vendorId = data?.id ?? null;
-        if (vendorId) vendorIds.set(row.vendor, vendorId);
+        if (vendorId && key) vendorIds.set(key, vendorId);
       }
     }
     const { error } = await admin.from('invoices').upsert({
@@ -50,10 +81,17 @@ export async function applyInvoiceRows(
       status: row.status,
       tab: 'invoices',
       entity: row.entity,
-      transfer_confirmation_url: row.link,
+      // The sheet's link column is the invoice document. It was written to
+      // transfer_confirmation_url, so every imported invoice link surfaced
+      // under the "Transfer confirmation" label instead.
+      invoice_url: row.link,
       approved_by: row.approved_by,
       budget_line: row.description,
-      paid_date: row.status === 'paid' ? row.received_date : null,
+      // Was `row.status === 'paid' ? row.received_date : null`, which stamped
+      // the received date as the payment date on every paid invoice — a
+      // fabricated figure on a financial record. Only a real payment date from
+      // the sheet is written now.
+      paid_date: row.paid_date,
     }, { onConflict: 'vendor_id,number' });
     if (error) failed++; else upserted++;
   }

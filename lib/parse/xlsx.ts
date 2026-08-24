@@ -13,7 +13,9 @@ export interface InvoiceRow {
   link: string | null;
   description: string | null;
   amount: number;
-  status: 'received' | 'for_rowan_approval' | 'approved' | 'paid';
+  status: 'received' | 'for_rowan_approval' | 'approved' | 'paid' | 'on_hold';
+  /** The real payment date from the sheet. Never the received date. */
+  paid_date: string | null;
   approved_by: string | null;
 }
 
@@ -95,6 +97,9 @@ function mapInvoiceStatus(v: unknown): InvoiceRow['status'] {
   if (s.includes('paid')) return 'paid';
   if (s.includes('rowan')) return 'for_rowan_approval';
   if (s.includes('approv')) return 'approved';
+  // "On Hold" normalises to "onhold" and matched none of the above, so every
+  // held invoice imported as Received — and was then counted as open money.
+  if (s.includes('hold')) return 'on_hold';
   return 'received';
 }
 
@@ -119,6 +124,7 @@ export function parseWorkbook(buffer: Buffer): XlsxImport {
         description: str(pick(o, 'description')),
         amount: Number(pick(o, 'invoiceamount', 'amount')) || 0,
         status: mapInvoiceStatus(pick(o, 'status')),
+        paid_date: excelDate(pick(o, 'paymentdate', 'paiddate', 'datepaid')),
         approved_by: str(pick(o, 'approvedby')),
       }));
     if (out.length > 0) return { kind: 'invoices', rows: out };

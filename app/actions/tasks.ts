@@ -54,6 +54,9 @@ export interface DuplicateCandidate {
   waiting_for: string | null;
 }
 
+/** Guards the one place a client-supplied id is interpolated into a filter. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function createTaskChecked(input: {
   projectId: string | null;
   title: string;
@@ -68,9 +71,21 @@ export async function createTaskChecked(input: {
   const admin = supabaseAdmin();
 
   if (!input.force) {
-    let q = admin.from('tasks').select('id,title,owner,due,waiting_for').eq('status', 'open');
-    q = input.projectId ? q.eq('project_id', input.projectId) : q.is('project_id', null);
-    const { data: open } = await q;
+    // Same fix as lib/dedup.ts: the search used to be locked to the candidate's
+    // own project, so adding a task that already existed under General (or the
+    // reverse) reported no duplicate and created the twin. Two known projects
+    // stay apart; an unassigned row is compared against both.
+    //
+    // projectId reaches here from the client, and .or() takes a filter
+    // expression, so it is only interpolated once it is known to be a UUID.
+    const scoped = input.projectId && UUID.test(input.projectId) ? input.projectId : null;
+    const base = admin
+      .from('tasks')
+      .select('id,title,owner,due,waiting_for,project_id')
+      .eq('status', 'open');
+    const { data: open } = scoped
+      ? await base.or(`project_id.eq.${scoped},project_id.is.null`)
+      : await base;
     const duplicates: DuplicateCandidate[] = ((open ?? []) as DuplicateCandidate[])
       .map((t) => ({ t, score: similarity(title, t.title) }))
       .filter((x) => x.score >= 0.5)
