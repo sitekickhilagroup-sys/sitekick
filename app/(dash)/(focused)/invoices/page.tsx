@@ -94,7 +94,15 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     const nm = vDisplay(inv.vendor_id);
     if (nm) vendorCounts.set(nm, (vendorCounts.get(nm) ?? 0) + 1);
   }
-  const vendorPills = [...vendorCounts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  // Spec §8 warns against "dozens of tiny vendor chips over several crowded
+  // rows", and the target screenshot shows roughly six. Busiest vendors lead;
+  // the rest stay reachable through the vendor filter rather than being lost.
+  const VENDOR_PILL_CAP = 6;
+  const allVendorPills = [...vendorCounts.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  const vendorPills = allVendorPills.slice(0, VENDOR_PILL_CAP);
+  const hiddenVendorCount = allVendorPills.length - vendorPills.length;
 
   const statusLabels: Record<string, string> = {
     received: t('invoices.st_received'),
@@ -216,9 +224,14 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                 fVendor === nm ? 'bg-sk-green-soft font-[650] text-sk-green' : 'bg-sk-surface-soft text-sk-muted hover:text-sk-ink'
               }`}
             >
-              {nm} <span className={fVendor === nm ? 'opacity-70' : 'text-ink3'}>{count}</span>
+              {nm} <span className={fVendor === nm ? 'opacity-70' : 'text-sk-muted'}>{count}</span>
             </Link>
           ))}
+          {hiddenVendorCount > 0 && (
+            <span className="inline-flex shrink-0 items-center whitespace-nowrap px-2 text-[10px] text-sk-muted-light">
+              +{hiddenVendorCount}
+            </span>
+          )}
         </div>
       )}
 
