@@ -71,7 +71,22 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
 
   const { data: openTasksData, error: openTasksError } = await admin.from('tasks').select('*').eq('status', 'open');
   if (openTasksError) return { error: openTasksError.message };
-  const openTasks = (openTasksData ?? []) as Task[];
+
+  // Inactive projects must not enter the review by default. `projects.active`
+  // has existed since 0007 and already marks Flicker inactive; this query was
+  // simply ignoring it, which is how a closed project kept turning up in the
+  // Monday agenda. Unassigned tasks (General) still come through.
+  const { data: projectRows, error: projectsError } = await admin.from('projects').select('id,active');
+  if (projectsError) return { error: projectsError.message };
+  const inactive = new Set(
+    ((projectRows ?? []) as { id: string; active: boolean | null }[])
+      .filter((p) => p.active === false)
+      .map((p) => p.id),
+  );
+  const onActiveProject = (t: Task) => !t.project_id || !inactive.has(t.project_id);
+
+  const openTasks = ((openTasksData ?? []) as Task[]).filter(onActiveProject);
+  doneSinceTasks = doneSinceTasks.filter(onActiveProject);
 
   const { data: stagesData, error: stagesError } = await admin.from('project_stages').select('stage_key,label');
   if (stagesError) return { error: stagesError.message };
@@ -82,9 +97,9 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
 
   const drafts = buildReviewItems({ openTasks, doneSinceTasks, priorItems, stageLabels });
 
-  // Notes survive re-preparing: buildReviewItems always starts weekly_note
-  // fresh (null), so anything already saved against this review's rows has
-  // to be re-merged in before the upsert overwrites them.
+  // Notes survive re-preparing. A draft now carries the previous review's note
+  // forward, but a note already saved against *this* review is newer, so it
+  // wins over the carried one before the upsert overwrites anything.
   const { data: existingItemsData, error: existingItemsError } = await admin
     .from('weekly_review_items')
     .select('task_id,weekly_note')

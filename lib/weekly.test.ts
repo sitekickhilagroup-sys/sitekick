@@ -16,9 +16,37 @@ describe('buildReviewItems', () => {
     id: 'i1', weekly_review_id: 'r1', task_id: 't1', project_id: 'p1',
     subtopic: 'Planning', status_snapshot: 'open', weekly_note: 'chase CE', sequence: 1, carried_from: null,
   }];
-  it('carries prior items forward with fresh note and current status', () => {
+  // A task completed since the last review belongs in *this* review, shown as
+  // completed — and it keeps last week's note. The note used to be discarded
+  // on every carry, which lost the history the meeting depends on.
+  it('carries a task completed this week, keeping the previous note', () => {
     const out = buildReviewItems({ openTasks: [], doneSinceTasks: [mk('t1', 'done')], priorItems: prior, stageLabels: new Map() });
-    expect(out[0]).toMatchObject({ task_id: 't1', carried_from: 'i1', weekly_note: null, status_snapshot: 'done', subtopic: 'Planning' });
+    expect(out[0]).toMatchObject({
+      task_id: 't1', carried_from: 'i1', weekly_note: 'chase CE',
+      status_snapshot: 'done', subtopic: 'Planning',
+    });
+  });
+
+  // Spec §6: completed work stays in the review where it was completed. Prior
+  // items used to be copied regardless of status, so a finished task followed
+  // the team forward every week indefinitely.
+  it('does not carry a task that was already completed in an earlier review', () => {
+    const done: WeeklyReviewItem[] = [{
+      ...prior[0], id: 'i9', task_id: 't9', status_snapshot: 'done', weekly_note: 'signed',
+    }];
+    const out = buildReviewItems({ openTasks: [], doneSinceTasks: [], priorItems: done, stageLabels: new Map() });
+    expect(out).toEqual([]);
+  });
+
+  // The other half of §6: the new-item loop iterated openTasks only, so a task
+  // completed this week that was never on last week's review simply vanished.
+  it('includes work completed this week even when it was not on the prior review', () => {
+    const out = buildReviewItems({
+      openTasks: [], doneSinceTasks: [mk('t5', 'done')], priorItems: [],
+      stageLabels: new Map(),
+    });
+    expect(out.map((i) => i.task_id)).toEqual(['t5']);
+    expect(out[0]).toMatchObject({ status_snapshot: 'done', carried_from: null });
   });
   it('appends new open tasks after carried ones', () => {
     const out = buildReviewItems({ openTasks: [mk('t2', 'open', 'sk')], doneSinceTasks: [], priorItems: prior, stageLabels: new Map([['sk', 'Plan Check']]) });
