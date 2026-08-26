@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { activateSubstage, setSubstageNote, setSubstageStatus } from '@/app/actions/process';
 import { ScenarioBox } from '@/components/process/scenario-box';
@@ -71,26 +72,50 @@ const DOT: Record<ProjectSubstageStatus, string> = {
 // split — numbered sub-stage list on one side, the selected sub-stage's
 // status, explanation and connected actions on the other.
 export function ProcessExplorer({ projectId, phases, labels }: Props) {
-  const current = phases.find((p) => p.isCurrent)?.key ?? phases[0]?.key;
-  const [selectedKey, setSelectedKey] = useState(current);
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  // Selection lives in the URL (checklist C1: a refresh must not lose it) —
+  // '' is an unreachable phase key, just a non-undefined fallback for the
+  // (never expected in practice) empty-phases case, so TS knows selectedKey
+  // is always a plain string.
+  const current = phases.find((p) => p.isCurrent)?.key ?? phases[0]?.key ?? '';
+  const urlPhase = params.get('phase');
+  // A stale/hostile ?phase= (a key that no longer exists) falls back to the
+  // project's current phase instead of resolving to `undefined` and blanking
+  // the panel — a query string never gets to lie.
+  const selectedKey = phases.some((p) => p.key === urlPhase) ? urlPhase! : current;
   const selected = phases.find((p) => p.key === selectedKey) ?? phases[0];
 
-  const firstOpen = selected.substages.find(
-    (s) => s.instance && s.instance.status !== 'done' && s.instance.status !== 'not_applicable',
-  ) ?? selected.substages[0] ?? null;
-  const [selectedSubId, setSelectedSubId] = useState<string | null>(firstOpen?.template.id ?? null);
+  const firstOpenSub = (phase: ExplorerPhase | undefined) =>
+    phase?.substages.find(
+      (s) => s.instance && s.instance.status !== 'done' && s.instance.status !== 'not_applicable',
+    ) ?? phase?.substages[0] ?? null;
+  const firstOpenOf = (key: string) => firstOpenSub(phases.find((p) => p.key === key))?.template.id ?? null;
+
+  const firstOpen = firstOpenSub(selected);
+  const urlSub = params.get('sub');
+  // Same guard for ?sub=: only honor it when that template actually belongs
+  // to the selected phase, otherwise fall back to the phase's first-open item.
+  const selectedSubId = urlSub && selected.substages.some((s) => s.template.id === urlSub)
+    ? urlSub
+    : (firstOpen?.template.id ?? null);
   const selectedSub =
     selected.substages.find((s) => s.template.id === selectedSubId) ??
     firstOpen ?? null;
 
-  const pickPhase = (key: string) => {
-    setSelectedKey(key);
-    const phase = phases.find((p) => p.key === key);
-    const first = phase?.substages.find(
-      (s) => s.instance && s.instance.status !== 'done' && s.instance.status !== 'not_applicable',
-    ) ?? phase?.substages[0];
-    setSelectedSubId(first?.template.id ?? null);
+  // scroll: false — a phase/sub-stage click is a selection change, not a page
+  // navigation, so it must not stack a history entry the user has to back out
+  // of one at a time.
+  const setSel = (phase: string, sub: string | null) => {
+    const q = new URLSearchParams(params.toString());
+    q.set('phase', phase);
+    if (sub) q.set('sub', sub); else q.delete('sub');
+    router.replace(`${pathname}?${q.toString()}`, { scroll: false });
   };
+
+  const pickPhase = (key: string) => setSel(key, firstOpenOf(key));
 
   return (
     <div className="space-y-4">
@@ -172,7 +197,7 @@ export function ProcessExplorer({ projectId, phases, labels }: Props) {
                   <li key={template.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedSubId(template.id)}
+                      onClick={() => setSel(selectedKey, template.id)}
                       aria-expanded={active}
                       className={`mb-1.5 flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-[9px] border px-3 py-3 text-start transition-colors ${
                         active ? 'border-sage-line bg-sk-green-soft' : 'border-transparent bg-sk-surface-soft hover:bg-sk-green-soft/60'
