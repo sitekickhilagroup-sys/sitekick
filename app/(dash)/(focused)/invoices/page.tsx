@@ -66,8 +66,17 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const fFrom = typeof sp.from === 'string' ? sp.from : '';
   const fTo = typeof sp.to === 'string' ? sp.to : '';
 
+  // Payment Summary is a different grouping of the SAME invoices the
+  // Invoices tab shows, not a separate stored population: every imported row
+  // is hard-coded to tab:'invoices' (lib/import/tracker.ts), so gating rows
+  // or the vendor-pill counts on inv.tab === 'payment_summary' always
+  // matched zero. `david` is untouched — a real, separately-tracked workbook
+  // tab the spec forbids deleting — so rows genuinely tagged tab='david'
+  // still land only there.
+  const rowsTab = tab === 'payment_summary' ? 'invoices' : tab;
+
   const rows = invoices.filter((inv) => {
-    if (inv.tab !== tab) return false;
+    if (inv.tab !== rowsTab) return false;
     // Spec §יב: no invoice belongs to "All" — unassigned rows read "General".
     const projLabel = inv.project_id ? (pName.get(inv.project_id) ?? '') : t('common.general');
     if (fProject && projLabel !== fProject) return false;
@@ -87,8 +96,11 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const openInvoices = invoices.filter((i) => ['received', 'for_rowan_approval', 'approved'].includes(i.status));
   const openTotal = openInvoices.reduce((s, i) => s + Number(i.amount_usd), 0);
 
-  // Vendor quick-filter pills with counts, scoped to the active tab.
-  const tabRows = invoices.filter((i) => i.tab === tab);
+  // Vendor quick-filter pills with counts, scoped to the active tab (via
+  // rowsTab — see above). Also PaymentSummary's own aggregation source below:
+  // the same "every invoice this view covers" set, before fProject/fEntity/
+  // fVendor/fStatus/fFrom/fTo narrow it down to `rows`.
+  const tabRows = invoices.filter((i) => i.tab === rowsTab);
   const vendorCounts = new Map<string, number>();
   for (const inv of tabRows) {
     const nm = vDisplay(inv.vendor_id);
@@ -223,10 +235,14 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
         </div>
 
         {/* Additive: the aggregation renders above the tab-filtered rows so no
-            workbook record disappears from the view. */}
+            workbook record disappears from the view. Aggregates tabRows —
+            every tab:'invoices' row, i.e. the same population the Invoices
+            tab itself shows before project/entity/vendor/status/date narrow
+            it further — not the full unfiltered `invoices` (which could also
+            pull in a separately-tracked tab='david' row). */}
         {tab === 'payment_summary' && (
           <PaymentSummary
-            invoices={invoices}
+            invoices={tabRows}
             projectName={(id) => (id ? (pName.get(id) ?? '') : '')}
             vendorName={vDisplay}
             statusLabels={statusLabels}
