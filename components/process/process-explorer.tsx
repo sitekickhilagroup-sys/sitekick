@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { activateSubstage, setSubstageNote, setSubstageStatus, undoSubstageChange } from '@/app/actions/process';
+import { selectConnectedTasks } from '@/lib/process';
 import { ScenarioBox } from '@/components/process/scenario-box';
 import { SavedChip } from '@/components/work/saved-chip';
 import { VerbMenu } from '@/components/work/verb-menu';
@@ -299,13 +300,12 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
   const status: ProjectSubstageStatus = instance?.status ?? 'upcoming';
 
   // C2: this panel used to list every open task in the whole PHASE — sibling
-  // sub-stages' work mixed in, with no cap. `mine` scopes it to tasks actually
-  // linked to THIS template; `phaseOnly` is the pre-backfill stand-in (until
-  // A6/B1 finish linking tasks, most rows have no substage_template_id at
-  // all — without this fallback the panel would go empty for every project).
-  const mine = tasks.filter((t) => t.substage_template_id === template.id);
-  const phaseOnly = tasks.filter((t) => !t.substage_template_id);
-  const shown = mine.slice(0, 4);
+  // sub-stages' work mixed in, with no cap. selectConnectedTasks (lib/process,
+  // tested there) scopes `mine` to tasks actually linked to THIS template;
+  // `phaseOnly` is the pre-backfill stand-in (until A6/B1 finish linking
+  // tasks, most rows have no substage_template_id at all — without this
+  // fallback the panel would go empty for every project).
+  const { mine, phaseOnly, shown } = selectConnectedTasks(tasks, template.id);
 
   const setStatus = (next: ProjectSubstageStatus) => start(async () => {
     setFailed(false);
@@ -411,7 +411,11 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
       <div className="mt-4 border-t border-line2 pt-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.connectedActions}</p>
-          <a href="/work?view=all" className="text-[10px] font-[650] text-sk-green hover:underline">
+          {/* Review round 1: this was still the generic register — scoped to
+              match the list right below it, same as "View all" and "Open
+              register". Without this, a sub-stage with 1-4 tasks (no cap, so
+              no "View all" link) had no scoped link at all. */}
+          <a href={`/work?view=all&substage=${template.id}`} className="text-[10px] font-[650] text-sk-green hover:underline">
             {labels.viewRegister} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
           </a>
         </div>

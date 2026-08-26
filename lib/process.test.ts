@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { groupProcess, substageUndoRestore, unactivatedConditionals } from './process.ts';
-import type { Phase, ProjectSubstage, SubstageTemplate, Workstream } from './types.ts';
+import { bucketTasksByPhase, groupProcess, selectConnectedTasks, substageUndoRestore, unactivatedConditionals } from './process.ts';
+import type { Phase, PhaseKey, ProjectSubstage, SubstageTemplate, Task, Workstream } from './types.ts';
+
+function task(over: Partial<Task> & { id: string }): Task {
+  return {
+    project_id: 'p1', document_id: null, title: 'Test task', description: null,
+    owner: null, waiting_for: null, due: null, stage_key: null, priority: 'normal',
+    status: 'open', planned: true, follow_up_date: null, check_back_on: null,
+    source: null, last_touched: '2026-08-20', created_at: '2026-08-20T00:00:00Z',
+    manual_priority: null, snoozed_until: null, process_impact: null,
+    merged_into: null, merged_at: null, merged_by: null, latest_note: null,
+    substage_template_id: null, workstream_id: null,
+    ...over,
+  };
+}
 
 const phases: Phase[] = [
   { key: 'planning', label: 'Planning', position: 1 },
@@ -89,5 +102,85 @@ describe('substageUndoRestore', () => {
   });
   it('defaults a missing/undefined status to upcoming and nulls for completed_at/note', () => {
     expect(substageUndoRestore({})).toEqual({ status: 'upcoming', completed_at: null, note: null });
+  });
+});
+
+// Review round 2 (C2 ruling): tasks used to be bucketed by stage_key /
+// current_phase_key alone — a task whose only phase signal was its linked
+// sub-stage template could land under the wrong phase, or (once C2 scoped
+// each sub-stage's panel to substage_template_id matches) vanish from every
+// phase's panel entirely. bucketTasksByPhase reuses resolveTaskPhaseKey's
+// precedence so this can't drift from My Work's phaseLabelFor.
+describe('bucketTasksByPhase', () => {
+  const stageMap: { stage_key: string; phase_key: PhaseKey }[] = [
+    { stage_key: 'grading', phase_key: 'bidding' },
+  ];
+
+  it('a task whose only phase signal is its sub-stage template lands in that template\'s phase, not the project\'s current phase', () => {
+    const t = task({ id: 't1', substage_template_id: 's3' }); // s3 -> plan_check
+    const { tasksByPhase, unmappedTasks } = bucketTasksByPhase([t], templates, stageMap, 'planning');
+    expect(tasksByPhase.get('plan_check')?.map((x) => x.id)).toEqual(['t1']);
+    expect(tasksByPhase.has('planning')).toBe(false);
+    expect(unmappedTasks).toEqual([]);
+  });
+
+  it('a legacy stage_key task still lands where the stage_phase_map bridge says, same as before', () => {
+    const t = task({ id: 't2', stage_key: 'grading' }); // -> bidding
+    const { tasksByPhase } = bucketTasksByPhase([t], templates, stageMap, 'planning');
+    expect(tasksByPhase.get('bidding')?.map((x) => x.id)).toEqual(['t2']);
+  });
+
+  it('a task with neither signal falls back to the project\'s current phase', () => {
+    const t = task({ id: 't3' });
+    const { tasksByPhase } = bucketTasksByPhase([t], templates, stageMap, 'planning');
+    expect(tasksByPhase.get('planning')?.map((x) => x.id)).toEqual(['t3']);
+  });
+
+  it('the sub-stage template wins over a conflicting legacy stage_key — same precedence resolveTaskPhaseKey settled for My Work', () => {
+    const t = task({ id: 't4', substage_template_id: 's3', stage_key: 'grading' }); // s3 -> plan_check, grading -> bidding
+    const { tasksByPhase } = bucketTasksByPhase([t], templates, stageMap, 'planning');
+    expect(tasksByPhase.get('plan_check')?.map((x) => x.id)).toEqual(['t4']);
+    expect(tasksByPhase.has('bidding')).toBe(false);
+  });
+
+  it('a task with no resolvable phase at all goes to unmappedTasks, never dropped silently', () => {
+    const t = task({ id: 't5' });
+    const { tasksByPhase, unmappedTasks } = bucketTasksByPhase([t], templates, stageMap, null);
+    expect(unmappedTasks.map((x) => x.id)).toEqual(['t5']);
+    expect(tasksByPhase.size).toBe(0);
+  });
+});
+
+// C2: SubstageDetail's mine/phaseOnly/shown selection, pulled out of the
+// component so the branch the reviewer flagged as untested (capped list vs.
+// phase-level fallback) has real assertions.
+describe('selectConnectedTasks', () => {
+  it('mine only includes tasks linked to this exact sub-stage template', () => {
+    const tasks = [{ id: 'a', substage_template_id: 's1' }, { id: 'b', substage_template_id: 's2' }];
+    expect(selectConnectedTasks(tasks, 's1').mine.map((t) => t.id)).toEqual(['a']);
+  });
+
+  it('phaseOnly is every task with no substage_template_id, the same regardless of which sub-stage is selected', () => {
+    const tasks = [
+      { id: 'a', substage_template_id: 's1' },
+      { id: 'b', substage_template_id: null },
+      { id: 'c', substage_template_id: null },
+    ];
+    expect(selectConnectedTasks(tasks, 's1').phaseOnly.map((t) => t.id)).toEqual(['b', 'c']);
+    expect(selectConnectedTasks(tasks, 's2').phaseOnly.map((t) => t.id)).toEqual(['b', 'c']);
+  });
+
+  it('shown caps mine at 4, preserving order', () => {
+    const tasks = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}`, substage_template_id: 's1' }));
+    const { mine, shown } = selectConnectedTasks(tasks, 's1');
+    expect(mine).toHaveLength(6);
+    expect(shown.map((t) => t.id)).toEqual(['t0', 't1', 't2', 't3']);
+  });
+
+  it('a task belonging to a sibling sub-stage in the same phase lands in neither mine nor phaseOnly', () => {
+    const tasks = [{ id: 'a', substage_template_id: 's2' }];
+    const result = selectConnectedTasks(tasks, 's1');
+    expect(result.mine).toEqual([]);
+    expect(result.phaseOnly).toEqual([]);
   });
 });

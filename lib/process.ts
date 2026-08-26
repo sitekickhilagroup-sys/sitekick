@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveTaskPhaseKey } from './task-details.ts';
 import type { Phase, PhaseKey, Project, ProjectSubstage, ProjectSubstageStatus, SubstageTemplate, Task, Workstream } from './types.ts';
 
 export interface PhaseView {
@@ -90,6 +91,63 @@ export function substageUndoRestore(before: Record<string, unknown>): {
   };
 }
 
+// Review round 2 (C2 ruling): tasks used to be bucketed into a phase by
+// stage_key -> stage_phase_map alone, falling back to the project's current
+// phase — the same gap A6 already fixed for My Work's phaseLabelFor, just
+// not here yet. Once C2 scoped each sub-stage's "Connected actions" panel to
+// tasks whose substage_template_id actually equals that template's id, the
+// gap turned load-bearing: a task whose ONLY phase signal was its linked
+// sub-stage template (no stage_key, project since moved to a different
+// current phase) could be bucketed under the wrong phase's tasks entirely —
+// or, worse, disappear from every phase's panel, since it would fail the
+// `mine` match everywhere its id doesn't equal AND fail the `phaseOnly` catch
+// (not null) everywhere too. resolveTaskPhaseKey already settled this
+// precedence for My Work (sub-stage's own phase wins, legacy tag next,
+// project's current phase last) — reused here rather than re-decided, so the
+// two pages can't drift apart on what "a task's phase" means.
+//
+// getProjectProcess itself can't be unit-tested (live supabase calls), so
+// this grouping lives in a pure, exported, tested helper — getProjectProcess
+// just assigns its result. Same reason groupProcess/unactivatedConditionals
+// are split out above.
+export function bucketTasksByPhase(
+  tasks: Task[],
+  templates: SubstageTemplate[],
+  stageMap: { stage_key: string; phase_key: PhaseKey }[],
+  projectPhaseKey: PhaseKey | null,
+): { tasksByPhase: Map<PhaseKey, Task[]>; unmappedTasks: Task[] } {
+  const phaseKeyByStage = new Map(stageMap.map((m) => [m.stage_key, m.phase_key]));
+  const phaseKeyBySubstageId = new Map(templates.map((tp) => [tp.id, tp.phase_key]));
+  const tasksByPhase = new Map<PhaseKey, Task[]>();
+  const unmappedTasks: Task[] = [];
+  for (const t of tasks) {
+    const phase = resolveTaskPhaseKey({
+      substagePhaseKey: t.substage_template_id ? phaseKeyBySubstageId.get(t.substage_template_id) ?? null : null,
+      legacyPhaseKey: t.stage_key ? phaseKeyByStage.get(t.stage_key) ?? null : null,
+      projectPhaseKey,
+    });
+    if (!phase) { unmappedTasks.push(t); continue; }
+    tasksByPhase.set(phase, [...(tasksByPhase.get(phase) ?? []), t]);
+  }
+  return { tasksByPhase, unmappedTasks };
+}
+
+// C2: SubstageDetail's "Connected actions" selection — which of a phase's
+// tasks belong to THIS sub-stage (`mine`, capped at 4 for `shown`), and the
+// phase-level fallback (`phaseOnly`) rendered in `mine`'s place until a task
+// actually carries a substage_template_id (pre-A6/B1-backfill, that's most
+// of them — without this fallback the panel would go empty for every
+// project). Generic over the minimal shape so process-explorer.tsx's
+// client-only ExplorerTask never has to be imported into this file.
+export function selectConnectedTasks<T extends { substage_template_id: string | null }>(
+  tasks: T[],
+  substageTemplateId: string,
+): { mine: T[]; phaseOnly: T[]; shown: T[] } {
+  const mine = tasks.filter((t) => t.substage_template_id === substageTemplateId);
+  const phaseOnly = tasks.filter((t) => !t.substage_template_id);
+  return { mine, phaseOnly, shown: mine.slice(0, 4) };
+}
+
 export async function getProjectProcess(supabase: SupabaseClient, projectId: string) {
   const [projectQ, phasesQ, templatesQ, instancesQ, workstreamsQ, tasksQ, mapQ] = await Promise.all([
     supabase.from('projects').select('*').eq('id', projectId).single(),
@@ -110,13 +168,9 @@ export async function getProjectProcess(supabase: SupabaseClient, projectId: str
     workstreams: (workstreamsQ.data ?? []) as Workstream[],
   });
   const unactivatedByPhase = unactivatedConditionals(templates, instances);
-  const map = new Map(((mapQ.data ?? []) as { stage_key: string; phase_key: PhaseKey }[]).map((m) => [m.stage_key, m.phase_key]));
-  const tasksByPhase = new Map<PhaseKey, Task[]>();
-  const unmappedTasks: Task[] = [];
-  for (const t of (tasksQ.data ?? []) as Task[]) {
-    const phase = (t.stage_key ? map.get(t.stage_key) : undefined) ?? project.current_phase_key ?? undefined;
-    if (!phase) { unmappedTasks.push(t); continue; }
-    tasksByPhase.set(phase, [...(tasksByPhase.get(phase) ?? []), t]);
-  }
+  const stageMap = (mapQ.data ?? []) as { stage_key: string; phase_key: PhaseKey }[];
+  const { tasksByPhase, unmappedTasks } = bucketTasksByPhase(
+    (tasksQ.data ?? []) as Task[], templates, stageMap, project.current_phase_key ?? null,
+  );
   return { project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase };
 }
