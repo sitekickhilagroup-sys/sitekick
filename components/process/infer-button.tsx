@@ -43,7 +43,7 @@ export function InferButton({ projectId, label, doneLabel, sameLabel, errorLabel
       )}
       {result && 'ok' in result && result.proposed && (
         <span role="status" className="text-[11px] text-sage">
-          <Link href="/inbox" className="underline">{doneLabel}</Link>
+          <Link href="/inbox" className="inline-flex min-h-11 items-center underline sm:min-h-0">{doneLabel}</Link>
         </span>
       )}
       {result && 'ok' in result && !result.proposed && (

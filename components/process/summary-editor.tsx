@@ -35,7 +35,7 @@ export function SummaryEditor({ projectId, value, placeholder, editTitle, saveLa
         title={editTitle}
         aria-label={editTitle}
         onClick={() => { setDraft(value ?? ''); setFailed(false); setEditing(true); }}
-        className="group block max-w-2xl cursor-pointer rounded-lg text-start"
+        className="group block min-h-11 max-w-2xl cursor-pointer rounded-lg text-start sm:min-h-0"
       >
         {value ? (
           <span className="text-sm leading-relaxed text-ink2">{value}</span>

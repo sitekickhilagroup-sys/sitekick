@@ -340,8 +340,15 @@ function SubstageDetail({ projectId, template, instance, tasks, labels, editorOp
     <div className="border-t border-line bg-sk-detail-surface p-5 sm:p-6 lg:border-s lg:border-t-0">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.selectedSub}</p>
-        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-[650] ${CHIP[status]}`}>
-          {labels['status.' + status]}
+        {/* C5: this chip was reading the instance-less fallback ('upcoming')
+            as if it were real status data. Spec §14's "never Upcoming, always
+            Not activated" rule already applies to the sub-stage list row
+            (below) — this header chip is the same sub-stage and was the one
+            place still missing it. */}
+        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-[650] ${
+          instance ? CHIP[status] : 'bg-sk-surface-soft text-sk-muted-light'
+        }`}>
+          {instance ? labels['status.' + status] : labels.notActivated}
         </span>
       </div>
       <h2 className="mt-2 text-[22px] font-[650] leading-[1.2] tracking-[-0.025em] text-sk-ink">{template.name}</h2>
@@ -362,7 +369,10 @@ function SubstageDetail({ projectId, template, instance, tasks, labels, editorOp
           className="mt-2 w-full rounded-lg border border-line2 bg-card2 p-2 text-sm leading-relaxed text-ink outline-none disabled:opacity-50"
         />
       ) : (
-        <p className="mt-2 text-xs text-ink3">{labels['status.upcoming']}</p>
+        // C5: same fix as the chip above — this placeholder stood in for the
+        // note textarea when there's no instance, but showed "Upcoming"
+        // instead of "Not activated".
+        <p className="mt-2 text-xs text-ink3">{labels.notActivated}</p>
       )}
 
       <div className={`mt-3 flex flex-wrap gap-1.5 ${pending ? 'opacity-50' : ''}`}>
@@ -419,7 +429,12 @@ function SubstageDetail({ projectId, template, instance, tasks, labels, editorOp
               match the list right below it, same as "View all" and "Open
               register". Without this, a sub-stage with 1-4 tasks (no cap, so
               no "View all" link) had no scoped link at all. */}
-          <a href={`/work?view=all&substage=${template.id}`} className="text-[10px] font-[650] text-sk-green hover:underline">
+          {/* C5: the only link in this panel still missing the 44px mobile
+              floor "View all" (below) and "Open register" already have. */}
+          <a
+            href={`/work?view=all&substage=${template.id}`}
+            className="inline-flex min-h-11 items-center text-[10px] font-[650] text-sk-green hover:underline sm:min-h-0"
+          >
             {labels.viewRegister} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
           </a>
         </div>
@@ -480,7 +495,10 @@ function ConnectedTaskRow({ task, labels, editorOptions }: { task: ExplorerTask;
       <div className="min-w-0">
         <p className="text-sm font-medium text-ink">{task.title}</p>
         {(task.owner || task.waiting_for) && (
-          <p className="mt-0.5 truncate text-[11px] text-ink3">
+          // C5: owner/waiting_for is free text someone typed — truncating it
+          // with an ellipsis could hide the actual blocker. task.title above
+          // already wraps; this line was the odd one out.
+          <p className="mt-0.5 text-[11px] text-ink3">
             {task.owner ?? ''}
             {task.owner && task.waiting_for ? ' · ' : ''}
             {task.waiting_for ? `${labels.waitingOn}: ${task.waiting_for}` : ''}

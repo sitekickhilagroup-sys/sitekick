@@ -216,8 +216,21 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
               </span>
             )}
           </div>
+          {/* C5: substage_templates/phase keys are a GLOBAL library (lib/process.ts
+              — not scoped per project), and every editor below seeds local state
+              from props at mount time (draft text, an uncontrolled select's
+              defaultValue, a last-action result message). None of that resets on
+              its own just because the props changed — React only remounts (and
+              re-seeds) when a component's `key` changes. A project switch whose
+              new current phase / first-open sub-stage template happens to match
+              the previous project's (e.g. two untouched projects both sitting on
+              Planning step 1) left these components unmounted-in-place — still
+              showing, or for the summary draft about to overwrite, the OLD
+              project's data. Every child here now keys off project.id so a
+              project switch always remounts them. */}
           <div className="mt-1.5 max-w-2xl">
             <SummaryEditor
+              key={project.id}
               projectId={project.id}
               value={project.summary}
               placeholder={t('process.summary_ph')}
@@ -229,7 +242,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <PhaseSwitcher
-              key={project.current_phase_key ?? 'none'}
+              key={`${project.id}:${project.current_phase_key ?? 'none'}`}
               projectId={project.id}
               phases={phaseViews.map((v) => v.phase)}
               current={project.current_phase_key}
@@ -237,6 +250,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
               errorLabel={t('common.error_save')}
             />
             <InferButton
+              key={project.id}
               projectId={project.id}
               label={t('process.infer')}
               doneLabel={t('process.infer_done')}
@@ -266,6 +280,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
           and the rail lives inside ProcessExplorer, so the notice moved there
           with it. Only its two strings travel via labels. */}
       <ProcessExplorer
+        key={project.id}
         projectId={project.id}
         labels={{ ...rowLabels, ...labels }}
         editorOptions={editorOptions}
