@@ -453,7 +453,17 @@ function ReviewControls(
   // later failed attempt never erases the record of what is actually
   // attached to this review right now (see the guard in `upload` below).
   const [lastFile, setLastFile] = useState<{ name: string; at: string } | null>(null);
-  const [uploadFailed, setUploadFailed] = useState(false);
+  // D4 (review follow-up): was a boolean rendering the generic labels.error
+  // ("Couldn't save — try again") for every failure alike. route.ts returns
+  // real reasons (413 "file too large (max 20MB)", the caught exception
+  // text on its 200 catch-all) and attachRecording returns a real Supabase
+  // error — every other action in this file surfaces res.error verbatim
+  // (see save/finalize/reopen above), and §19 further down says exactly
+  // this: surface the real failure, not a generic string. Falls back to
+  // labels.error only where there genuinely isn't a specific one (the
+  // `!json.documentId` branch below, which route.ts can return without an
+  // `error` key).
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const save = () => start(async () => {
     setFailed(null);
@@ -482,24 +492,27 @@ function ReviewControls(
   });
 
   const upload = (file: File) => start(async () => {
-    // Only the error flag resets up front. `lastFile` is left alone here on
+    // Only the error resets up front. `lastFile` is left alone here on
     // purpose: it describes what is actually attached to the review right
     // now, which a failed *retry* does not change (attachRecording never
     // reran, or never got a new documentId to run with), so clearing it
     // would show "nothing attached" while the prior recording is still
     // there.
-    setUploadFailed(false);
+    setUploadError(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const json = await res.json();
-      if (!res.ok || json.ok === false || !json.documentId) { setUploadFailed(true); return; }
+      if (!res.ok || json.ok === false || !json.documentId) {
+        setUploadError(typeof json.error === 'string' && json.error ? json.error : labels.error);
+        return;
+      }
       const attached = await attachRecording(review.id, json.documentId);
-      if (attached?.error) { setUploadFailed(true); return; }
+      if (attached?.error) { setUploadError(attached.error); return; }
       setLastFile({ name: file.name, at: laToday() });
-    } catch {
-      setUploadFailed(true);
+    } catch (e) {
+      setUploadError(String(e));
     }
   });
 
@@ -585,7 +598,7 @@ function ReviewControls(
               <bdi>{lastFile.name}</bdi> · <bdi>{lastFile.at}</bdi> · {labels.processed}
             </span>
           )}
-          {uploadFailed && <span role="alert" className="text-xs text-coral">{labels.error}</span>}
+          {uploadError && <span role="alert" className="text-xs text-coral">{uploadError}</span>}
         </div>
         {/* D4: state exactly the formats accept= allows and route.ts genuinely
             handles — .mp4 stores + links only (no transcription yet), .txt

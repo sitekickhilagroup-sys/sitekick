@@ -64,17 +64,27 @@ describe('buildReviewItems', () => {
   // Spec §6: completed work stays in the review where it was completed. Prior
   // items used to be copied regardless of status, so a finished task followed
   // the team forward every week indefinitely.
-  //
-  // D6: this is also the "dropped does not carry" case, not just "done" —
-  // the carry condition below (`status !== 'open' && !closedThisWeek`) does
-  // not special-case either string, so a status_snapshot of 'dropped' hits
-  // this exact same branch. Deliberately not duplicating this test with
-  // 'dropped' swapped in: same code path, same assertion, no extra coverage.
-  it('does not carry a task that was already completed (or dropped) in an earlier review', () => {
+  it('does not carry a task that was already completed in an earlier review', () => {
     const done: WeeklyReviewItem[] = [{
       ...prior[0], id: 'i9', task_id: 't9', status_snapshot: 'done', weekly_note: 'signed',
     }];
     const out = buildReviewItems({ openTasks: [], doneSinceTasks: [], priorItems: done, stageLabels: new Map() });
+    expect(out).toEqual([]);
+  });
+
+  // D6 (review follow-up): 'dropped' hits the exact same carry condition as
+  // 'done' above today (`status !== 'open' && !closedThisWeek`) — but a
+  // test's job is to survive the refactor that stops making that true. A
+  // future edit that special-cases terminal statuses explicitly (say
+  // `if (status === 'done' || status === 'no_update') continue`) and forgets
+  // 'dropped' would make dropped items silently resume carrying forever,
+  // with nothing in the suite to catch it. Asserted directly instead of
+  // just documented.
+  it('a dropped item does not carry forward', () => {
+    const out = buildReviewItems({
+      openTasks: [], doneSinceTasks: [],
+      priorItems: [{ ...prior[0], status_snapshot: 'dropped' }], stageLabels: new Map(),
+    });
     expect(out).toEqual([]);
   });
 
