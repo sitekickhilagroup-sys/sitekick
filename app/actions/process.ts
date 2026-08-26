@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { type PhaseKey, type ProjectSubstageStatus } from '@/lib/types';
 import { logActivity } from '@/lib/state-writer';
+import { substageUndoRestore } from '@/lib/process';
 import { inferProjectPhase } from '@/agents/infer-phase';
 
 const VALID_PHASES: PhaseKey[] = ['planning', 'plan_check', 'bidding', 'financing', 'construction'];
@@ -24,24 +25,43 @@ export async function setSubstageStatus(
   if (!VALID_SUBSTAGE_STATUSES.includes(status)) return { error: 'invalid status' };
   const admin = supabaseAdmin();
   const completed_at = status === 'done' ? laToday() : null;
-  // Snapshot the prior values first. The spec counts a sub-stage change as
-  // material and requires every material change to support undo — and undo
-  // restores from before_json, which this used to leave null.
-  const { data: prior } = await admin
-    .from('project_substages').select('status,completed_at').eq('id', projectSubstageId).maybeSingle();
+  // Snapshot the full prior row first (mirrors applyWorkVerb) — the spec
+  // counts a sub-stage change as material and requires every material change
+  // to support undo, and undo restores from before_json.
+  const { data: before } = await admin
+    .from('project_substages').select('*').eq('id', projectSubstageId).maybeSingle();
   const { error } = await admin.from('project_substages').update({ status, completed_at }).eq('id', projectSubstageId);
   if (error) return { error: error.message };
-  await logActivity(admin, {
+  const undoId = await logActivity(admin, {
     entity_type: 'project_substage',
     entity_id: projectSubstageId,
     actor: user.email ?? user.id,
     action: `status:${status}`,
-    before: prior ?? undefined,
+    before: before ?? undefined,
     after: { status, completed_at },
   });
   revalidatePath('/projects/' + projectId);
   revalidatePath('/');
-  return { ok: true };
+  return { ok: true as const, undoId };
+}
+
+/** Restores the project_substages snapshot taken before setSubstageStatus ran. */
+export async function undoSubstageChange(logId: string) {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const { data } = await admin.from('activity_log').select('*').eq('id', logId).maybeSingle();
+  const entry = data as { entity_type: string; entity_id: string; before_json: Record<string, unknown> | null } | null;
+  if (!entry?.before_json || entry.entity_type !== 'project_substage') return { error: 'nothing to undo' };
+  const restore = substageUndoRestore(entry.before_json);
+  const { error } = await admin.from('project_substages').update(restore).eq('id', entry.entity_id);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'project_substage', entity_id: entry.entity_id, actor: user.email ?? user.id,
+    action: 'undo', after: restore,
+  });
+  revalidatePath('/');
+  revalidatePath('/projects/[id]', 'page');
+  return { ok: true as const };
 }
 
 // Spec §ג: every sub-stage carries a short explanation ("what is needed to

@@ -574,6 +574,7 @@
   "process.decision_option_ph": "Outcome",
   "process.decision_result_ph": "What happens then",
   "process.decision_no_result": "No result recorded for this outcome yet.",
+  "process.msg.status_changed": "Status updated. Check whether the sub-stage can now advance.",
   "work.recorded": "Update recorded",
   "work.undo": "Undo",
   "work.msg.completed": "Completed recorded. Check whether the sub-stage can now advance.",

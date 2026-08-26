@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupProcess, unactivatedConditionals } from './process.ts';
+import { groupProcess, substageUndoRestore, unactivatedConditionals } from './process.ts';
 import type { Phase, ProjectSubstage, SubstageTemplate, Workstream } from './types.ts';
 
 const phases: Phase[] = [
@@ -69,5 +69,25 @@ describe('unactivatedConditionals', () => {
 
     const out = groupProcess({ phases, templates, instances: inst, workstreams: ws });
     expect(out[0].substages.map((s) => s.template.id)).not.toContain('s2');
+  });
+});
+
+// C3: undoSubstageChange's restore set, extracted so it's testable without a
+// database. before_json is always a full project_substages row snapshot.
+describe('substageUndoRestore', () => {
+  it('restores status, completed_at and note from a full-row snapshot', () => {
+    const before = {
+      id: 'i1', project_id: 'p1', substage_template_id: 's1', workstream_id: null,
+      status: 'blocked', note: 'waiting on city sign-off', decision: null,
+      activated_at: '2026-08-01', completed_at: null,
+    };
+    expect(substageUndoRestore(before)).toEqual({ status: 'blocked', completed_at: null, note: 'waiting on city sign-off' });
+  });
+  it('restores a done snapshot\'s completed_at alongside status, so the two never disagree after undo', () => {
+    const before = { status: 'done', completed_at: '2026-08-01', note: null };
+    expect(substageUndoRestore(before)).toEqual({ status: 'done', completed_at: '2026-08-01', note: null });
+  });
+  it('defaults a missing/undefined status to upcoming and nulls for completed_at/note', () => {
+    expect(substageUndoRestore({})).toEqual({ status: 'upcoming', completed_at: null, note: null });
   });
 });

@@ -2,8 +2,9 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { activateSubstage, setSubstageNote, setSubstageStatus } from '@/app/actions/process';
+import { activateSubstage, setSubstageNote, setSubstageStatus, undoSubstageChange } from '@/app/actions/process';
 import { ScenarioBox } from '@/components/process/scenario-box';
+import { SavedChip } from '@/components/work/saved-chip';
 import { VerbMenu } from '@/components/work/verb-menu';
 import type { ProjectSubstage, ProjectSubstageStatus, SubstageTemplate, Workstream } from '@/lib/types';
 
@@ -288,14 +289,33 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
 }) {
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState(false);
+  // C3: the audit row that reverses the last status change, plus the message
+  // the SavedChip shows — same result-chip pattern VerbMenu already uses,
+  // reusing A6's SavedChip instead of building a second one.
+  const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
   const status: ProjectSubstageStatus = instance?.status ?? 'upcoming';
 
   const setStatus = (next: ProjectSubstageStatus) => start(async () => {
     setFailed(false);
-    const res = instance
-      ? next === status ? null : await setSubstageStatus(projectId, instance.id, next)
-      : await activateSubstage(projectId, template.id, null);
-    if (res?.error) setFailed(true);
+    if (!instance) {
+      const res = await activateSubstage(projectId, template.id, null);
+      if ('error' in res) setFailed(true);
+      return;
+    }
+    if (next === status) return;
+    // 'error' in res (not res?.error) — the same discriminant applyWorkVerb's
+    // callers use, and the one TypeScript can actually narrow on: `undoId`
+    // only exists on the ok branch.
+    const res = await setSubstageStatus(projectId, instance.id, next);
+    if ('error' in res) { setFailed(true); return; }
+    setResult({ message: labels['msg.status_changed'], undoId: res.undoId ?? null });
+  });
+
+  const undo = () => start(async () => {
+    if (!result?.undoId) { setResult(null); return; }
+    const res = await undoSubstageChange(result.undoId);
+    if ('error' in res) { setFailed(true); return; }
+    setResult(null);
   });
 
   return (
@@ -349,6 +369,18 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
         ))}
       </div>
       {failed && <p role="alert" className="mt-2 text-xs text-coral">{labels.error}</p>}
+      {result && (
+        <div className="mt-2">
+          <SavedChip
+            message={result.message}
+            undoId={result.undoId}
+            pending={pending}
+            onUndo={undo}
+            onDismiss={() => setResult(null)}
+            labels={labels}
+          />
+        </div>
+      )}
 
       {/* Conditional rule (spec §ד) — outcomes to try, never to apply. */}
       <ScenarioBox

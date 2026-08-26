@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Phase, PhaseKey, Project, ProjectSubstage, SubstageTemplate, Task, Workstream } from './types.ts';
+import type { Phase, PhaseKey, Project, ProjectSubstage, ProjectSubstageStatus, SubstageTemplate, Task, Workstream } from './types.ts';
 
 export interface PhaseView {
   phase: Phase;
@@ -57,6 +57,37 @@ export function unactivatedConditionals(
     byPhase.set(tp.phase_key, [...(byPhase.get(tp.phase_key) ?? []), tp]);
   }
   return byPhase;
+}
+
+// C3: which columns undoSubstageChange writes back, given the full
+// project_substages row snapshotted as `before_json` before setSubstageStatus
+// ran. Kept pure and separate from the server action (same reason
+// lib/work-verbs.ts exists) so the restore set is unit-testable without a
+// database.
+//
+// setSubstageStatus only ever writes `status` and `completed_at` — always
+// together, since completed_at is derived from status in that same update
+// (laToday() when status becomes 'done', null otherwise). Restoring `status`
+// alone would leave completed_at out of sync with the status undo just put
+// back (e.g. status reverts to 'done' but completed_at stays null, or status
+// leaves 'done' but completed_at keeps a stale date), so both travel
+// together. `note` is included too, mirroring undoWorkVerb's own restore set
+// being slightly wider than any single action's write: setSubstageStatus
+// never touches note, so restoring it is a no-op for the direct
+// flip-then-undo sequence, but it keeps this restore aligned with the full
+// row shape the way undoWorkVerb's does. Deliberately NOT included: decision,
+// workstream_id, activated_at, substage_template_id, project_id — no action
+// in this round writes those, and undoWorkVerb's stage_key precedent is to
+// leave out columns nothing here changes rather than let an unrelated undo
+// overwrite them.
+export function substageUndoRestore(before: Record<string, unknown>): {
+  status: ProjectSubstageStatus; completed_at: string | null; note: string | null;
+} {
+  return {
+    status: (before.status as ProjectSubstageStatus | undefined) ?? 'upcoming',
+    completed_at: (before.completed_at as string | null | undefined) ?? null,
+    note: (before.note as string | null | undefined) ?? null,
+  };
 }
 
 export async function getProjectProcess(supabase: SupabaseClient, projectId: string) {

@@ -59,6 +59,9 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     viewRegister: t('process.view_register'),
     notePh: t('process.note_ph'),
     noTasksPhase: t('process.no_tasks_phase'),
+    // C3: the SavedChip shown after a sub-stage status change (A6's chip,
+    // reused rather than rebuilt — see SubstageDetail in process-explorer).
+    'msg.status_changed': t('process.msg.status_changed'),
     blocking: t('work.blocking'),
     waitingOn: t('tasks.waiting'),
     openRegister: t('process.open_register'),

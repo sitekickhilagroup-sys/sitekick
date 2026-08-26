@@ -574,6 +574,7 @@
   "process.decision_option_ph": "אפשרות",
   "process.decision_result_ph": "מה קורה אז",
   "process.decision_no_result": "עוד לא נרשמה תוצאה לאפשרות הזו.",
+  "process.msg.status_changed": "הסטטוס עודכן. כדאי לבדוק אם תת-השלב יכול להתקדם.",
   "work.recorded": "העדכון נרשם",
   "work.undo": "ביטול",
   "work.msg.completed": "הושלם. כדאי לבדוק אם תת-השלב יכול להתקדם.",
