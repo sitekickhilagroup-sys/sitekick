@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { updateInvoice, undoInvoiceEdit, type InvoicePatch } from '@/app/actions/invoices';
-import { INVOICE_ERRORS, parseAmountInput } from '@/lib/invoice-rules';
+import { getInvoiceHistory, updateInvoice, undoInvoiceEdit, type InvoiceHistoryEntry, type InvoicePatch } from '@/app/actions/invoices';
+import { INVOICE_ERRORS, parseAmountInput, patchKeyForColumn, type InvoicePatchKey } from '@/lib/invoice-rules';
 import { SavedChip } from '@/components/work/saved-chip';
 import type { InvoiceStatus } from '@/lib/types';
 
@@ -42,6 +42,20 @@ interface Labels {
   errorEmptyPatch: string;
   errorNothingToUndo: string;
   errorSaveReason: string;
+  /** E5 — the collapsed "History" <details> in the editor footer. */
+  history: string;
+  historyEmpty: string;
+  historyLoading: string;
+  /** Prefix before the list of changed field names, e.g. "Changed: Amount, Status". */
+  historyChanged: string;
+  historyActionCreate: string;
+  historyActionEdit: string;
+  historyActionUndo: string;
+  historyActionAdvance: string;
+  errorHistoryLoad: string;
+  /** Also doubles as the create-only "needs_verification" changed-key label,
+   *  since that column has no InvoicePatch key of its own to look up. */
+  verify: string;
 }
 
 export interface LinkEditorOptions {
@@ -117,6 +131,13 @@ export function LinkEditor({
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
   const [pending, start] = useTransition();
+  // E5 — the editor footer's collapsed History <details>. null = not loaded
+  // yet (also the "collapsed, never opened" state); loaded lazily on first
+  // expand rather than whenever the editor opens, since most opens are a
+  // quick status/link tweak that never touches History at all.
+  const [history, setHistory] = useState<InvoiceHistoryEntry[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const startEditing = () => {
     setVendorDraft(vendorId ?? '');
@@ -134,8 +155,52 @@ export function LinkEditor({
     setTransferUrlDraft(transferUrl ?? '');
     setNotesDraft(notes ?? '');
     setErrorCode(null);
+    // Stale from a previous open of this same row's editor — a save made
+    // during that earlier session should show up next time History expands,
+    // not the cached list from before it happened.
+    setHistory(null);
+    setHistoryError(null);
     setEditing(true);
   };
+
+  // Fetches on first expand only (details -> open, history still null); a
+  // second expand within the same edit session reuses what's already loaded
+  // rather than re-querying every toggle. Deliberately NOT routed through the
+  // `pending`/`start` transition above — History is read-only and unrelated
+  // to Save/Undo, so loading it must never disable the Save button.
+  const loadHistory = (open: boolean) => {
+    if (!open || history !== null || historyLoading) return;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    void getInvoiceHistory(invoiceId).then((res) => {
+      setHistoryLoading(false);
+      if ('error' in res) { setHistoryError(res.error); return; }
+      setHistory(res.entries);
+    });
+  };
+
+  const LABEL_BY_PATCH_KEY: Record<InvoicePatchKey, string> = {
+    vendor_id: labels.vendor, invoice_no: labels.invoiceNo, project_id: labels.project,
+    entity: labels.entity, received_date: labels.receivedDate, description: labels.description,
+    amount_usd: labels.amount, status: labels.status, paid_date: labels.paidDate,
+    invoice_url: labels.invoice, receipt_url: labels.receipt,
+    transfer_confirmation_url: labels.transfer, notes: labels.notes,
+  };
+  // needs_verification/tab are create-only columns (createInvoice in
+  // app/actions/invoices.ts) with no InvoicePatch key of their own — the
+  // first falls back to the same "Verify" label the table's own chip uses,
+  // the rest fall back to their raw column name rather than disappearing.
+  const columnLabel = (column: string): string => {
+    if (column === 'needs_verification') return labels.verify;
+    const patchKey = patchKeyForColumn(column);
+    return patchKey ? LABEL_BY_PATCH_KEY[patchKey] : column;
+  };
+
+  const ACTION_LABEL: Record<string, string> = {
+    create: labels.historyActionCreate, edit: labels.historyActionEdit,
+    undo: labels.historyActionUndo, advance: labels.historyActionAdvance,
+  };
+  const actionLabel = (action: string): string => ACTION_LABEL[action] ?? action;
 
   const setStatusAndReset = (next: InvoiceStatus) => {
     setStatusDraft(next);
@@ -452,6 +517,40 @@ export function LinkEditor({
               </button>
               {errorCode && <span role="alert" className="text-[10px] font-semibold text-coral">{errorMessage(errorCode)}</span>}
             </div>
+
+            {/* E5 — read-only change trail; Undo above stays the only way to
+                revert, and only ever the newest edit. Collapsed by default,
+                fetched once on first expand (loadHistory). */}
+            <details className="mt-1 shrink-0 rounded-lg border border-line" onToggle={(e) => loadHistory(e.currentTarget.open)}>
+              <summary className="min-h-11 cursor-pointer list-none rounded-lg px-2 py-1.5 text-[10px] font-semibold text-ink3 hover:text-ink2 sm:min-h-7">
+                {labels.history}
+              </summary>
+              <div className="max-h-36 overflow-y-auto border-t border-line px-2 py-1.5">
+                {historyLoading && <p className="text-[10px] text-ink3">{labels.historyLoading}</p>}
+                {historyError && (
+                  <p role="alert" className="text-[10px] font-semibold text-coral">
+                    {labels.errorHistoryLoad.replace('{reason}', `⁨${historyError}⁩`)}
+                  </p>
+                )}
+                {history && history.length === 0 && <p className="text-[10px] text-ink3">{labels.historyEmpty}</p>}
+                {history && history.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {history.map((h) => (
+                      <li key={h.id} className="border-b border-line2 pb-1.5 text-[10px] leading-relaxed text-ink2 last:border-0 last:pb-0">
+                        <span className="font-semibold text-ink">{actionLabel(h.action)}</span>
+                        <span className="text-ink3"> · {h.actor} · </span>
+                        <span className="font-mono text-ink3">{h.createdAt}</span>
+                        {h.changedKeys.length > 0 && (
+                          <span className="mt-0.5 block text-ink3">
+                            {labels.historyChanged} {h.changedKeys.map(columnLabel).join(', ')}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </details>
           </span>
         </>
       )}

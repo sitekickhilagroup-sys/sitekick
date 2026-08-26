@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
-  buildInvoiceRow, canonVendorName, findExactInvoiceDuplicate, findSuspectedInvoiceDuplicate,
-  INVOICE_PATCH_KEYS, parseAmountInput, validateInvoicePatch, vendorGroupKey,
+  buildInvoiceRow, canonVendorName, diffChangedKeys, findExactInvoiceDuplicate, findSuspectedInvoiceDuplicate,
+  INVOICE_PATCH_KEYS, parseAmountInput, patchKeyForColumn, validateInvoicePatch, vendorGroupKey,
   type InvoiceDupCandidate,
 } from './invoice-rules.ts';
 
@@ -247,5 +247,37 @@ describe('findExactInvoiceDuplicate / findSuspectedInvoiceDuplicate', () => {
       [existingInvoice({ entity: null, projectId: null })],
     );
     expect(hit?.id).toBe('existing-1');
+  });
+});
+
+describe('diffChangedKeys', () => {
+  test('a create (before null) reports every key present in after', () => {
+    expect(diffChangedKeys(null, { vendor_id: 'v1', amount_usd: 100 }).sort()).toEqual(['amount_usd', 'vendor_id']);
+  });
+
+  test('an edit reports only the keys whose value actually changed', () => {
+    expect(diffChangedKeys({ status: 'received', amount_usd: 100 }, { status: 'approved', amount_usd: 100 }))
+      .toEqual(['status']);
+  });
+
+  test('null and an absent key are the same "no value" for comparison purposes', () => {
+    expect(diffChangedKeys({ notes: null }, {})).toEqual([]);
+  });
+
+  test('no changes at all reports an empty list', () => {
+    expect(diffChangedKeys({ a: 1 }, { a: 1 })).toEqual([]);
+  });
+});
+
+describe('patchKeyForColumn', () => {
+  test('resolves a real column back to the InvoicePatch key that writes it', () => {
+    expect(patchKeyForColumn('number')).toBe('invoice_no');
+    expect(patchKeyForColumn('budget_line')).toBe('description');
+    expect(patchKeyForColumn('vendor_id')).toBe('vendor_id');
+  });
+
+  test('a column outside INVOICE_PATCH_KEYS (create-only columns) resolves to null', () => {
+    expect(patchKeyForColumn('needs_verification')).toBeNull();
+    expect(patchKeyForColumn('tab')).toBeNull();
   });
 });

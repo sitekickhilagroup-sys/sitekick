@@ -20,7 +20,9 @@ export const INVOICE_PATCH_KEYS = [
   'invoice_url', 'receipt_url', 'transfer_confirmation_url', 'notes',
 ] as const;
 
-type InvoicePatchKey = (typeof INVOICE_PATCH_KEYS)[number];
+// Exported so link-editor.tsx's history panel (E5) can map a diffed column
+// name back to one of its own field labels via patchKeyForColumn below.
+export type InvoicePatchKey = (typeof INVOICE_PATCH_KEYS)[number];
 
 /** InvoicePatch key -> the actual `invoices` column it writes. */
 const COLUMN_MAP: Record<InvoicePatchKey, string> = {
@@ -34,6 +36,18 @@ const COLUMN_MAP: Record<InvoicePatchKey, string> = {
 /** Real `invoices` columns updateInvoice can write — also what
  *  undoInvoiceEdit whitelists when restoring a before_json snapshot. */
 export const INVOICE_ROW_COLUMNS = Object.values(COLUMN_MAP);
+
+/** Column name -> the InvoicePatch key that writes it (COLUMN_MAP inverted).
+ *  Drives the change-history panel (E5): activity_log stores real column
+ *  names in before_json/after_json, but the editor's own labels are keyed by
+ *  InvoicePatchKey — this is how a diffed column name finds its label. */
+const COLUMN_TO_PATCH_KEY = Object.fromEntries(
+  (Object.entries(COLUMN_MAP) as [InvoicePatchKey, string][]).map(([key, column]) => [column, key]),
+) as Record<string, InvoicePatchKey>;
+
+export function patchKeyForColumn(column: string): InvoicePatchKey | null {
+  return COLUMN_TO_PATCH_KEY[column] ?? null;
+}
 
 // receipt_url and transfer_confirmation_url are additions beyond the brief's
 // literal InvoicePatch (which listed invoice_url and transfer_confirmation_url
@@ -259,4 +273,26 @@ export function findExactInvoiceDuplicate(query: InvoiceDupQuery, candidates: In
 export function findSuspectedInvoiceDuplicate(query: InvoiceDupQuery, candidates: InvoiceDupCandidate[]): InvoiceDupCandidate | null {
   const key = suspicionDupKey(query);
   return candidates.find((c) => suspicionDupKey(c) === key) ?? null;
+}
+
+// ── E5: per-invoice change history ───────────────────────────────────────
+
+/**
+ * Which keys differ between an activity_log row's before_json/after_json —
+ * drives the change-history panel's "Changed: vendor, amount" line. Pure and
+ * generic over two optional JSON objects (a create's before_json is always
+ * null, which this treats as "every key in after is a change" — an accurate
+ * read of "this is what the row started as").
+ */
+export function diffChangedKeys(
+  before: Record<string, unknown> | null | undefined,
+  after: Record<string, unknown> | null | undefined,
+): string[] {
+  const b = before ?? {};
+  const a = after ?? {};
+  const changed: string[] = [];
+  for (const key of new Set([...Object.keys(b), ...Object.keys(a)])) {
+    if (JSON.stringify(b[key] ?? null) !== JSON.stringify(a[key] ?? null)) changed.push(key);
+  }
+  return changed;
 }

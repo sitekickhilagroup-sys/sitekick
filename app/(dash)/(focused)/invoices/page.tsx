@@ -175,6 +175,17 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     errorEmptyPatch: t('invoices.error_empty_patch'),
     errorNothingToUndo: t('invoices.error_nothing_to_undo'),
     errorSaveReason: t('invoices.error_save_reason'),
+    // E5 — per-invoice change history, collapsed in the editor footer.
+    history: t('invoices.history'),
+    historyEmpty: t('invoices.history_empty'),
+    historyLoading: t('common.loading'),
+    historyChanged: t('invoices.history_changed'),
+    historyActionCreate: t('invoices.history_action_create'),
+    historyActionEdit: t('invoices.history_action_edit'),
+    historyActionUndo: t('invoices.history_action_undo'),
+    historyActionAdvance: t('invoices.history_action_advance'),
+    errorHistoryLoad: t('invoices.error_history_load'),
+    verify: t('invoices.verify'),
   };
 
   // E4 — Add Invoice header button + duplicate-confirm dialog. Reuses the

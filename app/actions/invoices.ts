@@ -3,10 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
-import { laToday } from '@/lib/date';
+import { laDateTime, laToday } from '@/lib/date';
 import { logActivity } from '@/lib/state-writer';
 import {
-  buildInvoiceRow, canonVendorName, findExactInvoiceDuplicate, findSuspectedInvoiceDuplicate,
+  buildInvoiceRow, canonVendorName, diffChangedKeys, findExactInvoiceDuplicate, findSuspectedInvoiceDuplicate,
   INVOICE_ERRORS, INVOICE_ROW_COLUMNS, validateInvoicePatch, vendorGroupKey,
   type InvoiceDupCandidate, type InvoicePatch,
 } from '@/lib/invoice-rules';
@@ -226,11 +226,64 @@ export async function createInvoice(
   // No `before` — nothing existed to snapshot, same as every other pure
   // creation event already in this codebase (createTask/createTaskChecked in
   // app/actions/tasks.ts, blocker_create/decision_create in
-  // lib/state-writer.ts). `after` carries the full inserted row instead.
+  // lib/state-writer.ts). `after` carries the full inserted row instead, so
+  // the E5 history panel's before/after diff still shows every field the
+  // invoice started with rather than an empty diff against a missing before.
   await logActivity(admin, {
     entity_type: 'invoice', entity_id: data.id, actor: user.email ?? user.id,
     action: 'create', after: row,
   });
   revalidatePath('/invoices');
   return { ok: true as const, id: data.id, needsVerification };
+}
+
+export interface InvoiceHistoryEntry {
+  id: string;
+  actor: string;
+  action: string;
+  /** Pre-formatted LA-local "YYYY-MM-DD HH:mm" (lib/date.ts's laDateTime) —
+   *  the history panel renders this as-is, no client-side formatting. */
+  createdAt: string;
+  /** Real column names (activity_log's own before_json/after_json keys) —
+   *  the caller maps these to field labels via patchKeyForColumn. */
+  changedKeys: string[];
+}
+
+/**
+ * E5: the change-history panel's data source. Reads back what every action
+ * above already writes via logActivity — this adds nothing to the audit
+ * trail, it only reads a slice of it back, capped at the last 10 rows for
+ * one invoice.
+ *
+ * Deliberately a separate on-demand call rather than a prop from the page:
+ * page.tsx's own invoices/projects/vendors Promise.all loads once for every
+ * row on screen, but only one LinkEditor is ever open (and its History
+ * <details> expanded) at a time — fetching 10 activity_log rows per invoice
+ * up front would be a real N+1 query for data almost nobody expands. This is
+ * called directly by link-editor.tsx instead, the same way it already calls
+ * updateInvoice/undoInvoiceEdit.
+ */
+export async function getInvoiceHistory(invoiceId: string): Promise<{ entries: InvoiceHistoryEntry[] } | { error: string }> {
+  await requireUser();
+  const admin = supabaseAdmin();
+  const { data, error } = await admin
+    .from('activity_log')
+    .select('id, actor, action, before_json, after_json, created_at')
+    .eq('entity_type', 'invoice')
+    .eq('entity_id', invoiceId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (error) return { error: error.message };
+  const entries: InvoiceHistoryEntry[] = ((data ?? []) as Array<{
+    id: string; actor: string; action: string;
+    before_json: Record<string, unknown> | null; after_json: Record<string, unknown> | null;
+    created_at: string;
+  }>).map((row) => ({
+    id: row.id,
+    actor: row.actor,
+    action: row.action,
+    createdAt: laDateTime(row.created_at),
+    changedKeys: diffChangedKeys(row.before_json, row.after_json),
+  }));
+  return { entries };
 }
