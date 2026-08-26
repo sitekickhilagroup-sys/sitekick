@@ -8,6 +8,7 @@ import { FilterBar } from '@/components/invoices/filter-bar';
 import { StatusChain } from '@/components/invoices/status-chain';
 import { LinkEditor, type LinkEditorOptions } from '@/components/invoices/link-editor';
 import { AddInvoice } from '@/components/invoices/add-invoice';
+import { canonVendorName, vendorKey } from '@/lib/invoice-rules';
 import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -44,19 +45,19 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const pName = new Map(projects.map((p) => [p.id, p.name]));
   const vName = new Map(vendors.map((v) => [v.id, v.name]));
 
-  // Spec §יב vendor hygiene: trim + collapse whitespace and merge case
-  // variants for display/grouping only — original names stay untouched in
-  // the database for audit. Deeper merges need a human-approved rule.
-  const canon = (s: string) => s.trim().replace(/\s+/g, ' ');
-  const vKey = (s: string) => canon(s).toLowerCase();
+  // Spec §יב vendor hygiene: merge punctuation/case/corporate-suffix variants
+  // for display/grouping only — original names stay untouched in the
+  // database for audit. canonVendorName/vendorKey (lib/invoice-rules.ts) are
+  // the same functions Add Invoice's duplicate check uses, so this table and
+  // that check can never disagree about what "the same vendor" means.
   const canonicalByKey = new Map<string, string>();
   for (const v of vendors) {
-    const k = vKey(v.name);
-    if (!canonicalByKey.has(k)) canonicalByKey.set(k, canon(v.name));
+    const k = vendorKey(v.name);
+    if (!canonicalByKey.has(k)) canonicalByKey.set(k, canonVendorName(v.name));
   }
   const vDisplay = (id: string | null) => {
     const raw = id ? vName.get(id) : undefined;
-    return raw ? (canonicalByKey.get(vKey(raw)) ?? canon(raw)) : '';
+    return raw ? (canonicalByKey.get(vendorKey(raw)) ?? canonVendorName(raw)) : '';
   };
 
   const tab = (typeof sp.tab === 'string' ? sp.tab : 'invoices') as InvoiceTab;
@@ -82,7 +83,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     const projLabel = inv.project_id ? (pName.get(inv.project_id) ?? '') : t('common.general');
     if (fProject && projLabel !== fProject) return false;
     if (fEntity && inv.entity !== fEntity) return false;
-    if (fVendor && vKey(vDisplay(inv.vendor_id)) !== vKey(fVendor)) return false;
+    if (fVendor && vendorKey(vDisplay(inv.vendor_id)) !== vendorKey(fVendor)) return false;
     if (fStatus && inv.status !== fStatus) return false;
     const d = inv.received_date ?? inv.invoice_date ?? inv.due;
     if (fFrom && (!d || d < fFrom)) return false;
@@ -138,7 +139,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const entityOptions = [...new Set(invoices.map((i) => i.entity).filter((e): e is string => !!e))].sort();
   const editorOptions: LinkEditorOptions = {
     vendors: vendors
-      .map((v) => ({ id: v.id, name: canonicalByKey.get(vKey(v.name)) ?? canon(v.name) }))
+      .map((v) => ({ id: v.id, name: canonicalByKey.get(vendorKey(v.name)) ?? canonVendorName(v.name) }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     projects: [...projects].sort((a, b) => a.name.localeCompare(b.name)),
     entities: entityOptions,
@@ -218,6 +219,8 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     errorVendorRequired: t('invoices.error_vendor_required'),
     errorInvalidDate: t('invoices.error_invalid_date'),
     errorSaveReason: t('invoices.error_save_reason'),
+    errorDuplicateNumber: t('invoices.error_duplicate_number'),
+    errorMigrationPending: t('invoices.error_migration_pending'),
   };
 
   return (
@@ -352,7 +355,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
         options={{
           projects: [...projects.map((p) => p.name), t('common.general')].sort(),
           entities: entityOptions,
-          vendors: [...new Set(vendors.map((v) => canonicalByKey.get(vKey(v.name)) ?? canon(v.name)))].sort(),
+          vendors: [...new Set(vendors.map((v) => canonicalByKey.get(vendorKey(v.name)) ?? canonVendorName(v.name)))].sort(),
           statuses: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
         }}
         labels={{

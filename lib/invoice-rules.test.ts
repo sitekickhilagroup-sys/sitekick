@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
-  buildInvoiceRow, canonVendorName, diffChangedKeys, findExactInvoiceDuplicate, findSuspectedInvoiceDuplicate,
-  INVOICE_PATCH_KEYS, parseAmountInput, patchKeyForColumn, validateInvoicePatch, vendorGroupKey,
-  type InvoiceDupCandidate,
+  buildInvoiceRow, canonVendorName, decideCreateInvoiceOutcome, diffChangedKeys, findExactInvoiceDuplicate,
+  findSuspectedInvoiceDuplicate, INVOICE_PATCH_KEYS, parseAmountInput, patchKeyForColumn, validateInvoicePatch,
+  type InvoiceDupCandidate, type InvoiceDupQuery,
 } from './invoice-rules.ts';
 
 test('paid requires a payment date', () => {
@@ -177,63 +177,80 @@ describe('buildInvoiceRow', () => {
   });
 });
 
-describe('canonVendorName / vendorGroupKey', () => {
-  test('trims and collapses internal whitespace', () => {
+describe('canonVendorName', () => {
+  test('trims and collapses internal whitespace, preserving case', () => {
     expect(canonVendorName('  Acme   Corp  ')).toBe('Acme Corp');
   });
 
-  test('vendorGroupKey case-folds on top of canonVendorName', () => {
-    expect(vendorGroupKey('Acme Corp')).toBe('acme corp');
-    expect(vendorGroupKey('  ACME   corp ')).toBe('acme corp');
-  });
-
-  test('does not strip punctuation or corporate suffixes — unlike lib/import/tracker.ts vendorKey', () => {
-    // The documented real-world case (tracker.ts's own comment): these two
-    // strings are "the same vendor" to a human, but this weaker,
-    // page.tsx-matching key deliberately still tells them apart.
-    expect(vendorGroupKey('Thang Le & Associates')).not.toBe(vendorGroupKey('Thang le& Associates'));
-  });
+  // vendorKey itself (the matching key — punctuation/suffix-stripping,
+  // case-insensitive) is tested thoroughly in lib/import/vendor-key.test.ts,
+  // its one canonical home; not duplicated here.
 });
 
 describe('findExactInvoiceDuplicate / findSuspectedInvoiceDuplicate', () => {
   const existingInvoice = (overrides: Partial<InvoiceDupCandidate> = {}): InvoiceDupCandidate => ({
-    id: 'existing-1', vendorName: 'Acme Corp', invoiceNo: 'INV-1', amountUsd: 100,
+    id: 'existing-1', vendorId: 'v1', vendorName: 'Acme Corp', invoiceNo: 'INV-1', amountUsd: 100,
+    receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1',
+    ...overrides,
+  });
+  const baseQuery = (overrides: Partial<InvoiceDupQuery> = {}): InvoiceDupQuery => ({
+    vendorId: 'v1', vendorName: 'Acme Corp', invoiceNo: 'INV-1', amountUsd: 100,
     receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1',
     ...overrides,
   });
 
   test('exact key matches vendor case/whitespace-insensitively plus the exact invoice number', () => {
     const hit = findExactInvoiceDuplicate(
-      { vendorName: '  acme   corp ', invoiceNo: 'inv-1', amountUsd: 999, receivedDate: null, entity: null, projectId: null },
+      baseQuery({ vendorId: 'v2', vendorName: '  acme   corp ', invoiceNo: 'inv-1', amountUsd: 999, receivedDate: null, entity: null, projectId: null }),
       [existingInvoice()],
     );
     expect(hit?.id).toBe('existing-1');
   });
 
+  // Critical review finding: both keys previously used a weaker vendor
+  // normalizer (trim/lowercase only), which missed exactly the case the
+  // invoice audit documents — "Thang Le & Associates" vs "Thang le&
+  // Associates" are the same vendor split into two rows, and a duplicate
+  // invoice filed under the second row used to insert unflagged. Both keys
+  // now route through vendorKey (lib/import/tracker.ts's own, punctuation/
+  // suffix-stripping) instead, so this must be caught.
+  test('exact key catches a punctuation-only vendor variant, not just whitespace/case (the audit\'s own example)', () => {
+    const hit = findExactInvoiceDuplicate(
+      baseQuery({ vendorId: 'v2', vendorName: 'Thang le& Associates', invoiceNo: 'INV-1' }),
+      [existingInvoice({ vendorId: 'v1', vendorName: 'Thang Le & Associates' })],
+    );
+    expect(hit?.id).toBe('existing-1');
+  });
+
+  test('suspicion key also catches a punctuation-only vendor variant', () => {
+    const hit = findSuspectedInvoiceDuplicate(
+      baseQuery({ vendorId: 'v2', vendorName: 'Thang le& Associates', invoiceNo: 'a-different-number' }),
+      [existingInvoice({ vendorId: 'v1', vendorName: 'Thang Le & Associates' })],
+    );
+    expect(hit?.id).toBe('existing-1');
+  });
+
   test('exact key: a different invoice number on the same vendor is not a match', () => {
-    expect(findExactInvoiceDuplicate(
-      { vendorName: 'Acme Corp', invoiceNo: 'INV-2', amountUsd: 100, receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1' },
-      [existingInvoice()],
-    )).toBeNull();
+    expect(findExactInvoiceDuplicate(baseQuery({ invoiceNo: 'INV-2' }), [existingInvoice()])).toBeNull();
   });
 
   test('exact key: never matches when the new invoice has no number, regardless of the candidate', () => {
     expect(findExactInvoiceDuplicate(
-      { vendorName: 'Acme Corp', invoiceNo: null, amountUsd: 100, receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1' },
+      baseQuery({ invoiceNo: null }),
       [existingInvoice({ invoiceNo: null })],
     )).toBeNull();
   });
 
   test('suspicion key matches vendor + amount + received date + entity + project, ignoring invoice number entirely', () => {
     const hit = findSuspectedInvoiceDuplicate(
-      { vendorName: 'Acme Corp', invoiceNo: 'a-totally-different-number', amountUsd: 100, receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1' },
+      baseQuery({ invoiceNo: 'a-totally-different-number' }),
       [existingInvoice()],
     );
     expect(hit?.id).toBe('existing-1');
   });
 
   test('suspicion key: any one differing field breaks the match', () => {
-    const base = { vendorName: 'Acme Corp', invoiceNo: null, amountUsd: 100, receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1' };
+    const base = baseQuery({ invoiceNo: null });
     const existing = [existingInvoice()];
     expect(findSuspectedInvoiceDuplicate({ ...base, amountUsd: 100.01 }, existing)).toBeNull();
     expect(findSuspectedInvoiceDuplicate({ ...base, receivedDate: '2026-03-02' }, existing)).toBeNull();
@@ -243,10 +260,74 @@ describe('findExactInvoiceDuplicate / findSuspectedInvoiceDuplicate', () => {
 
   test('suspicion key: null entity/project and a blank entity string are the same "unset"', () => {
     const hit = findSuspectedInvoiceDuplicate(
-      { vendorName: 'Acme Corp', invoiceNo: null, amountUsd: 100, receivedDate: '2026-03-01', entity: '  ', projectId: null },
+      baseQuery({ invoiceNo: null, entity: '  ', projectId: null }),
       [existingInvoice({ entity: null, projectId: null })],
     );
     expect(hit?.id).toBe('existing-1');
+  });
+});
+
+describe('decideCreateInvoiceOutcome', () => {
+  const existingInvoice = (overrides: Partial<InvoiceDupCandidate> = {}): InvoiceDupCandidate => ({
+    id: 'existing-1', vendorId: 'v1', vendorName: 'Acme Corp', invoiceNo: 'INV-1', amountUsd: 100,
+    receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1',
+    ...overrides,
+  });
+  const baseQuery = (overrides: Partial<InvoiceDupQuery> = {}): InvoiceDupQuery => ({
+    vendorId: 'v2', vendorName: 'Acme Corp', invoiceNo: 'INV-1', amountUsd: 100,
+    receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1',
+    ...overrides,
+  });
+
+  test('clean (no match on either key): insert, not flagged', () => {
+    // Differs on invoice number (breaks the exact key) AND amount (breaks
+    // the suspicion key too) — a genuinely unrelated invoice.
+    expect(decideCreateInvoiceOutcome(baseQuery({ invoiceNo: 'INV-999', amountUsd: 250 }), [existingInvoice()], false))
+      .toEqual({ kind: 'insert', needsVerification: false });
+  });
+
+  test('clean, force=true: force is a no-op with nothing to force past', () => {
+    expect(decideCreateInvoiceOutcome(baseQuery({ invoiceNo: 'INV-999', amountUsd: 250 }), [existingInvoice()], true))
+      .toEqual({ kind: 'insert', needsVerification: false });
+  });
+
+  test('missing invoice number: insert, flagged, regardless of force', () => {
+    expect(decideCreateInvoiceOutcome(baseQuery({ invoiceNo: null }), [], false))
+      .toEqual({ kind: 'insert', needsVerification: true });
+    expect(decideCreateInvoiceOutcome(baseQuery({ invoiceNo: null }), [], true))
+      .toEqual({ kind: 'insert', needsVerification: true });
+  });
+
+  test('suspicion match only: insert, flagged, regardless of force', () => {
+    const candidates = [existingInvoice({ invoiceNo: 'a-different-number' })];
+    expect(decideCreateInvoiceOutcome(baseQuery(), candidates, false)).toEqual({ kind: 'insert', needsVerification: true });
+    expect(decideCreateInvoiceOutcome(baseQuery(), candidates, true)).toEqual({ kind: 'insert', needsVerification: true });
+  });
+
+  test('exact match, different vendor_id, no force: blocked with the dup row', () => {
+    const dup = existingInvoice();
+    expect(decideCreateInvoiceOutcome(baseQuery(), [dup], false)).toEqual({ kind: 'blocked', dup });
+  });
+
+  test('exact match, different vendor_id, force: inserts flagged (not the same DB row, no constraint collision)', () => {
+    const dup = existingInvoice({ vendorId: 'v1' }); // query below is vendorId 'v2'
+    expect(decideCreateInvoiceOutcome(baseQuery({ vendorId: 'v2' }), [dup], true))
+      .toEqual({ kind: 'insert', needsVerification: true });
+  });
+
+  // Critical review finding: an exact match sharing the literal same
+  // vendor_id is the ORDINARY case (vendors.name is itself unique), and
+  // forcing it would hit the table's `unique (vendor_id, number)`
+  // constraint — this must be refused with a named outcome, never left to
+  // reach Postgres.
+  test('exact match, SAME vendor_id, no force: still just blocked (force not relevant yet)', () => {
+    const dup = existingInvoice({ vendorId: 'v-shared' });
+    expect(decideCreateInvoiceOutcome(baseQuery({ vendorId: 'v-shared' }), [dup], false)).toEqual({ kind: 'blocked', dup });
+  });
+
+  test('exact match, SAME vendor_id, force: blockedSameVendor — never silently inserts, never reaches the DB constraint', () => {
+    const dup = existingInvoice({ vendorId: 'v-shared' });
+    expect(decideCreateInvoiceOutcome(baseQuery({ vendorId: 'v-shared' }), [dup], true)).toEqual({ kind: 'blockedSameVendor' });
   });
 });
 

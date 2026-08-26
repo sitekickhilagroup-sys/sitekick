@@ -4,7 +4,19 @@
 // authenticated request — same reason lib/task-details.ts exists.
 
 import { DATE_RE } from './task-details.ts';
+import { vendorKey } from './import/tracker.ts';
 import type { Invoice } from './types.ts';
+
+// Re-exported so every call site that needs "is this the same vendor"
+// (app/(dash)/(focused)/invoices/page.tsx's own display/grouping, this
+// file's duplicate-detection keys below, and lib/import/tracker.ts's own
+// import-time vendor-row merging) can import it from one place instead of
+// three definitions quietly drifting apart. See lib/import/tracker.ts's own
+// doc comment on vendorKey for why the punctuation/suffix stripping matters:
+// "Thang Le & Associates" and "Thang le& Associates" are two vendor rows in
+// the real data, and a weaker key (trim/lowercase only) misses that pair
+// entirely — which is exactly the bug this task exists to catch.
+export { vendorKey };
 
 // The full set of columns the invoice editor (E2) is allowed to touch. Two
 // entries are deliberately NOT 1:1 with the column name: `invoice_no` and
@@ -89,6 +101,17 @@ export const INVOICE_ERRORS = {
   // check identifies "the same invoice" at all, so unlike an edit (where
   // every field is optional) a create cannot go in without one.
   vendorRequired: 'vendor required',
+  // "Add anyway" forced past an exact-key match that shares the literal same
+  // vendor_id — inserting would collide with the table's own
+  // `unique (vendor_id, number)` constraint (0001_init.sql). Refused before
+  // the insert is even attempted, so the caller never sees the raw
+  // constraint-violation text.
+  duplicateNumber: 'this vendor already has an invoice with this number',
+  // The insert asked for needs_verification and PostgREST returned PGRST204
+  // (column not found in schema cache) — migration 0017_invoice_verify.sql
+  // has not been applied yet. Named separately from a generic DB error so
+  // the message can say what to actually do about it.
+  migrationPending: 'the verification column is not live in the database yet',
 } as const;
 
 // Inspects the number's own decimal-string form rather than `n * 100` —
@@ -200,28 +223,22 @@ export function buildInvoiceRow(patch: InvoicePatch): Record<string, unknown> {
 
 // ── E4: Add Invoice duplicate detection ─────────────────────────────────
 //
-// Vendor-name hygiene: trim + collapse whitespace, case-fold for grouping —
-// the exact canonicalization app/(dash)/(focused)/invoices/page.tsx already
-// applies to every vendor name it displays or groups by (its own `canon`/
-// `vKey`). Lifted here, unchanged, so the page and createInvoice's duplicate
-// check share one definition of "the same vendor" instead of two that could
-// drift apart. This is deliberately NOT lib/import/tracker.ts's own
-// `vendorKey` — that one additionally strips punctuation and corporate
-// suffixes ("PREMISE" ~ "PREMISE LLC") for import-time vendor-row merging, a
-// stronger and different notion of identity than this task's spec calls for.
+// Display-safe canonical form of a vendor name — trim + collapse whitespace,
+// case preserved. Used wherever a *readable* name is needed (page.tsx's
+// vDisplay, the duplicate-confirm dialog's `dup.vendor`), as opposed to
+// vendorKey above, which is a matching key, not a name.
 export function canonVendorName(s: string): string {
   return s.trim().replace(/\s+/g, ' ');
 }
 
-export function vendorGroupKey(s: string): string {
-  return canonVendorName(s).toLowerCase();
-}
-
 /** One existing invoice, reduced to exactly what the duplicate check
  *  compares — vendorName already resolved to its canonical display name (the
- *  same one vDisplay() in page.tsx would show), not a raw vendor_id. */
+ *  same one vDisplay() in page.tsx would show), and vendorId kept alongside
+ *  it (raw, unresolved) only for decideCreateInvoiceOutcome's same-vendor_id
+ *  guard below — the key functions themselves never touch it. */
 export interface InvoiceDupCandidate {
   id: string;
+  vendorId: string | null;
   vendorName: string;
   invoiceNo: string | null;
   amountUsd: number;
@@ -239,17 +256,20 @@ export type InvoiceDupQuery = Omit<InvoiceDupCandidate, 'id'>;
  *  being refused outright. */
 function exactDupKey(vendorName: string, invoiceNo: string | null): string | null {
   const no = invoiceNo?.trim();
-  return no ? `${vendorGroupKey(vendorName)}::${no.toLowerCase()}` : null;
+  return no ? `${vendorKey(vendorName)}::${no.toLowerCase()}` : null;
 }
 
 /** Suspicion key: vendor + amount + received date + entity + project — the
  *  project's own audit's second, softer identity for "probably the same
  *  invoice" when there is no invoice number to key on exactly (or the number
  *  alone didn't match). Every field folds into one string key so the caller
- *  never needs its own field-by-field comparison. */
+ *  never needs its own field-by-field comparison. Vendor identity here uses
+ *  the same vendorKey as the exact key above (not a weaker one) — a
+ *  punctuation-only vendor variant must not defeat *either* key, only one of
+ *  which requires an invoice number to exist at all. */
 function suspicionDupKey(q: Pick<InvoiceDupCandidate, 'vendorName' | 'amountUsd' | 'receivedDate' | 'entity' | 'projectId'>): string {
   return [
-    vendorGroupKey(q.vendorName),
+    vendorKey(q.vendorName),
     q.amountUsd.toFixed(2),
     q.receivedDate ?? '',
     q.entity ? q.entity.trim().toLowerCase() : '',
@@ -273,6 +293,45 @@ export function findExactInvoiceDuplicate(query: InvoiceDupQuery, candidates: In
 export function findSuspectedInvoiceDuplicate(query: InvoiceDupQuery, candidates: InvoiceDupCandidate[]): InvoiceDupCandidate | null {
   const key = suspicionDupKey(query);
   return candidates.find((c) => suspicionDupKey(c) === key) ?? null;
+}
+
+export type CreateInvoiceOutcome =
+  | { kind: 'blocked'; dup: InvoiceDupCandidate }
+  | { kind: 'blockedSameVendor' }
+  | { kind: 'insert'; needsVerification: boolean };
+
+/**
+ * createInvoice's own orchestration, pulled out as a pure function over an
+ * already-fetched candidate set so the full force/needsVerification truth
+ * table — and the same-vendor_id collision with the table's own
+ * `unique (vendor_id, number)` constraint — is directly testable without
+ * mocking Supabase. createInvoice itself only fetches candidates, calls
+ * this, and turns the result into a DB write (or not).
+ */
+export function decideCreateInvoiceOutcome(
+  query: InvoiceDupQuery,
+  candidates: InvoiceDupCandidate[],
+  force: boolean,
+): CreateInvoiceOutcome {
+  const exactDup = findExactInvoiceDuplicate(query, candidates);
+  if (exactDup) {
+    if (!force) return { kind: 'blocked', dup: exactDup };
+    // Forced past an exact-key match. If it shares the literal same
+    // vendor_id (not just the same canonical vendor identity via vendorKey
+    // — see above), inserting collides with the table's own
+    // `unique (vendor_id, number)` constraint (0001_init.sql). This is the
+    // ORDINARY case for an exact match, not a rare one: vendors.name is
+    // itself unique, so two vendor rows sharing a canonical identity via a
+    // punctuation/case difference is the unusual variant — sharing a
+    // vendor_id outright is the common one. Refuse cleanly here rather than
+    // let the insert reach Postgres and bounce back a raw constraint error:
+    // the real fix is a different invoice number, not a second identical
+    // (vendor_id, number) row.
+    if (exactDup.vendorId === query.vendorId) return { kind: 'blockedSameVendor' };
+  }
+  const missingInvoiceNo = !query.invoiceNo;
+  const suspected = !exactDup && findSuspectedInvoiceDuplicate(query, candidates);
+  return { kind: 'insert', needsVerification: missingInvoiceNo || !!suspected || !!exactDup };
 }
 
 // ── E5: per-invoice change history ───────────────────────────────────────

@@ -156,6 +156,8 @@
   "invoices.created": "החשבונית נוספה",
   "invoices.created_verify": "החשבונית נוספה — סומנה לאימות",
   "invoices.error_vendor_required": "יש לבחור ספק",
+  "invoices.error_duplicate_number": "לספק הזה כבר יש חשבונית עם אותו המספר — יש לשנות את המספר כדי להוסיף אותה כחשבונית חדשה.",
+  "invoices.error_migration_pending": "עמודת האימות עדיין לא פעילה במסד הנתונים — יש להריץ קודם את migration 0017.",
   "drafts.title": "תור אישור טיוטות",
   "drafts.approve": "אישור",
   "drafts.dismiss": "דחייה",

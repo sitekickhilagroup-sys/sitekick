@@ -61,6 +61,14 @@ export function AddInvoice({ options, money, labels }: Props) {
       case INVOICE_ERRORS.vendorRequired: return labels.errorVendorRequired;
       case INVOICE_ERRORS.invalidAmount: return labels.invalidAmount;
       case INVOICE_ERRORS.invalidDate: return labels.errorInvalidDate;
+      // "Add anyway" was forced past an exact match that turned out to share
+      // the same vendor row — createInvoice refused before ever attempting
+      // the insert, so this is the clean, named message instead of the raw
+      // `unique (vendor_id, number)` constraint text.
+      case INVOICE_ERRORS.duplicateNumber: return labels.errorDuplicateNumber;
+      // Migration 0017_invoice_verify.sql hasn't been applied yet — nothing
+      // the user can do; this needs to reach whoever runs migrations.
+      case INVOICE_ERRORS.migrationPending: return labels.errorMigrationPending;
       default: return labels.errorSaveReason.replace('{reason}', `⁨${code}⁩`);
     }
   };

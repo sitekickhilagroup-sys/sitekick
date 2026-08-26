@@ -6,8 +6,8 @@ import { requireUser } from '@/lib/auth';
 import { laDateTime, laToday } from '@/lib/date';
 import { logActivity } from '@/lib/state-writer';
 import {
-  buildInvoiceRow, canonVendorName, diffChangedKeys, findExactInvoiceDuplicate, findSuspectedInvoiceDuplicate,
-  INVOICE_ERRORS, INVOICE_ROW_COLUMNS, validateInvoicePatch, vendorGroupKey,
+  buildInvoiceRow, canonVendorName, decideCreateInvoiceOutcome, diffChangedKeys,
+  INVOICE_ERRORS, INVOICE_ROW_COLUMNS, validateInvoicePatch, vendorKey,
   type InvoiceDupCandidate, type InvoicePatch,
 } from '@/lib/invoice-rules';
 import type { Invoice, InvoiceStatus } from '@/lib/types';
@@ -107,6 +107,25 @@ export interface InvoiceDupInfo {
   received_date: string | null;
 }
 
+/** Shape of an `invoices` row as returned by the narrowed candidate queries
+ *  below — just what the duplicate-detection keys need. */
+interface RawInvoiceCandidate {
+  id: string;
+  vendor_id: string | null;
+  number: string | null;
+  amount_usd: number;
+  received_date: string | null;
+  entity: string | null;
+  project_id: string | null;
+}
+
+/** Escapes ILIKE's own wildcard characters (%, _) so a literal invoice
+ *  number or entity value that happens to contain one can't accidentally
+ *  act as a pattern when used below for a case-insensitive exact match. */
+function escapeLike(s: string): string {
+  return s.replace(/[%_\\]/g, (c) => `\\${c}`);
+}
+
 /**
  * Add-Invoice (E4). The tracker is known to contain genuine duplicates —
  * lib/import/tracker.ts's own vendorKey doc tells the actual story: the same
@@ -118,7 +137,11 @@ export interface InvoiceDupInfo {
  *   - exact key (normalized vendor + invoice_no) hit -> refuse the insert,
  *     hand back the existing row so the caller can point the user at it —
  *     unless `force` says the human already looked and wants a second row
- *     anyway (still flagged, never silently treated as "the same").
+ *     anyway (still flagged, never silently treated as "the same"). If that
+ *     match shares the literal same vendor_id, force is refused too — with
+ *     a named error, not a raw Postgres constraint failure — because
+ *     inserting would violate `unique (vendor_id, number)` (0001_init.sql);
+ *     the real fix there is a different invoice number.
  *   - suspicion key (vendor + amount + received_date + entity + project) hit
  *     -> insert proceeds, flagged needs_verification: true.
  *   - no invoice_no at all -> insert proceeds, flagged needs_verification:
@@ -155,39 +178,57 @@ export async function createInvoice(
   const validation = validateInvoicePatch({ status: 'received', paid_date: null }, patch);
   if ('error' in validation) return validation;
 
-  // Vendor-hygiene canonicalization, reused (not reimplemented) from
-  // page.tsx's own — see lib/invoice-rules.ts's canonVendorName/vendorGroupKey
-  // doc comment for why this is deliberately NOT tracker.ts's stronger
-  // vendorKey. Scoped to tab:'invoices' — the same population the Invoices
-  // tab itself (and Add Invoice) shows; 'david' is a separately-tracked sheet
+  // Candidate fetch, narrowed to what the two detection keys can actually
+  // match — vendor identity is resolved and compared in JS below (vendorKey
+  // isn't a column Postgres can filter on), but every other field IS a real
+  // column, so two small, targeted queries replace one unscoped `select *`
+  // scan of every invoice. Supabase's default API max_rows is 1000; an
+  // unscoped fetch here would silently truncate past that and let a genuine
+  // duplicate insert unflagged with no error — the exact failure mode this
+  // avoids. Scoped to tab:'invoices' — the same population the Invoices tab
+  // itself (and Add Invoice) shows; 'david' is a separately-tracked sheet
   // this flow never writes to or checks against.
-  const [vendorsRes, existingRes] = await Promise.all([
+  const trimmedNo = patch.invoice_no as string | null;
+  const receivedDate = patch.received_date as string | null;
+  const entity = patch.entity as string | null;
+  const projectId = patch.project_id as string | null;
+  const candidateColumns = 'id,vendor_id,number,amount_usd,received_date,entity,project_id';
+  let suspicionQuery = admin.from('invoices').select(candidateColumns)
+    .eq('tab', 'invoices').eq('amount_usd', input.amountUsd);
+  suspicionQuery = receivedDate ? suspicionQuery.eq('received_date', receivedDate) : suspicionQuery.is('received_date', null);
+  suspicionQuery = entity ? suspicionQuery.ilike('entity', escapeLike(entity)) : suspicionQuery.is('entity', null);
+  suspicionQuery = projectId ? suspicionQuery.eq('project_id', projectId) : suspicionQuery.is('project_id', null);
+
+  const [vendorsRes, exactCandidatesRes, suspicionCandidatesRes] = await Promise.all([
     admin.from('vendors').select('id,name'),
-    admin.from('invoices')
-      .select('id,vendor_id,number,amount_usd,received_date,entity,project_id')
-      .eq('tab', 'invoices'),
+    trimmedNo
+      ? admin.from('invoices').select(candidateColumns).eq('tab', 'invoices').ilike('number', escapeLike(trimmedNo))
+      : Promise.resolve({ data: [] as RawInvoiceCandidate[], error: null }),
+    suspicionQuery,
   ]);
   // A failed lookup here must not masquerade as "vendor required" below —
   // that would name the wrong reason for what is really a query failure.
   if (vendorsRes.error) return { error: vendorsRes.error.message };
-  if (existingRes.error) return { error: existingRes.error.message };
-  const { data: vendorRows } = vendorsRes;
-  const { data: existingRows } = existingRes;
-  const vendors = (vendorRows ?? []) as { id: string; name: string }[];
+  if (exactCandidatesRes.error) return { error: exactCandidatesRes.error.message };
+  if (suspicionCandidatesRes.error) return { error: suspicionCandidatesRes.error.message };
+
+  const vendors = (vendorsRes.data ?? []) as { id: string; name: string }[];
   const canonicalByKey = new Map<string, string>();
   for (const v of vendors) {
-    const k = vendorGroupKey(v.name);
+    const k = vendorKey(v.name);
     if (!canonicalByKey.has(k)) canonicalByKey.set(k, canonVendorName(v.name));
   }
-  const vendorNameById = new Map(vendors.map((v) => [v.id, canonicalByKey.get(vendorGroupKey(v.name)) ?? canonVendorName(v.name)]));
+  const vendorNameById = new Map(vendors.map((v) => [v.id, canonicalByKey.get(vendorKey(v.name)) ?? canonVendorName(v.name)]));
   const newVendorName = vendorNameById.get(input.vendorId);
   if (!newVendorName) return { error: INVOICE_ERRORS.vendorRequired };
 
-  const candidates: InvoiceDupCandidate[] = ((existingRows ?? []) as Array<{
-    id: string; vendor_id: string | null; number: string | null; amount_usd: number;
-    received_date: string | null; entity: string | null; project_id: string | null;
-  }>).map((r) => ({
+  const rawCandidates = new Map<string, RawInvoiceCandidate>();
+  for (const r of [...(exactCandidatesRes.data ?? []), ...(suspicionCandidatesRes.data ?? [])] as RawInvoiceCandidate[]) {
+    rawCandidates.set(r.id, r);
+  }
+  const candidates: InvoiceDupCandidate[] = [...rawCandidates.values()].map((r) => ({
     id: r.id,
+    vendorId: r.vendor_id,
     vendorName: r.vendor_id ? (vendorNameById.get(r.vendor_id) ?? '') : '',
     invoiceNo: r.number,
     amountUsd: Number(r.amount_usd),
@@ -197,44 +238,47 @@ export async function createInvoice(
   }));
 
   const query = {
-    vendorName: newVendorName, invoiceNo: patch.invoice_no as string | null,
-    amountUsd: input.amountUsd, receivedDate: patch.received_date as string | null,
-    entity: patch.entity as string | null, projectId: patch.project_id as string | null,
+    vendorId: input.vendorId, vendorName: newVendorName, invoiceNo: trimmedNo,
+    amountUsd: input.amountUsd, receivedDate, entity, projectId,
   };
 
-  const exactDup = findExactInvoiceDuplicate(query, candidates);
-  if (exactDup && !input.force) {
-    return { dup: { id: exactDup.id, vendor: exactDup.vendorName, amount_usd: exactDup.amountUsd, received_date: exactDup.receivedDate } };
+  const outcome = decideCreateInvoiceOutcome(query, candidates, !!input.force);
+  if (outcome.kind === 'blocked') {
+    const { dup } = outcome;
+    return { dup: { id: dup.id, vendor: dup.vendorName, amount_usd: dup.amountUsd, received_date: dup.receivedDate } };
   }
-
-  const missingInvoiceNo = !query.invoiceNo;
-  const suspected = !exactDup && findSuspectedInvoiceDuplicate(query, candidates);
-  const needsVerification = missingInvoiceNo || !!suspected || !!(exactDup && input.force);
+  if (outcome.kind === 'blockedSameVendor') return { error: INVOICE_ERRORS.duplicateNumber };
 
   const row = buildInvoiceRow(patch);
   row.tab = 'invoices';
-  row.needs_verification = needsVerification;
-  // NOTE: if `exactDup` shares this exact vendor_id (not just the same
-  // canonical name — e.g. force:true after the SAME vendor+number was
-  // already on file), the table's own `unique (vendor_id, number)`
-  // constraint (0001_init.sql) will reject this insert outright. That
-  // constraint predates this task and is untouched here; the resulting
-  // Postgres error still surfaces below rather than being swallowed.
+  row.needs_verification = outcome.needsVerification;
   const { data, error } = await admin.from('invoices').insert(row).select('id').single();
-  if (error) return { error: error.message };
+  if (error) {
+    // PGRST204: PostgREST can't find needs_verification in its schema
+    // cache — migration 0017_invoice_verify.sql hasn't been applied yet.
+    // Named separately so the message tells the owner what to actually do,
+    // instead of a raw "column ... does not exist" internal.
+    if (error.code === 'PGRST204') return { error: INVOICE_ERRORS.migrationPending };
+    return { error: error.message };
+  }
 
   // No `before` — nothing existed to snapshot, same as every other pure
   // creation event already in this codebase (createTask/createTaskChecked in
   // app/actions/tasks.ts, blocker_create/decision_create in
   // lib/state-writer.ts). `after` carries the full inserted row instead, so
   // the E5 history panel's before/after diff still shows every field the
-  // invoice started with rather than an empty diff against a missing before.
+  // invoice started with rather than an empty diff against a missing
+  // before — except `tab`, which every Add-Invoice row shares unconditionally
+  // and has no InvoicePatch key/label of its own, so it would only ever show
+  // up in history as a meaningless "Changed: … tab".
+  const loggedRow: Record<string, unknown> = { ...row };
+  delete loggedRow.tab;
   await logActivity(admin, {
     entity_type: 'invoice', entity_id: data.id, actor: user.email ?? user.id,
-    action: 'create', after: row,
+    action: 'create', after: loggedRow,
   });
   revalidatePath('/invoices');
-  return { ok: true as const, id: data.id, needsVerification };
+  return { ok: true as const, id: data.id, needsVerification: outcome.needsVerification };
 }
 
 export interface InvoiceHistoryEntry {

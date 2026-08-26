@@ -156,6 +156,8 @@
   "invoices.created": "Invoice added",
   "invoices.created_verify": "Invoice added — flagged for verification",
   "invoices.error_vendor_required": "Choose a vendor",
+  "invoices.error_duplicate_number": "This vendor already has an invoice with that number — change the number to add it as a new invoice.",
+  "invoices.error_migration_pending": "The verification column isn't live in the database yet — migration 0017 needs to be applied first.",
   "drafts.title": "Draft approval queue",
   "drafts.approve": "Approve",
   "drafts.dismiss": "Dismiss",
