@@ -568,7 +568,7 @@
   "work.msg.delayed": "Delay recorded. Add a reason and a new date; the blocker impact stays visible.",
   "work.msg.scheduled": "Scheduled. It leaves Today and returns on the date you chose.",
   "work.msg.not_applicable": "Marked not applicable. The reason stays in the audit trail.",
-  "work.msg.note": "Note saved as new evidence; the agent proposes, it does not force a change.",
+  "work.msg.note": "Note saved to the task and shown on the row; nothing to review or approve.",
   "work.status.open": "Open",
   "work.status.done": "Done",
   "work.status.dropped": "Not applicable"
