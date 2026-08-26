@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   attachRecording, finalizeReview, reopenReview, saveItemNote, saveItemOwnerDue, saveReview, saveSubtopicContext,
   setItemSnapshot, setItemStatus, type SnapshotState,
@@ -17,13 +18,18 @@ interface Props {
   review: WeeklyReview;
   groups: ProjectGroup[];
   labels: Record<string, string>;
+  /** D5: count of state='pending' agent_proposals whose target_task_id is on
+   *  this review, computed server-side in page.tsx (agent_proposals has no
+   *  weekly_review_id of its own — it is matched by task, same as every
+   *  other cross-reference between a review item and its canonical task). */
+  pendingProposals: number;
 }
 
 // Client-demo structure: mode toggle (Sunday draft = edit, Monday presentation
 // = clean read-only), 3-step explainer, save + upload cards, project -> sub-topic
 // groups, archive-semantics footer. Spec §יא: each project is an accordion and
 // only one opens at a time; Completed rows collapse; status is one dropdown.
-export function ReviewBoard({ review, groups, labels }: Props) {
+export function ReviewBoard({ review, groups, labels, pendingProposals }: Props) {
   const params = useSearchParams();
   // Mode comes from the URL, not component state: it has to survive a refresh,
   // §2 requires it to come from application state, and it lets the header own
@@ -68,6 +74,22 @@ export function ReviewBoard({ review, groups, labels }: Props) {
           present ? 'border-sk-blue/30 bg-sk-blue-soft text-sk-blue' : 'border-sk-cream-border bg-sk-cream text-sk-amber'
         }`}>
           {present ? labels.modeNoteMeeting : labels.modeNoteDraft}
+        </p>
+      )}
+
+      {/* D5: agent_proposals is a real, already-built approval queue (0002 +
+          0008, /inbox) — extraction runs on .txt/.docx weekly uploads same as
+          any other transcript and writes pending proposals there (.mp4
+          recordings are store+link only, no extraction, see the upload card
+          below). This surfaces it only when a pending proposal actually
+          targets a task on THIS review, rather than a generic "you have
+          suggestions somewhere" nag. */}
+      {pendingProposals > 0 && labels.proposalsBanner && (
+        <p role="status" className="rounded-[10px] border border-apricot/30 bg-apricot-soft px-4 py-2.5 text-[11px] leading-[1.5] text-apricot">
+          {labels.proposalsBanner}{' '}
+          <Link href="/inbox" className="font-[650] underline underline-offset-2">
+            {labels.proposalsBannerLink}
+          </Link>
         </p>
       )}
 

@@ -37,6 +37,21 @@ export default async function WeeklyPage() {
     .maybeSingle();
   const embedded = reviewData as EmbeddedReview | null;
 
+  // D5: transcripts uploaded through this page's card DO run through the
+  // same extraction pipeline as any other transcript (app/api/upload/route.ts
+  // -> lib/ingest.ts processDocument -> agents/extract-comms.ts), which
+  // writes real agent_proposals rows awaiting approval in /inbox (recordings
+  // are the one exception — .mp4 is store+link only, no extraction, see the
+  // upload card's own comment). Rather than only flag proposals that came
+  // from this review's own uploads, this surfaces any pending proposal that
+  // targets a task already on this week's agenda, from any source document —
+  // that is what actually matters to someone prepping this meeting.
+  const taskIds = embedded ? [...new Set(embedded.weekly_review_items.map((i) => i.task_id))] : [];
+  const { count: pendingProposalsCount } = taskIds.length
+    ? await supabase.from('agent_proposals').select('id', { count: 'exact', head: true })
+      .eq('state', 'pending').in('target_task_id', taskIds)
+    : { count: 0 };
+
   return (
     <>
       <WeeklyHeader />
@@ -53,68 +68,79 @@ export default async function WeeklyPage() {
         (() => {
           const { weekly_review_items: items, weekly_review_subtopics: contexts, ...review } = embedded;
           return (
-            <ReviewBoard review={review} groups={buildGroups(items, contexts, t)} labels={{
-              contextPh: t('weekly.context_ph'),
-              error: t('common.error_save'),
-              saved: t('weekly.saved'),
-              save: t('weekly.save'),
-              // D4: the upload card now renders "{name} · {date} · Processed"
-              // on success (not a bare "Recording attached" flag), so this
-              // replaces weekly.uploaded as what review-board.tsx reads.
-              processed: t('weekly.processed'),
-              upload: t('weekly.upload'),
-              note: t('weekly.note'),
-              meeting: t('weekly.meeting'),
-              completed: t('work.verb.completed'),
-              notApplicable: t('work.verb.not_applicable'),
-              statusOpen: t('weekly.status_open'),
-              noItems: t('weekly.no_items'),
-              progress: t('weekly.progress'),
-              stCarried: t('weekly.st_carried'),
-              stWaiting: t('weekly.st_waiting'),
-              stBlocked: t('weekly.st_blocked'),
-              stNoUpdate: t('weekly.st_no_update'),
-              itemKicker: t('weekly.item_kicker'),
-              modeDraft: t('weekly.mode_draft'),
-              modePresent: t('weekly.mode_present'),
-              step1t: t('weekly.step1_t'), step1d: t('weekly.step1_d'),
-              step2t: t('weekly.step2_t'), step2d: t('weekly.step2_d'),
-              step3t: t('weekly.step3_t'), step3d: t('weekly.step3_d'),
-              saveKicker: t('weekly.save_kicker'),
-              saveSub: t('weekly.save_sub'),
-              uploadKicker: t('weekly.upload_kicker'),
-              uploadSub: t('weekly.upload_sub'),
-              noteKicker: t('weekly.note_kicker'),
-              ownerLabel: t('weekly.owner'),
-              archiveNote: t('weekly.archive_note'),
-              statusLabel: t('weekly.status_label'),
-              completedN: t('weekly.completed_n'),
-              actionsN: t('weekly.actions_n'),
-              actions1: t('weekly.actions_1'),
-              // Was never passed, so the SUB-TOPIC eyebrow the spec requires
-              // silently never rendered.
-              subTopic: t('weekly.sub_topic'),
-              noSubtopics: t('weekly.no_subtopics'),
-              noActions: t('weekly.no_actions'),
-              modeNoteDraft: t('weekly.mode_note_draft'),
-              modeNoteMeeting: t('weekly.mode_note_meeting'),
-              uploadKickerDraft: t('weekly.upload_kicker_draft'),
-              // D1: Finalize / Reopen, distinct from Save.
-              finalize: t('weekly.finalize'),
-              reopen: t('weekly.reopen'),
-              finalizeConfirm: t('weekly.finalize_confirm'),
-              // Raw template with a literal "{date}" — substituted client-side
-              // in ReviewControls, same pattern `progress` already uses (the
-              // real value comes from review.finalized_at, which only the
-              // client component has after ReviewBoard passes `review` down).
-              finalizedBadge: t('weekly.finalized_badge'),
-              // D2: Next step field + Owner/Due inline editing.
-              nextStepKicker: t('weekly.next_step_kicker'),
-              nextStepPh: t('weekly.next_step_ph'),
-              // Reuses the same "Due" label /work already shows for this
-              // column, rather than a second weekly-only translation of it.
-              dueLabel: t('work.col_due'),
-            }} />
+            <ReviewBoard
+              review={review}
+              groups={buildGroups(items, contexts, t)}
+              pendingProposals={pendingProposalsCount ?? 0}
+              labels={{
+                contextPh: t('weekly.context_ph'),
+                error: t('common.error_save'),
+                saved: t('weekly.saved'),
+                save: t('weekly.save'),
+                // D4: the upload card now renders "{name} · {date} · Processed"
+                // on success (not a bare "Recording attached" flag), so this
+                // replaces weekly.uploaded as what review-board.tsx reads.
+                processed: t('weekly.processed'),
+                upload: t('weekly.upload'),
+                note: t('weekly.note'),
+                meeting: t('weekly.meeting'),
+                completed: t('work.verb.completed'),
+                notApplicable: t('work.verb.not_applicable'),
+                statusOpen: t('weekly.status_open'),
+                noItems: t('weekly.no_items'),
+                progress: t('weekly.progress'),
+                stCarried: t('weekly.st_carried'),
+                stWaiting: t('weekly.st_waiting'),
+                stBlocked: t('weekly.st_blocked'),
+                stNoUpdate: t('weekly.st_no_update'),
+                itemKicker: t('weekly.item_kicker'),
+                modeDraft: t('weekly.mode_draft'),
+                modePresent: t('weekly.mode_present'),
+                step1t: t('weekly.step1_t'), step1d: t('weekly.step1_d'),
+                step2t: t('weekly.step2_t'), step2d: t('weekly.step2_d'),
+                step3t: t('weekly.step3_t'), step3d: t('weekly.step3_d'),
+                saveKicker: t('weekly.save_kicker'),
+                saveSub: t('weekly.save_sub'),
+                uploadKicker: t('weekly.upload_kicker'),
+                uploadSub: t('weekly.upload_sub'),
+                // D5: banner shown when a pending suggestion targets a task
+                // already on this week's agenda (see pendingProposalsCount
+                // above) — reuses bell.review_now rather than a new "go to
+                // inbox" translation, since it is the same action.
+                proposalsBanner: t('weekly.proposals_banner'),
+                proposalsBannerLink: t('bell.review_now'),
+                noteKicker: t('weekly.note_kicker'),
+                ownerLabel: t('weekly.owner'),
+                archiveNote: t('weekly.archive_note'),
+                statusLabel: t('weekly.status_label'),
+                completedN: t('weekly.completed_n'),
+                actionsN: t('weekly.actions_n'),
+                actions1: t('weekly.actions_1'),
+                // Was never passed, so the SUB-TOPIC eyebrow the spec requires
+                // silently never rendered.
+                subTopic: t('weekly.sub_topic'),
+                noSubtopics: t('weekly.no_subtopics'),
+                noActions: t('weekly.no_actions'),
+                modeNoteDraft: t('weekly.mode_note_draft'),
+                modeNoteMeeting: t('weekly.mode_note_meeting'),
+                uploadKickerDraft: t('weekly.upload_kicker_draft'),
+                // D1: Finalize / Reopen, distinct from Save.
+                finalize: t('weekly.finalize'),
+                reopen: t('weekly.reopen'),
+                finalizeConfirm: t('weekly.finalize_confirm'),
+                // Raw template with a literal "{date}" — substituted client-side
+                // in ReviewControls, same pattern `progress` already uses (the
+                // real value comes from review.finalized_at, which only the
+                // client component has after ReviewBoard passes `review` down).
+                finalizedBadge: t('weekly.finalized_badge'),
+                // D2: Next step field + Owner/Due inline editing.
+                nextStepKicker: t('weekly.next_step_kicker'),
+                nextStepPh: t('weekly.next_step_ph'),
+                // Reuses the same "Due" label /work already shows for this
+                // column, rather than a second weekly-only translation of it.
+                dueLabel: t('work.col_due'),
+              }}
+            />
           );
         })()
       )}
