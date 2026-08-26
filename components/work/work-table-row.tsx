@@ -37,7 +37,9 @@ interface Props {
   unlocks?: string[];
   /** Canonical phase this task maps to (stage_phase_map). */
   phaseLabel?: string | null;
-  /** Legacy stage tag shown under the phase — her "sub-stage" line. */
+  /** Her "sub-stage" line under the phase — resolveTaskSubstageLabel's
+   *  result: the linked sub-stage template's own name, falling back to the
+   *  legacy stage tag only for a task that predates the 0015 backfill. */
   stageLabel?: string | null;
   /** Project page link target for "Open project". */
   projectHref?: string | null;

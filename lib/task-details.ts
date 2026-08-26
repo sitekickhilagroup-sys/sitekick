@@ -105,3 +105,18 @@ export function resolveTaskPhaseKey(input: {
 }): PhaseKey | null {
   return input.substagePhaseKey ?? input.legacyPhaseKey ?? input.projectPhaseKey ?? null;
 }
+
+/**
+ * A task's displayed sub-stage line — the same derive-don't-store rule as
+ * resolveTaskPhaseKey, one column over. My Work's row used to read this off
+ * `stage_key` alone, so re-classifying a task's Sub-stage within the same
+ * phase (A6's editor) changed nothing a user could see: the linked template's
+ * own name now wins, and the legacy tag is only ever the fallback for a task
+ * that predates the 0015 backfill and carries no substage_template_id yet.
+ */
+export function resolveTaskSubstageLabel(input: {
+  substageName?: string | null;
+  legacyLabel?: string | null;
+}): string | null {
+  return input.substageName ?? input.legacyLabel ?? null;
+}

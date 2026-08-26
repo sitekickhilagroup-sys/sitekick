@@ -7,7 +7,7 @@ import { isBlockingTask } from '@/lib/blockers';
 import { supabaseServer } from '@/lib/supabase/server';
 import { rankToday, scoreTask, type TodayRankContext } from '@/lib/priority';
 import { laToday } from '@/lib/date';
-import { resolveTaskPhaseKey } from '@/lib/task-details';
+import { resolveTaskPhaseKey, resolveTaskSubstageLabel } from '@/lib/task-details';
 import { WORK_COLS, WorkTableRow } from '@/components/work/work-table-row';
 import { AddAction } from '@/components/work/add-action';
 import type { RelationRow } from '@/components/work/relation-editor';
@@ -140,6 +140,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     .map((m) => [m.stage_key, m.phase_key]));
   const substageTemplates = (substageTemplatesQ.data ?? []) as SubstageTemplate[];
   const phaseKeyBySubstageId = new Map(substageTemplates.map((s) => [s.id, s.phase_key]));
+  const substageNameById = new Map(substageTemplates.map((s) => [s.id, s.name]));
   // A stale/hostile ?substage= (an id matching no real template) is dropped
   // rather than honored — the same rule process-explorer.tsx applies to its
   // own ?phase=/?sub= — so a bad query string filters nothing instead of
@@ -156,6 +157,14 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     });
     return key ? (phaseLabelByKey.get(key) ?? null) : null;
   };
+  // C2: the row's sub-stage line used to read `stage_key` only, so
+  // re-classifying a task's Sub-stage within the same phase (A6's editor)
+  // changed nothing visible here — see resolveTaskSubstageLabel.
+  const stageLabelFor = (task: Task): string | null =>
+    resolveTaskSubstageLabel({
+      substageName: task.substage_template_id ? substageNameById.get(task.substage_template_id) ?? null : null,
+      legacyLabel: task.stage_key ? prettyStage(task.stage_key) : null,
+    });
 
   // TaskEditor's option lists (A6). AddAction only ever creates a task
   // against an active project, so it keeps the active-only projectOptions
@@ -589,7 +598,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                       taskOptions={taskOptionsFor(task)}
                       editorOptions={editorOptions}
                       phaseLabel={phaseLabelFor(task)}
-                      stageLabel={task.stage_key ? prettyStage(task.stage_key) : null}
+                      stageLabel={stageLabelFor(task)}
                       highlight={!!spTask && task.id === spTask}
                       projectHref={task.project_id ? `/projects/${task.project_id}` : null}
                     />

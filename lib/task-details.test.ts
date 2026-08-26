@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDetailsPatch, resolveTaskPhaseKey, validateDetailsIntegrity, type TaskDetailsPatch } from './task-details.ts';
+import { buildDetailsPatch, resolveTaskPhaseKey, resolveTaskSubstageLabel, validateDetailsIntegrity, type TaskDetailsPatch } from './task-details.ts';
 
 describe('buildDetailsPatch', () => {
   it('whitelists a present key and null-coalesces it', () => {
@@ -137,5 +137,20 @@ describe('resolveTaskPhaseKey', () => {
 
   it('the editor\'s own initial guess (no legacyPhaseKey supplied at all) still falls through to the project phase', () => {
     expect(resolveTaskPhaseKey({ substagePhaseKey: null, projectPhaseKey: 'financing' })).toBe('financing');
+  });
+});
+
+describe('resolveTaskSubstageLabel', () => {
+  it('prefers the linked sub-stage template name over the legacy tag', () => {
+    expect(resolveTaskSubstageLabel({ substageName: 'Plan check submittal', legacyLabel: 'B Permit' })).toBe('Plan check submittal');
+  });
+
+  it('falls back to the legacy stage_key label when no sub-stage is linked', () => {
+    expect(resolveTaskSubstageLabel({ substageName: null, legacyLabel: 'B Permit' })).toBe('B Permit');
+  });
+
+  it('returns null when neither resolves — most tasks, pre-backfill', () => {
+    expect(resolveTaskSubstageLabel({})).toBeNull();
+    expect(resolveTaskSubstageLabel({ substageName: null, legacyLabel: null })).toBeNull();
   });
 });
