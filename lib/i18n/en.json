@@ -303,6 +303,8 @@
   "process.note_ph": "Short explanation — what is needed to complete it",
   "process.no_tasks_phase": "No open actions in this phase",
   "process.open_register": "Open in Action Register",
+  "process.view_all": "View all ({n})",
+  "process.phase_level": "Phase-level actions — not yet linked to a sub-stage",
   "process.status.not_applicable": "N/A",
   "process.empty_phase": "Nothing recorded in this phase yet",
   "process.infer": "Infer from emails",

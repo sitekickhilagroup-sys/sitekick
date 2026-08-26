@@ -41,12 +41,17 @@ interface Props {
   stageLabel?: string | null;
   /** Project page link target for "Open project". */
   projectHref?: string | null;
+  /** C2: this is the row a `/work?...&task=<id>#task-<id>` deep link (from
+   *  the process page's "Open register") points at — rings it so landing on
+   *  a page of many rows doesn't leave the user hunting for the one that
+   *  sent them here. */
+  highlight?: boolean;
 }
 
 // Her My Work table row: What must move | Phase / sub-stage | Owner /
 // waiting on | Due | Status & update — with an explicit Details toggle.
 // Below lg everything stacks; the columns only exist on wide screens.
-export function WorkTableRow({ task, labels, relations, taskOptions, editorOptions, today, rank, whyNow, unlocks, phaseLabel, stageLabel, projectHref }: Props) {
+export function WorkTableRow({ task, labels, relations, taskOptions, editorOptions, today, rank, whyNow, unlocks, phaseLabel, stageLabel, projectHref, highlight }: Props) {
   const [open, setOpen] = useState(false);
   const dueState = task.due && today
     ? task.due < today ? 'overdue' : task.due === today ? 'now' : 'future'
@@ -72,7 +77,16 @@ export function WorkTableRow({ task, labels, relations, taskOptions, editorOptio
     : blocking ? labels.recBlocking : labels.recComplete;
 
   return (
-    <li className="border-b border-line2 px-3 py-3 last:border-b-0">
+    // id + scroll-mt-20: the target of a `#task-<id>` deep link — scroll-mt
+    // keeps the sticky app header (h-16) from landing on top of the row the
+    // native anchor-scroll just brought into view. The ring is a plain
+    // box-shadow (ring-inset so the parent's overflow-hidden can never clip
+    // it) — visible in both themes via the existing --color-sage token, adds
+    // no border/padding so nothing else in the row reflows.
+    <li
+      id={`task-${task.id}`}
+      className={`scroll-mt-20 border-b border-line2 px-3 py-3 last:border-b-0 ${highlight ? 'ring-2 ring-inset ring-sage' : ''}`}
+    >
       <div className={`grid gap-x-4 gap-y-2 ${WORK_COLS} lg:items-start`}>
         {/* What must move — her .action-name: a state dot (red halo when
             blocking) beside the title. */}

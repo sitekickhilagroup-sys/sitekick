@@ -55,6 +55,13 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   const rawView = typeof sp.view === 'string' ? sp.view : '';
   const view: WorkView = (VIEWS as string[]).includes(rawView) ? (rawView as WorkView) : 'today';
+  // C2 deep links from the process page: ?substage= narrows the list to one
+  // sub-stage's tasks (validated below, once substage_templates is loaded —
+  // an id that matches no real template is dropped, never honored blind);
+  // ?task= just marks a row to highlight + anchor-scroll to, so an unknown
+  // value is harmless on its own (no row matches, nothing highlights).
+  const rawSubstage = typeof sp.substage === 'string' ? sp.substage : '';
+  const spTask = typeof sp.task === 'string' ? sp.task : '';
 
   const supabase = await supabaseServer();
   // Relationships ride the same batch (table is small — filter in memory
@@ -133,6 +140,12 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     .map((m) => [m.stage_key, m.phase_key]));
   const substageTemplates = (substageTemplatesQ.data ?? []) as SubstageTemplate[];
   const phaseKeyBySubstageId = new Map(substageTemplates.map((s) => [s.id, s.phase_key]));
+  // A stale/hostile ?substage= (an id matching no real template) is dropped
+  // rather than honored — the same rule process-explorer.tsx applies to its
+  // own ?phase=/?sub= — so a bad query string filters nothing instead of
+  // silently producing a blank table with no explanation.
+  const substageIds = new Set(substageTemplates.map((s) => s.id));
+  const spSubstage = rawSubstage && substageIds.has(rawSubstage) ? rawSubstage : '';
   const prettyStage = (key: string) =>
     key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   const phaseLabelFor = (task: Task): string | null => {
@@ -170,7 +183,13 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     projects: editorProjectOptions, phases: phaseOptions, substages: substageOptions, workstreams: workstreamOptions,
   };
 
-  const filtered = computeView(tasks, view, today, todayCtx);
+  const viewTasks = computeView(tasks, view, today, todayCtx);
+  // ?substage= (the process page's "View all (n)" deep link) narrows
+  // whichever view is active down to that one sub-stage's tasks. Validated
+  // above, so this only ever narrows to a real (possibly empty) result —
+  // never blanks the table because of a bad id — and a legitimately empty
+  // result still gets the existing isEmpty/work.empty explanation below.
+  const filtered = spSubstage ? viewTasks.filter((t) => t.substage_template_id === spSubstage) : viewTasks;
   const scoreOf = (task: Task) => scoreTask(task, { today });
 
   const groups = new Map<string | null, Task[]>();
@@ -571,6 +590,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                       editorOptions={editorOptions}
                       phaseLabel={phaseLabelFor(task)}
                       stageLabel={task.stage_key ? prettyStage(task.stage_key) : null}
+                      highlight={!!spTask && task.id === spTask}
                       projectHref={task.project_id ? `/projects/${task.project_id}` : null}
                     />
                   ))}

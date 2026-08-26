@@ -304,6 +304,8 @@
   "process.note_ph": "הסבר קצר — מה נדרש כדי להשלים",
   "process.no_tasks_phase": "אין פעולות פתוחות בשלב הזה",
   "process.open_register": "פתיחה ברשימת הפעולות",
+  "process.view_all": "הצג הכול ({n})",
+  "process.phase_level": "פעולות ברמת השלב — טרם שויכו לתת־שלב",
   "process.empty_phase": "אין עדיין רישום בשלב הזה",
   "process.infer": "זיהוי שלב מהמיילים",
   "process.no_connected": "אין עדיין משימות פתוחות המקושרות לפרויקט הזה",

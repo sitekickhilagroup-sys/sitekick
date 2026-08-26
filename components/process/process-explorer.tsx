@@ -14,6 +14,9 @@ export interface ExplorerTask {
   owner: string | null;
   waiting_for: string | null;
   priority: string;
+  /** 0015 — which sub-stage this task is classified under, if any. Drives
+   *  which sub-stage's panel a task shows in (mine vs. phase-level fallback). */
+  substage_template_id: string | null;
 }
 
 export interface ExplorerPhase {
@@ -295,6 +298,15 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
   const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
   const status: ProjectSubstageStatus = instance?.status ?? 'upcoming';
 
+  // C2: this panel used to list every open task in the whole PHASE — sibling
+  // sub-stages' work mixed in, with no cap. `mine` scopes it to tasks actually
+  // linked to THIS template; `phaseOnly` is the pre-backfill stand-in (until
+  // A6/B1 finish linking tasks, most rows have no substage_template_id at
+  // all — without this fallback the panel would go empty for every project).
+  const mine = tasks.filter((t) => t.substage_template_id === template.id);
+  const phaseOnly = tasks.filter((t) => !t.substage_template_id);
+  const shown = mine.slice(0, 4);
+
   const setStatus = (next: ProjectSubstageStatus) => start(async () => {
     setFailed(false);
     if (!instance) {
@@ -403,48 +415,86 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
             {labels.viewRegister} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
           </a>
         </div>
-        {tasks.length === 0 ? (
+        {mine.length > 0 ? (
+          <>
+            <ul className="mt-2 space-y-2">
+              {shown.map((task) => (
+                <ConnectedTaskRow key={task.id} task={task} labels={labels} />
+              ))}
+            </ul>
+            {/* Step 1: the rest of `mine` beyond the 4-item cap is one click
+                away, scoped to this sub-stage — not the generic register. */}
+            {mine.length > 4 && (
+              <a
+                href={`/work?view=all&substage=${template.id}`}
+                className="mt-2 inline-flex min-h-11 items-center text-[10px] font-[650] text-sk-green hover:underline sm:min-h-0"
+              >
+                {labels.viewAll.replace('{n}', String(mine.length))} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
+              </a>
+            )}
+          </>
+        ) : phaseOnly.length > 0 ? (
+          <>
+            {/* Nothing is linked to THIS sub-stage yet — the phase's
+                unlinked tasks stand in so the panel never reads as empty
+                before A6/B1 backfill the links, clearly captioned so it
+                isn't mistaken for this sub-stage's own list. */}
+            <p className="mt-2 text-[10px] leading-[1.4] text-sk-muted">{labels.phaseLevel}</p>
+            <ul className="mt-2 space-y-2">
+              {phaseOnly.map((task) => (
+                <ConnectedTaskRow key={task.id} task={task} labels={labels} />
+              ))}
+            </ul>
+          </>
+        ) : (
           // Spec §11: a compact dashed empty-state panel, not a bare line.
           <p className="mt-2 rounded-[9px] border border-dashed border-line bg-sk-surface px-4 py-4 text-center text-[10px] leading-[1.5] text-sk-muted">
             {labels.noTasksPhase}
           </p>
-        ) : (
-          <ul className="mt-2 space-y-2">
-            {tasks.map((task) => (
-              // Her .mini-task: status icon square, title, owner · waiting,
-              // register link + inline Update, blocking chip at the end.
-              <li key={task.id} className="grid grid-cols-[27px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-[10px] border border-line bg-card p-3">
-                <span aria-hidden="true" className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs ${
-                  task.priority === 'critical' ? 'bg-coral-soft text-coral' : task.waiting_for ? 'bg-mist-soft text-mist' : 'bg-apricot-soft text-apricot'
-                }`}>
-                  {task.priority === 'critical' ? '!' : task.waiting_for ? '…' : '→'}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">{task.title}</p>
-                  {(task.owner || task.waiting_for) && (
-                    <p className="mt-0.5 truncate text-[11px] text-ink3">
-                      {task.owner ?? ''}
-                      {task.owner && task.waiting_for ? ' · ' : ''}
-                      {task.waiting_for ? `${labels.waitingOn}: ${task.waiting_for}` : ''}
-                    </p>
-                  )}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <a href="/work?view=all" className="inline-flex min-h-11 items-center rounded-full border border-line px-2.5 py-0.5 text-[11px] text-ink2 hover:bg-card2 sm:min-h-7">
-                      {labels.openRegister}
-                    </a>
-                    <VerbMenu taskId={task.id} labels={labels} />
-                  </div>
-                </div>
-                {task.priority === 'critical' && (
-                  <span className="whitespace-nowrap rounded-full bg-coral-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-coral">
-                    {labels.blocking}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
         )}
       </div>
     </div>
+  );
+}
+
+// Her .mini-task: status icon square, title, owner · waiting, register link +
+// inline Update, blocking chip at the end. Extracted so Step 1's two lists
+// (sub-stage-scoped vs. phase-level fallback) render identical rows instead
+// of forking the markup.
+function ConnectedTaskRow({ task, labels }: { task: ExplorerTask; labels: Record<string, string> }) {
+  return (
+    <li className="grid grid-cols-[27px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-[10px] border border-line bg-card p-3">
+      <span aria-hidden="true" className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs ${
+        task.priority === 'critical' ? 'bg-coral-soft text-coral' : task.waiting_for ? 'bg-mist-soft text-mist' : 'bg-apricot-soft text-apricot'
+      }`}>
+        {task.priority === 'critical' ? '!' : task.waiting_for ? '…' : '→'}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ink">{task.title}</p>
+        {(task.owner || task.waiting_for) && (
+          <p className="mt-0.5 truncate text-[11px] text-ink3">
+            {task.owner ?? ''}
+            {task.owner && task.waiting_for ? ' · ' : ''}
+            {task.waiting_for ? `${labels.waitingOn}: ${task.waiting_for}` : ''}
+          </p>
+        )}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {/* Step 2: deep-linked to the specific record, not the generic
+              register — filtered + scrolled + highlighted on arrival. */}
+          <a
+            href={`/work?view=all&task=${task.id}#task-${task.id}`}
+            className="inline-flex min-h-11 items-center rounded-full border border-line px-2.5 py-0.5 text-[11px] text-ink2 hover:bg-card2 sm:min-h-7"
+          >
+            {labels.openRegister}
+          </a>
+          <VerbMenu taskId={task.id} labels={labels} />
+        </div>
+      </div>
+      {task.priority === 'critical' && (
+        <span className="whitespace-nowrap rounded-full bg-coral-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-coral">
+          {labels.blocking}
+        </span>
+      )}
+    </li>
   );
 }

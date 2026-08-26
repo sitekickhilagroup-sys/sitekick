@@ -57,6 +57,10 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     selectedSub: t('process.selected_sub'),
     connectedActions: t('process.connected_actions'),
     viewRegister: t('process.view_register'),
+    // C2: the capped-list "View all (n)" link, and the caption over the
+    // pre-backfill phase-level fallback list (see SubstageDetail).
+    viewAll: t('process.view_all'),
+    phaseLevel: t('process.phase_level'),
     notePh: t('process.note_ph'),
     noTasksPhase: t('process.no_tasks_phase'),
     // C3: the SavedChip shown after a sub-stage status change (A6's chip,
@@ -233,6 +237,9 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
           tasks: (tasksByPhase.get(view.phase.key) ?? []).map((task) => ({
             id: task.id, title: task.title, owner: task.owner,
             waiting_for: task.waiting_for, priority: task.priority,
+            // Already on every row from getProjectProcess's tasksQ (select('*'))
+            // — no new query needed to scope this panel to its own sub-stage.
+            substage_template_id: task.substage_template_id,
           })),
         }))}
       />
