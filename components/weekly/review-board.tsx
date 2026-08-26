@@ -6,6 +6,7 @@ import {
   attachRecording, finalizeReview, reopenReview, saveItemNote, saveItemOwnerDue, saveReview, saveSubtopicContext,
   setItemSnapshot, setItemStatus, type SnapshotState,
 } from '@/app/actions/weekly';
+import { laToday } from '@/lib/date';
 import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
 
 interface Row { item: WeeklyReviewItem; title: string; owner?: string | null; due?: string | null }
@@ -423,7 +424,13 @@ function ReviewControls(
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
-  const [uploaded, setUploaded] = useState(false);
+  // D4: was two booleans (uploaded/uploadFailed) that could only ever say
+  // "something uploaded" with no name, date or status — the checklist wants
+  // enough detail to tell which file landed and when. `lastFile` only
+  // updates on a confirmed success (fetch + attachRecording both ok), so a
+  // later failed attempt never erases the record of what is actually
+  // attached to this review right now (see the guard in `upload` below).
+  const [lastFile, setLastFile] = useState<{ name: string; at: string } | null>(null);
   const [uploadFailed, setUploadFailed] = useState(false);
 
   const save = () => start(async () => {
@@ -453,7 +460,12 @@ function ReviewControls(
   });
 
   const upload = (file: File) => start(async () => {
-    setUploaded(false);
+    // Only the error flag resets up front. `lastFile` is left alone here on
+    // purpose: it describes what is actually attached to the review right
+    // now, which a failed *retry* does not change (attachRecording never
+    // reran, or never got a new documentId to run with), so clearing it
+    // would show "nothing attached" while the prior recording is still
+    // there.
     setUploadFailed(false);
     try {
       const fd = new FormData();
@@ -463,7 +475,7 @@ function ReviewControls(
       if (!res.ok || json.ok === false || !json.documentId) { setUploadFailed(true); return; }
       const attached = await attachRecording(review.id, json.documentId);
       if (attached?.error) { setUploadFailed(true); return; }
-      setUploaded(true);
+      setLastFile({ name: file.name, at: laToday() });
     } catch {
       setUploadFailed(true);
     }
@@ -542,9 +554,23 @@ function ReviewControls(
               onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
             />
           </label>
-          {uploaded && <span role="status" className="text-xs text-sage">{labels.uploaded}</span>}
+          {/* D4: on success, name + date + status — not just a bare flag.
+              Both wrapped in <bdi> (same as due/meeting-date elsewhere in
+              this file) since a file name can be arbitrary text sitting next
+              to a numeric date in an RTL layout. */}
+          {lastFile && (
+            <span role="status" className="text-xs text-sage">
+              <bdi>{lastFile.name}</bdi> · <bdi>{lastFile.at}</bdi> · {labels.processed}
+            </span>
+          )}
           {uploadFailed && <span role="alert" className="text-xs text-coral">{labels.error}</span>}
         </div>
+        {/* D4: state exactly the formats accept= allows and route.ts genuinely
+            handles — .mp4 stores + links only (no transcription yet), .txt
+            and .docx both run through the real transcript pipeline. Same
+            casing/format as the identical MP4/TXT/DOCX set already shown on
+            the Data Inbox's "Meeting recording" tab (app/(dash)/(focused)/upload/page.tsx). */}
+        <p className="mt-2 font-mono text-[9px] text-sk-muted">MP4 · TXT · DOCX</p>
       </div>
     </div>
   );

@@ -58,7 +58,10 @@ export default async function WeeklyPage() {
               error: t('common.error_save'),
               saved: t('weekly.saved'),
               save: t('weekly.save'),
-              uploaded: t('weekly.uploaded'),
+              // D4: the upload card now renders "{name} · {date} · Processed"
+              // on success (not a bare "Recording attached" flag), so this
+              // replaces weekly.uploaded as what review-board.tsx reads.
+              processed: t('weekly.processed'),
               upload: t('weekly.upload'),
               note: t('weekly.note'),
               meeting: t('weekly.meeting'),
