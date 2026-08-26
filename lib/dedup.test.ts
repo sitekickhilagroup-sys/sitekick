@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchExistingTask } from './dedup';
+import { findDuplicatePairs, matchExistingTask } from './dedup';
 import type { Task } from './types';
 
 function t(id: string, title: string, project_id: string | null = 'p1', stage_key: string | null = null): Task {
@@ -90,5 +90,25 @@ describe('matchExistingTask', () => {
     const borderline = { title: 'File city forms packet', project_id: 'p1' };
     expect(matchExistingTask({ ...borderline, stage_key: 'entitlements' }, open)?.id).toBe('x');
     expect(matchExistingTask({ ...borderline, stage_key: 'permits' }, open)).toBeNull();
+  });
+});
+
+describe('findDuplicatePairs', () => {
+  it('pairs a General twin with the same work filed against a project', () => {
+    const open = [
+      t('scoped', 'Hold Letter Corrections', 'san-marco'),
+      t('general', 'Hold Letter Corrections', null),
+    ];
+    const pairs = findDuplicatePairs(open);
+    expect(pairs.length).toBe(1);
+  });
+
+  it('finds no pairs among unrelated titles', () => {
+    const open = [
+      t('a', 'Retain Certified Arborist', 'san-marco'),
+      t('b', 'Review new lawsuit filing', null),
+    ];
+    const pairs = findDuplicatePairs(open);
+    expect(pairs.length).toBe(0);
   });
 });

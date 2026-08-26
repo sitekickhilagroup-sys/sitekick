@@ -63,3 +63,16 @@ export function matchExistingTask(candidate: TaskCandidate, open: Task[]): Task 
   }
   return bestScore >= 0.55 ? best : null;
 }
+
+/** Pairs of open tasks that look like the same work (General twin ↔ project row). */
+export function findDuplicatePairs(open: Task[]): Array<[Task, Task]> {
+  const pairs: Array<[Task, Task]> = [];
+  for (let i = 0; i < open.length; i++) {
+    const match = matchExistingTask(
+      { title: open[i].title, project_id: open[i].project_id, stage_key: open[i].stage_key },
+      open.slice(i + 1),
+    );
+    if (match) pairs.push([open[i], match]);
+  }
+  return pairs;
+}

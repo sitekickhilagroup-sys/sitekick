@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { verbResultLabels } from '@/lib/i18n/verb-labels';
+import { findDuplicatePairs } from '@/lib/dedup';
 import { supabaseServer } from '@/lib/supabase/server';
 import { scoreTask } from '@/lib/priority';
 import { laToday } from '@/lib/date';
@@ -65,6 +66,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   ]);
 
   const tasks = (tasksQ.data ?? []) as Task[];
+  // Header claim (below) is computed from this, not asserted — Dor #47 saw
+  // "Nothing is duplicated" above a real General/project duplicate pair.
+  const dupPairs = findDuplicatePairs(tasks);
   const projects = (projectsQ.data ?? []) as Project[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const pendingCount = proposalsQ.count ?? 0;
@@ -251,7 +255,10 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
         <h1 className="mt-1 text-[clamp(26px,2.6vw,30px)] font-[650] leading-[1.1] tracking-[-0.035em] text-sk-ink">
           {t('work.statement')}
         </h1>
-        <p className="mx-auto mt-1.5 max-w-xl text-[11px] leading-[1.5] text-sk-muted">{t('work.sub')}</p>
+        <p className="mx-auto mt-1.5 max-w-xl text-[11px] leading-[1.5] text-sk-muted">
+          {t('work.sub')}
+          {dupPairs.length === 0 && ` ${t('work.sub_clean')}`}
+        </p>
         <div className="mt-3 flex justify-center sm:absolute sm:end-0 sm:top-2 sm:mt-0">
           <AddAction
             projects={projects.filter((p) => p.active !== false).map((p) => ({ id: p.id, name: p.name }))}
@@ -276,6 +283,15 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
           />
         </div>
       </div>
+
+      {dupPairs.length > 0 && (
+        <Link
+          href="/work?view=all"
+          className="flex min-h-11 items-center rounded-(--radius-card) border border-apricot/40 bg-apricot-soft px-4 py-2.5 text-sm text-apricot hover:underline"
+        >
+          {t('work.dup_warning').replace('{n}', String(dupPairs.length))}
+        </Link>
+      )}
 
       {pendingCount > 0 && (
         <Link
