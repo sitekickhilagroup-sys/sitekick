@@ -40,7 +40,7 @@ export async function undoWorkVerb(logId: string) {
   if (!entry?.before_json || entry.entity_type !== 'task') return { error: 'nothing to undo' };
   const before = entry.before_json;
   const restore: Record<string, unknown> = {};
-  for (const k of ['status', 'waiting_for', 'due', 'last_touched', 'description', 'owner'] as const) {
+  for (const k of ['status', 'waiting_for', 'due', 'last_touched', 'description', 'owner', 'latest_note'] as const) {
     restore[k] = before[k] ?? null;
   }
   const { error } = await admin.from('tasks').update(restore).eq('id', entry.entity_id);

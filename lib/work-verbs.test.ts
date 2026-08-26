@@ -26,12 +26,14 @@ describe('verbToPatch', () => {
       patch: { status: 'dropped', last_touched: TODAY }, action: 'verb:not_applicable',
     });
   });
-  it('sent_email and note only touch last_touched (note text goes to activity log)', () => {
+  it('sent_email only touches last_touched', () => {
     expect(verbToPatch('sent_email', null, TODAY)).toEqual({
       patch: { last_touched: TODAY }, action: 'verb:sent_email',
     });
+  });
+  it('note requires text and sets latest_note so it survives refresh', () => {
     expect(verbToPatch('note', 'called the city', TODAY)).toEqual({
-      patch: { last_touched: TODAY }, action: 'verb:note',
+      patch: { latest_note: 'called the city', last_touched: TODAY }, action: 'verb:note',
     });
     expect(verbToPatch('note', '', TODAY)).toEqual({ error: 'input required' });
   });

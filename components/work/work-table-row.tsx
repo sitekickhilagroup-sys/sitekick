@@ -83,6 +83,9 @@ export function WorkTableRow({ task, labels, relations, taskOptions, today, rank
               )}
               <span className="min-w-0 text-[11px] font-[650] leading-[1.4] text-sk-ink">{task.title}</span>
             </span>
+            {task.latest_note && (
+              <span className="mt-0.5 block text-[10px] leading-[1.4] text-sk-muted">“{task.latest_note}”</span>
+            )}
             {task.source && <span className="mt-0.5 block truncate text-[10px] text-sk-muted">{task.source}</span>}
           </span>
         </div>

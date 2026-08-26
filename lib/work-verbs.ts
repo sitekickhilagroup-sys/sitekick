@@ -28,6 +28,6 @@ export function verbToPatch(
       return { patch: { due: text, ...base }, action };
     case 'note':
       if (!text) return { error: 'input required' };
-      return { patch: { ...base }, action };
+      return { patch: { latest_note: text, ...base }, action };
   }
 }

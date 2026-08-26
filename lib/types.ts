@@ -132,6 +132,13 @@ export interface Task {
   merged_into: string | null;
   merged_at: string | null;
   merged_by: string | null;
+  /** 0015 — free-text note from the last "note" verb; renders on the row so
+   *  it survives a refresh instead of living only in the activity log. */
+  latest_note: string | null;
+  /** 0015 — sub-stage this task is classified under, if any. */
+  substage_template_id: string | null;
+  /** 0015 — parallel workstream this task is classified under, if any. */
+  workstream_id: string | null;
 }
 
 export interface Blocker {
