@@ -22,6 +22,46 @@ export function buildStageLabelMap(rows: { stage_key: string; label: string }[])
 }
 
 /**
+ * D1 review-code review: the single definition of "can this review still be
+ * written to." Before this, 'final' was hard-coded as a string in six
+ * separate places across app/actions/weekly.ts, which is exactly how a
+ * status check can quietly miss a spot — this is the one place that list
+ * lives now, and every one of those six sites routes through this instead
+ * of repeating the literal, including finalizeReview/reopenReview's own
+ * idempotency checks: "already final, nothing to finalize" and "not yet
+ * final, nothing to reopen" are both just this predicate read in the
+ * direction each action needs (proceed when NOT editable is the "unlock"
+ * direction reopenReview needs; proceed when editable is the direction
+ * finalizeReview and every write-gate need). The one exception is
+ * prepareCurrentReview's prior-review lookup, which is a materially
+ * different question ("has this review settled enough to carry FROM") and
+ * deliberately keeps its own explicit status list — see the comment there.
+ *
+ * Takes a plain `string`, not `WeeklyReviewStatus`, on purpose: values
+ * arriving from Supabase in this codebase aren't schema-typed, so a status
+ * this function has never heard of is a real runtime possibility (a future
+ * status added to the enum before this function is updated for it, bad
+ * data, whatever) — not just a type-checker abstraction. That case defaults
+ * to **not editable** (fail closed): treating an unrecognized status as
+ * "safe to write to" is the wrong default for a lock whose entire job is to
+ * stop unwanted writes; treating it as locked-until-proven-otherwise is the
+ * safe one, even at the cost of occasionally blocking a legitimate edit
+ * under a status nobody had taught this function about yet. One
+ * consequence worth naming: since reopenReview proceeds whenever
+ * `!isReviewEditable(status)`, an unrecognized status is reopenable, not
+ * just 'final' is — deliberate, not an oversight. Fail-closed already
+ * treats an unknown status as locked everywhere else (no item writes, no
+ * re-finalizing over it); letting Reopen unlock it back to 'preparing' is
+ * the one place that "locked" gets an escape hatch, and it's a strictly
+ * safer direction to err in than the reverse (an unknown status silently
+ * accepting writes).
+ */
+const EDITABLE_REVIEW_STATUSES: readonly string[] = ['preparing', 'saved'];
+export function isReviewEditable(status: string): boolean {
+  return EDITABLE_REVIEW_STATUSES.includes(status);
+}
+
+/**
  * A task under no project (General) always belongs on the review; a task
  * under a project explicitly marked inactive (0007_alignment.sql) never
  * does — "a closed project kept turning up in the Monday agenda" is exactly

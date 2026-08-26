@@ -1,8 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildReviewItems, buildStageLabelMap, isProjectEligibleForReview, isTaskEligibleForOpenReview, nextMonday,
+  buildReviewItems, buildStageLabelMap, isProjectEligibleForReview, isReviewEditable, isTaskEligibleForOpenReview,
+  nextMonday,
 } from './weekly.ts';
 import type { Task, WeeklyReviewItem } from './types.ts';
+
+// D1 review-code review: this is the single source of truth every finalize
+// lock check in app/actions/weekly.ts now routes through, so it carries the
+// coverage that actually protects the lock (the project's convention is
+// pure logic tested in lib/, Server Actions left untested — see the other
+// describe blocks in this file for the established pattern).
+describe('isReviewEditable', () => {
+  it('preparing and saved are editable', () => {
+    expect(isReviewEditable('preparing')).toBe(true);
+    expect(isReviewEditable('saved')).toBe(true);
+  });
+
+  it('final is not editable', () => {
+    expect(isReviewEditable('final')).toBe(false);
+  });
+
+  it('an unrecognized status fails closed (not editable), not open', () => {
+    expect(isReviewEditable('archived')).toBe(false);
+    expect(isReviewEditable('')).toBe(false);
+    expect(isReviewEditable('Final')).toBe(false); // case-sensitive, not a loose match
+  });
+});
 
 describe('nextMonday', () => {
   it('thursday → next monday', () => expect(nextMonday('2026-08-20')).toBe('2026-08-24'));

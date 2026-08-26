@@ -133,6 +133,7 @@ export function ReviewBoard({ review, groups, labels }: Props) {
                       subtopic={sub.name}
                       value={sub.context ?? null}
                       placeholder={labels.contextPh}
+                      finalized={finalized}
                     />
                     {/* §11: display every action. Completed rows used to hide
                         inside a <details>, and the two lists each restarted
@@ -170,10 +171,15 @@ export function ReviewBoard({ review, groups, labels }: Props) {
 // Sub-topic narrative (0006): read as prose; in draft mode a quiet textarea
 // saves on blur — same rhythm as the per-item note.
 // Editable in both modes: the spec requires Monday to stay live, so there is
-// no longer a read-only rendering of this.
-function SubtopicContext({ reviewId, projectId, subtopic, value, placeholder }: {
+// no longer a read-only rendering of this — but D1's finalized lock still
+// wins over that: this text is part of the meeting record (it carries
+// forward the same way items do), and the server action refuses the write
+// regardless of what this <textarea>'s disabled state says, so disabling it
+// here isn't optional decoration — see assertReviewEditable in
+// app/actions/weekly.ts.
+function SubtopicContext({ reviewId, projectId, subtopic, value, placeholder, finalized }: {
   reviewId: string; projectId: string | null; subtopic: string; value: string | null;
-  placeholder?: string;
+  placeholder?: string; finalized: boolean;
 }) {
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
@@ -190,7 +196,7 @@ function SubtopicContext({ reviewId, projectId, subtopic, value, placeholder }: 
           const res = await saveSubtopicContext(reviewId, projectId, subtopic, e.target.value);
           if (res?.error) setFailed(res.error);
         })}
-        disabled={pending}
+        disabled={pending || finalized}
         aria-label={placeholder}
         placeholder={placeholder}
         className="w-full max-w-2xl rounded-[13px] border border-line2 bg-sk-green-soft p-2 text-[11px] leading-[1.5] text-sk-ink outline-none [border-inline-start:3px_solid_var(--sk-green)] disabled:opacity-50"

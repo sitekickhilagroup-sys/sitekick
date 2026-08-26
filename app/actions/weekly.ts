@@ -6,8 +6,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import {
-  buildReviewItems, buildStageLabelMap, isProjectEligibleForReview, isTaskEligibleForOpenReview, nextMonday,
+  buildReviewItems, buildStageLabelMap, isProjectEligibleForReview, isReviewEditable, isTaskEligibleForOpenReview,
+  nextMonday,
 } from '@/lib/weekly';
+import { buildDetailsPatch, type TaskDetailsPatch } from '@/lib/task-details';
 import { verbToPatch } from '@/lib/work-verbs';
 import { logActivity } from '@/lib/state-writer';
 import type { Task, TaskPriority, WeeklyReviewItem } from '@/lib/types';
@@ -52,8 +54,12 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
   // can call directly, so the same-day case (finalized this morning, someone
   // retries prepare this afternoon) needs a real server-side stop, not just
   // an absent button. Returning ok rather than an error: from the caller's
-  // side "this week is already done" isn't a failure.
-  if (existingReview?.status === 'final') return { ok: true, reviewId: existingReview.id };
+  // side "this week is already done" isn't a failure. The `existingReview &&`
+  // guard matters: when no review exists yet, `existingReview` is null and
+  // this must fall through to create one, not read a nonexistent `.status`.
+  if (existingReview && !isReviewEditable(existingReview.status)) {
+    return { ok: true, reviewId: existingReview.id };
+  }
 
   // 'final' counts as prior too — a finalized review is a *stronger* form of
   // saved, not a review that stops existing for carry-forward purposes.
@@ -62,7 +68,10 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
   // silently lose every open item, note and sub-topic context that should
   // have carried forward. 'preparing' is deliberately still excluded — an
   // unsaved draft was never treated as a legitimate prior review before D1
-  // either.
+  // either. NOT the same list as isReviewEditable's — this is "has this
+  // review reached a state settled enough to carry FROM" (saved or final),
+  // the near-opposite of "can still be written TO" (preparing or saved) —
+  // so it stays its own explicit .in(), not routed through that predicate.
   const { data: priorReview, error: priorError } = await admin
     .from('weekly_reviews')
     .select('id,meeting_date')
@@ -194,15 +203,22 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
  * every write that can put a task into the "should be on this week's review"
  * state: applyWorkVerb, updateTaskDetails, and AddAction's create.
  *
- * Targets whichever review is still open for editing today — status
- * 'preparing' or 'saved'. Save is a checkpoint, not a lock
- * (review-board.tsx: "stays enabled after saving so a review can be saved
- * again during the meeting"), so a review someone has already saved once
- * must still accept a task edited afterward, or this reintroduces a
- * narrower version of the exact bug A7 exists to fix. D1 later adds a
- * 'final' status for an explicit, UI-locking Finalize action; deliberately
- * *not* listing 'final' here is what keeps a finalized review frozen with
- * nobody needing to revisit this code.
+ * Targets whichever review is still open for editing today (isReviewEditable
+ * — 'preparing' or 'saved'). Fetches the *newest* review unconditionally and
+ * then checks editability, rather than filtering the query itself to
+ * editable statuses: a filtered query conflates "no open review exists"
+ * with "the open review isn't the newest one" — those used to be the same
+ * thing, but once a review can reach 'final' (D1) they aren't. A finalized
+ * review used to make the filtered query skip straight past it to the next
+ * most recent 'saved' review — a genuinely older, already-wrapped-up
+ * meeting's row — and silently append this week's task edit onto *that*
+ * review instead of correctly finding nothing to sync into. "There is no
+ * open review right now" must be a no-op, never "fall back to an older
+ * one." Save is a checkpoint, not a lock (review-board.tsx: "stays enabled
+ * after saving so a review can be saved again during the meeting"), so a
+ * review someone has already saved once must still accept a task edited
+ * afterward, or this reintroduces a narrower version of the exact bug A7
+ * exists to fix.
  *
  * Also applies the same projects.active gate prepareCurrentReview enforces
  * (isProjectEligibleForReview / 0007) — without it, a leftover open task
@@ -223,12 +239,11 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
 export async function syncTaskIntoOpenReview(admin: SupabaseClient, taskId: string): Promise<void> {
   const { data: review } = await admin
     .from('weekly_reviews')
-    .select('id')
-    .in('status', ['preparing', 'saved'])
+    .select('id,status')
     .order('meeting_date', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!review) return;
+  if (!review || !isReviewEditable(review.status)) return;
 
   // One read covers "already on the review" and "next sequence" from the
   // same consistent snapshot, rather than two separate reads that could
@@ -293,25 +308,35 @@ export async function syncTaskIntoOpenReview(admin: SupabaseClient, taskId: stri
 }
 
 /**
- * D1: the server-side half of Finalize's lock. The client disables item
- * inputs once a review is 'final', but note/next_step, owner/due and
- * status/snapshot are each their own Server Action, callable directly by a
- * signed-in browser with any itemId — a disabled <input> is a UI nicety,
- * not a guarantee. Looked up fresh from the item's own weekly_review_id on
- * every call, never trusted from a client-supplied flag. Returns the item
- * row itself (not just a boolean) so callers that need task_id or the
- * current field values don't have to re-query it.
+ * D1: the actual server-side gate — fetches the review's status fresh from
+ * `reviewId` on every call, never trusted from anything a client passes.
+ * This is the one place in the file that calls isReviewEditable to decide
+ * "can this review still be written to."
  *
- * Scope: this gates weekly_review_items writes (note, next_step,
- * status_snapshot) and the owner/due edit that rides along with them — the
- * checklist's "item inputs disabled" for a finalized review. Sub-topic
- * context (weekly_review_subtopics, saveSubtopicContext) and
- * attachRecording stay ungated deliberately: neither is a per-item input,
- * and both are already documented as staying live regardless of
- * draft/meeting mode (see SubtopicContext and the upload card in
- * review-board.tsx) — the recording in particular is normally uploaded
- * *after* the meeting, i.e. after finalize, so locking it would force a
- * Reopen just to attach a file.
+ * Scope: gates weekly_review_items writes (note, next_step, status_snapshot)
+ * via loadEditableReviewItem below, the owner/due edit that rides along
+ * with them, and saveSubtopicContext directly (the sub-topic narrative is
+ * part of the meeting record too — prepareCurrentReview carries it forward
+ * the same way it carries items, see "Carry sub-topic context paragraphs
+ * forward" further up). attachRecording stays ungated deliberately: it's
+ * normally uploaded *after* the meeting, i.e. after finalize, so locking it
+ * would force a Reopen just to attach a file.
+ */
+async function assertReviewEditable(admin: SupabaseClient, reviewId: string): Promise<{ error: string } | { ok: true }> {
+  const { data: review, error: reviewError } = await admin
+    .from('weekly_reviews').select('status').eq('id', reviewId).maybeSingle();
+  if (reviewError) return { error: reviewError.message };
+  if (!review || !isReviewEditable(review.status)) return { error: 'review is finalized' };
+  return { ok: true };
+}
+
+/**
+ * Item-scoped wrapper around assertReviewEditable: looks the item up by
+ * itemId, then gates on its parent review — a disabled <input> is a UI
+ * nicety, not a guarantee, since every item-mutating action here is a
+ * Server Action a signed-in browser can call directly with any itemId.
+ * Returns the item row itself (not just a boolean) so callers that need
+ * task_id or the current field values don't have to re-query it.
  */
 async function loadEditableReviewItem(
   admin: SupabaseClient, itemId: string,
@@ -321,10 +346,8 @@ async function loadEditableReviewItem(
   if (itemError) return { error: itemError.message };
   if (!item) return { error: 'item not found' };
   const row = item as WeeklyReviewItem;
-  const { data: review, error: reviewError } = await admin
-    .from('weekly_reviews').select('status').eq('id', row.weekly_review_id).maybeSingle();
-  if (reviewError) return { error: reviewError.message };
-  if ((review as { status: string } | null)?.status === 'final') return { error: 'review is finalized' };
+  const gate = await assertReviewEditable(admin, row.weekly_review_id);
+  if ('error' in gate) return gate;
   return { ok: true, item: row };
 }
 
@@ -354,8 +377,6 @@ export async function saveItemNote(itemId: string, patch: { weekly_note?: string
   return { ok: true };
 }
 
-const OWNER_DUE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
  * D2: Owner + Due edited inline from the review, Sunday-mode only (see
  * `editableOwnerDue` in review-board.tsx for why). Both live on the
@@ -363,6 +384,14 @@ const OWNER_DUE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * writes, not on the review item — so this is a real task mutation and gets
  * applyWorkVerb's audited snapshot-before/update/logActivity pattern, never
  * a bare .update() the way a review-only field would.
+ *
+ * Shaping and validation go through buildDetailsPatch (lib/task-details.ts)
+ * rather than a second, inline owner/due whitelist + date regex — that
+ * function already whitelists exactly this field set (it takes any subset
+ * of TaskDetailsPatch, so passing only owner/due naturally clean-patches
+ * only those two) and is already exported, tested, and used by
+ * app/actions/tasks.ts's updateTaskDetails. One definition of "what a date
+ * field is allowed to look like," not two that could drift.
  */
 export async function saveItemOwnerDue(itemId: string, patch: { owner?: string; due?: string }): Promise<ActionResult> {
   const user = await requireUser();
@@ -371,21 +400,22 @@ export async function saveItemOwnerDue(itemId: string, patch: { owner?: string; 
   if ('error' in gate) return gate;
   const taskId = gate.item.task_id;
 
-  const clean: Record<string, string | null> = {};
-  if ('owner' in patch) clean.owner = (patch.owner ?? '').trim() || null;
-  if ('due' in patch) {
-    const due = (patch.due ?? '').trim();
-    if (due && !OWNER_DUE_DATE_RE.test(due)) return { error: 'invalid date' };
-    clean.due = due || null;
-  }
-  if (Object.keys(clean).length === 0) return { ok: true };
+  // buildDetailsPatch itself doesn't trim/null-coalesce (task-editor.tsx
+  // does that client-side, before calling the server) — do the same
+  // normalization here, since this server action receives the raw
+  // onBlur value directly.
+  const input: TaskDetailsPatch = {};
+  if ('owner' in patch) input.owner = (patch.owner ?? '').trim() || null;
+  if ('due' in patch) input.due = (patch.due ?? '').trim() || null;
+  const built = buildDetailsPatch(input);
+  if ('error' in built) return built;
 
   const { data: before } = await admin.from('tasks').select('*').eq('id', taskId).maybeSingle();
-  const { error } = await admin.from('tasks').update({ ...clean, last_touched: laToday() }).eq('id', taskId);
+  const { error } = await admin.from('tasks').update({ ...built.clean, last_touched: laToday() }).eq('id', taskId);
   if (error) return { error: error.message };
   await logActivity(admin, {
     entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id,
-    action: 'weekly:owner_due', before, after: clean,
+    action: 'weekly:owner_due', before, after: built.clean,
   });
   revalidatePath('/weekly'); revalidatePath('/'); revalidatePath('/work'); revalidatePath('/projects/[id]', 'page');
   return { ok: true };
@@ -424,15 +454,24 @@ export async function setItemStatus(itemId: string, taskId: string, verb: Review
 // Sub-topic context paragraph (0006): the narrative shown above a sub-topic's
 // actions. Manual input is first-class — select-then-write keeps the null-safe
 // unique index happy without relying on upsert against an expression index.
+// D1: gated the same way item inputs are — this text is part of the meeting
+// record (carried forward at "Carry sub-topic context paragraphs forward"
+// above, same as items) and was the one write in this file that could still
+// land on a finalized review. Also now snapshots `before`, matching every
+// other material write in this file — an overwrite of meeting-record text
+// with no `before` would be unauditable and unundoable.
 export async function saveSubtopicContext(
   reviewId: string, projectId: string | null, subtopic: string, context: string,
-) {
+): Promise<ActionResult> {
   const user = await requireUser();
   const admin = supabaseAdmin();
+  const gate = await assertReviewEditable(admin, reviewId);
+  if ('error' in gate) return gate;
+
   const trimmed = context.trim() || null;
   let query = admin
     .from('weekly_review_subtopics')
-    .select('id')
+    .select('id,context')
     .eq('weekly_review_id', reviewId)
     .eq('subtopic', subtopic);
   query = projectId ? query.eq('project_id', projectId) : query.is('project_id', null);
@@ -448,7 +487,9 @@ export async function saveSubtopicContext(
 
   await logActivity(admin, {
     entity_type: 'weekly_review', entity_id: reviewId, actor: user.email ?? user.id,
-    action: 'subtopic_context', after: { subtopic, context: trimmed },
+    action: 'subtopic_context',
+    before: { context: existing?.context ?? null },
+    after: { subtopic, context: trimmed },
   });
   revalidatePath('/weekly');
   return { ok: true };
@@ -532,7 +573,7 @@ export async function saveReview(reviewId: string): Promise<ActionResult> {
   // swaps it for the Finalized badge + Reopen); this is the server-side half
   // of that, for the same reason every other finalized-state guard here is
   // server-side.
-  if (current?.status === 'final') return { ok: true };
+  if (current && !isReviewEditable(current.status)) return { ok: true };
   const { error } = await admin.from('weekly_reviews').update({ status: 'saved' }).eq('id', reviewId);
   if (error) return { error: error.message };
   await logActivity(admin, {
@@ -543,7 +584,7 @@ export async function saveReview(reviewId: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function attachRecording(reviewId: string, documentId: string) {
+export async function attachRecording(reviewId: string, documentId: string): Promise<ActionResult> {
   const user = await requireUser();
   const admin = supabaseAdmin();
   const { error } = await admin.from('weekly_reviews').update({ recording_document_id: documentId }).eq('id', reviewId);
@@ -577,7 +618,7 @@ export async function finalizeReview(reviewId: string): Promise<ActionResult> {
     .from('weekly_reviews').select('*').eq('id', reviewId).maybeSingle();
   if (beforeError) return { error: beforeError.message };
   if (!before) return { error: 'review not found' };
-  if (before.status === 'final') return { ok: true };
+  if (!isReviewEditable(before.status)) return { ok: true };
 
   const finalized_at = new Date().toISOString();
   const { error } = await admin
@@ -604,7 +645,7 @@ export async function reopenReview(reviewId: string): Promise<ActionResult> {
     .from('weekly_reviews').select('*').eq('id', reviewId).maybeSingle();
   if (beforeError) return { error: beforeError.message };
   if (!before) return { error: 'review not found' };
-  if (before.status !== 'final') return { ok: true };
+  if (isReviewEditable(before.status)) return { ok: true };
 
   const { error } = await admin
     .from('weekly_reviews')
