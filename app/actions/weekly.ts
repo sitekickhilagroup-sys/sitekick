@@ -15,6 +15,20 @@ import type { Task, TaskPriority, WeeklyReviewItem } from '@/lib/types';
 type ReviewVerb = 'completed' | 'not_applicable' | 'sent_email';
 const REVIEW_VERBS: ReviewVerb[] = ['completed', 'not_applicable', 'sent_email'];
 
+/**
+ * Common shape for the item/review mutating actions below. The `ok?:
+ * undefined` / `error?: undefined` companions are deliberate, not filler:
+ * TypeScript only synthesizes them itself when a return type is left to
+ * plain inference from fresh `{ error }` / `{ ok: true }` object literals —
+ * the moment one branch instead returns an already-typed value (here,
+ * `loadEditableReviewItem`'s `gate` on its error path), that synthesis stops
+ * applying and `res?.error` at the call site fails to typecheck (`.error`
+ * doesn't exist on the `{ ok: true }` branch). Writing both companions out
+ * explicitly gets the same "either key is safe to probe" shape without
+ * depending on that inference quirk.
+ */
+type ActionResult = { error: string; ok?: undefined } | { ok: true; error?: undefined };
+
 // Sunday prep: reuse-or-create this week's review row, then recompute its
 // items from the prior saved review + current task state (carry-forward
 // rule lives in buildReviewItems). Re-running this (idempotent) must not
@@ -26,15 +40,33 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
 
   const { data: existingReview, error: existingError } = await admin
     .from('weekly_reviews')
-    .select('id')
+    .select('id,status')
     .eq('meeting_date', meetingDate)
     .maybeSingle();
   if (existingError) return { error: existingError.message };
 
+  // D1: this week's review already exists and is locked. The Prepare button
+  // itself can never reach this — page.tsx only renders it when no review
+  // row exists yet for meetingDate, and once one exists (any status) the
+  // page swaps to ReviewBoard — but this is still a Server Action a browser
+  // can call directly, so the same-day case (finalized this morning, someone
+  // retries prepare this afternoon) needs a real server-side stop, not just
+  // an absent button. Returning ok rather than an error: from the caller's
+  // side "this week is already done" isn't a failure.
+  if (existingReview?.status === 'final') return { ok: true, reviewId: existingReview.id };
+
+  // 'final' counts as prior too — a finalized review is a *stronger* form of
+  // saved, not a review that stops existing for carry-forward purposes.
+  // Without 'final' here, the week after any finalize would find no prior
+  // review at all (status stays 'final', never reverts to 'saved') and
+  // silently lose every open item, note and sub-topic context that should
+  // have carried forward. 'preparing' is deliberately still excluded — an
+  // unsaved draft was never treated as a legitimate prior review before D1
+  // either.
   const { data: priorReview, error: priorError } = await admin
     .from('weekly_reviews')
     .select('id,meeting_date')
-    .eq('status', 'saved')
+    .in('status', ['saved', 'final'])
     .order('meeting_date', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -254,9 +286,48 @@ export async function syncTaskIntoOpenReview(admin: SupabaseClient, taskId: stri
   if (error) throw error;
 }
 
-export async function saveItemNote(itemId: string, note: string) {
+/**
+ * D1: the server-side half of Finalize's lock. The client disables item
+ * inputs once a review is 'final', but note and status/snapshot are each
+ * their own Server Action, callable directly by a signed-in browser with
+ * any itemId — a disabled <input> is a UI nicety, not a guarantee. Looked
+ * up fresh from the item's own weekly_review_id on every call, never
+ * trusted from a client-supplied flag. Returns the item row itself (not
+ * just a boolean) so callers that need task_id or the current field values
+ * don't have to re-query it.
+ *
+ * Scope: this gates weekly_review_items writes (note, status_snapshot) —
+ * the checklist's "item inputs disabled" for a finalized review. Sub-topic
+ * context (weekly_review_subtopics, saveSubtopicContext) and
+ * attachRecording stay ungated deliberately: neither is a per-item input,
+ * and both are already documented as staying live regardless of
+ * draft/meeting mode (see SubtopicContext and the upload card in
+ * review-board.tsx) — the recording in particular is normally uploaded
+ * *after* the meeting, i.e. after finalize, so locking it would force a
+ * Reopen just to attach a file.
+ */
+async function loadEditableReviewItem(
+  admin: SupabaseClient, itemId: string,
+): Promise<{ error: string } | { ok: true; item: WeeklyReviewItem }> {
+  const { data: item, error: itemError } = await admin
+    .from('weekly_review_items').select('*').eq('id', itemId).maybeSingle();
+  if (itemError) return { error: itemError.message };
+  if (!item) return { error: 'item not found' };
+  const row = item as WeeklyReviewItem;
+  const { data: review, error: reviewError } = await admin
+    .from('weekly_reviews').select('status').eq('id', row.weekly_review_id).maybeSingle();
+  if (reviewError) return { error: reviewError.message };
+  if ((review as { status: string } | null)?.status === 'final') return { error: 'review is finalized' };
+  return { ok: true, item: row };
+}
+
+// D1: the note field is an "item input" too, so it locks the same way
+// status/snapshot do — see loadEditableReviewItem.
+export async function saveItemNote(itemId: string, note: string): Promise<ActionResult> {
   const user = await requireUser();
   const admin = supabaseAdmin();
+  const gate = await loadEditableReviewItem(admin, itemId);
+  if ('error' in gate) return gate;
   const weekly_note = note.trim() || null;
   const { error } = await admin.from('weekly_review_items').update({ weekly_note }).eq('id', itemId);
   if (error) return { error: error.message };
@@ -270,12 +341,14 @@ export async function saveItemNote(itemId: string, note: string) {
 
 // Verb applies to the canonical task (spec: updates propagate everywhere —
 // same tasks row /work reads), then the review row snapshots the result.
-export async function setItemStatus(itemId: string, taskId: string, verb: ReviewVerb) {
+export async function setItemStatus(itemId: string, taskId: string, verb: ReviewVerb): Promise<ActionResult> {
   const user = await requireUser();
   if (!REVIEW_VERBS.includes(verb)) return { error: 'invalid verb' };
   const mapped = verbToPatch(verb, null, laToday());
   if ('error' in mapped) return { error: mapped.error };
   const admin = supabaseAdmin();
+  const gate = await loadEditableReviewItem(admin, itemId);
+  if ('error' in gate) return gate;
   const { error } = await admin.from('tasks').update(mapped.patch).eq('id', taskId);
   if (error) return { error: error.message };
   await logActivity(admin, {
@@ -340,15 +413,19 @@ export async function saveSubtopicContext(
 const SNAPSHOT_STATES = ['open', 'carried', 'waiting', 'blocked', 'no_update'] as const;
 export type SnapshotState = (typeof SNAPSHOT_STATES)[number];
 
-export async function setItemSnapshot(itemId: string, snapshot: SnapshotState) {
+export async function setItemSnapshot(itemId: string, snapshot: SnapshotState): Promise<ActionResult> {
   const user = await requireUser();
   if (!SNAPSHOT_STATES.includes(snapshot)) return { error: 'invalid status' };
   const admin = supabaseAdmin();
   const actor = user.email ?? user.id;
 
-  const { data: itemRow, error: itemError } = await admin
-    .from('weekly_review_items').select('task_id,status_snapshot').eq('id', itemId).single();
-  if (itemError) return { error: itemError.message };
+  // D1: reuses the same finalized-review gate note/status share — and since
+  // it already has to fetch the item to check the review's status, that
+  // row's task_id/status_snapshot replace the two-column select this used
+  // to run on its own.
+  const gate = await loadEditableReviewItem(admin, itemId);
+  if ('error' in gate) return gate;
+  const itemRow = gate.item;
 
   const { error } = await admin
     .from('weekly_review_items')
@@ -388,9 +465,22 @@ export async function setItemSnapshot(itemId: string, snapshot: SnapshotState) {
   return { ok: true };
 }
 
-export async function saveReview(reviewId: string) {
+export async function saveReview(reviewId: string): Promise<ActionResult> {
   const user = await requireUser();
   const admin = supabaseAdmin();
+  const { data: current, error: currentError } = await admin
+    .from('weekly_reviews').select('status').eq('id', reviewId).maybeSingle();
+  if (currentError) return { error: currentError.message };
+  // D1: Save is a checkpoint, never a lock (review-board.tsx: "stays enabled
+  // after saving so a review can be saved again during the meeting") — but it
+  // must also never be a silent *downgrade*. Without this guard, clicking
+  // Save after Finalize would flip status back to 'saved' while finalized_at
+  // stays set, corrupting the exact state Reopen exists to change on
+  // purpose. The UI already stops offering Save once final (ReviewControls
+  // swaps it for the Finalized badge + Reopen); this is the server-side half
+  // of that, for the same reason every other finalized-state guard here is
+  // server-side.
+  if (current?.status === 'final') return { ok: true };
   const { error } = await admin.from('weekly_reviews').update({ status: 'saved' }).eq('id', reviewId);
   if (error) return { error: error.message };
   await logActivity(admin, {
@@ -411,5 +501,68 @@ export async function attachRecording(reviewId: string, documentId: string) {
     action: 'attach_recording', after: { recording_document_id: documentId },
   });
   revalidatePath('/weekly');
+  return { ok: true };
+}
+
+/**
+ * D1: locks a review as the meeting record. Distinct from saveReview on
+ * purpose — the checklist requires Save to stay a draft-only action and
+ * Finalize to be the one control that actually locks. Audited with a full
+ * `before` snapshot (applyWorkVerb's pattern), even though only status/
+ * finalized_at change, so undo tooling elsewhere that expects a full-row
+ * before_json keeps working uniformly across entity types.
+ *
+ * Idempotent: finalizing an already-final review is a no-op success rather
+ * than an error — matches syncTaskIntoOpenReview's existing-item short
+ * circuit elsewhere in this file — since the only way the UI could call this
+ * twice is a double-click race the disabled-while-pending button mostly
+ * prevents anyway.
+ */
+export async function finalizeReview(reviewId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const { data: before, error: beforeError } = await admin
+    .from('weekly_reviews').select('*').eq('id', reviewId).maybeSingle();
+  if (beforeError) return { error: beforeError.message };
+  if (!before) return { error: 'review not found' };
+  if (before.status === 'final') return { ok: true };
+
+  const finalized_at = new Date().toISOString();
+  const { error } = await admin
+    .from('weekly_reviews')
+    .update({ status: 'final', finalized_at })
+    .eq('id', reviewId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'weekly_review', entity_id: reviewId, actor: user.email ?? user.id,
+    action: 'finalize', before, after: { status: 'final', finalized_at },
+  });
+  revalidatePath('/weekly'); revalidatePath('/');
+  return { ok: true };
+}
+
+/** D1: reverses finalizeReview — back to 'preparing' (not 'saved': Reopen is
+ *  "start editing again," not "pretend it was only ever saved"), and clears
+ *  finalized_at so the badge disappears. Audited and idempotent the same way
+ *  finalizeReview is. */
+export async function reopenReview(reviewId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const { data: before, error: beforeError } = await admin
+    .from('weekly_reviews').select('*').eq('id', reviewId).maybeSingle();
+  if (beforeError) return { error: beforeError.message };
+  if (!before) return { error: 'review not found' };
+  if (before.status !== 'final') return { ok: true };
+
+  const { error } = await admin
+    .from('weekly_reviews')
+    .update({ status: 'preparing', finalized_at: null })
+    .eq('id', reviewId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'weekly_review', entity_id: reviewId, actor: user.email ?? user.id,
+    action: 'reopen', before, after: { status: 'preparing', finalized_at: null },
+  });
+  revalidatePath('/weekly'); revalidatePath('/');
   return { ok: true };
 }

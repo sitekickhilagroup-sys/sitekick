@@ -96,6 +96,15 @@ export default async function WeeklyPage() {
               modeNoteDraft: t('weekly.mode_note_draft'),
               modeNoteMeeting: t('weekly.mode_note_meeting'),
               uploadKickerDraft: t('weekly.upload_kicker_draft'),
+              // D1: Finalize / Reopen, distinct from Save.
+              finalize: t('weekly.finalize'),
+              reopen: t('weekly.reopen'),
+              finalizeConfirm: t('weekly.finalize_confirm'),
+              // Raw template with a literal "{date}" — substituted client-side
+              // in ReviewControls, same pattern `progress` already uses (the
+              // real value comes from review.finalized_at, which only the
+              // client component has after ReviewBoard passes `review` down).
+              finalizedBadge: t('weekly.finalized_badge'),
             }} />
           );
         })()

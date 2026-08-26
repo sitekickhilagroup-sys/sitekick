@@ -2,7 +2,10 @@
 
 import { useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { attachRecording, saveItemNote, saveReview, saveSubtopicContext, setItemSnapshot, setItemStatus, type SnapshotState } from '@/app/actions/weekly';
+import {
+  attachRecording, finalizeReview, reopenReview, saveItemNote, saveReview, saveSubtopicContext,
+  setItemSnapshot, setItemStatus, type SnapshotState,
+} from '@/app/actions/weekly';
 import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
 
 interface Row { item: WeeklyReviewItem; title: string; owner?: string | null; due?: string | null }
@@ -25,6 +28,10 @@ export function ReviewBoard({ review, groups, labels }: Props) {
   // §2 requires it to come from application state, and it lets the header own
   // the control while this board just reads the value.
   const present = params.get('mode') === 'meeting';
+  // D1: finalized locks the record for the meeting regardless of which mode
+  // (Sunday draft / Monday presentation) the URL happens to be on — it's an
+  // orthogonal, stronger axis than present/draft, not a third mode.
+  const finalized = review.status === 'final';
   const [openProjects, setOpenProjects] = useState<Set<string>>(
     () => new Set(groups.map((g) => g.projectName)),
   );
@@ -81,7 +88,7 @@ export function ReviewBoard({ review, groups, labels }: Props) {
 
       {/* §7 and §16: Save and the upload card stay available in Monday mode.
           They used to disappear entirely when presenting. */}
-      <ReviewControls review={review} labels={labels} present={present} />
+      <ReviewControls review={review} labels={labels} present={present} finalized={finalized} />
 
       {groups.length === 0 && labels.noItems && (
         <p className="rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{labels.noItems}</p>
@@ -132,7 +139,7 @@ export function ReviewBoard({ review, groups, labels }: Props) {
                         their numbering at 1 — one continuous counter now. */}
                     <ul className="mt-2 space-y-3">
                       {sub.items.map((row, i) => (
-                        <ReviewItemRow key={row.item.id} row={row} index={i + 1} labels={labels} />
+                        <ReviewItemRow key={row.item.id} row={row} index={i + 1} labels={labels} finalized={finalized} />
                       ))}
                     </ul>
                     {sub.items.length === 0 && labels.noActions && (
@@ -193,7 +200,15 @@ function SubtopicContext({ reviewId, projectId, subtopic, value, placeholder }: 
   );
 }
 
-function ReviewItemRow({ row, index, labels }: { row: Row; index: number; labels: Record<string, string> }) {
+interface ReviewItemRowProps {
+  row: Row; index: number; labels: Record<string, string>;
+  /** D1: the review is locked — item inputs (note, status) render disabled
+   *  and the server refuses the write regardless (see loadEditableReviewItem
+   *  in app/actions/weekly.ts). */
+  finalized: boolean;
+}
+
+function ReviewItemRow({ row, index, labels, finalized }: ReviewItemRowProps) {
   const { item, title, owner, due } = row;
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
@@ -274,15 +289,16 @@ function ReviewItemRow({ row, index, labels }: { row: Row; index: number; labels
       </span>
       <span role="status" className={`rounded-[6px] px-2 py-1 text-[9px] font-[650] uppercase leading-none ${statusClass}`}>{statusText}</span>
 
-      {/* Editable in both modes now. §13: the note is multiline — this was an
-          <input>, which forced a week's meeting notes onto one line. */}
+      {/* Editable in both modes, unless finalized (D1) — §13: the note is
+          multiline — this was an <input>, which forced a week's meeting
+          notes onto one line. */}
       <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
         <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.noteKicker}</span>
         <textarea
           defaultValue={item.weekly_note ?? ''}
           rows={2}
           onBlur={(e) => saveNote(e.target.value)}
-          disabled={pending}
+          disabled={pending || finalized}
           aria-label={labels.noteKicker}
           placeholder={labels.note}
           className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-50"
@@ -292,7 +308,7 @@ function ReviewItemRow({ row, index, labels }: { row: Row; index: number; labels
         <label className="flex items-center gap-1.5 text-[10px] text-sk-muted">
           {labels.statusLabel}
           <select
-            disabled={pending}
+            disabled={pending || finalized}
             value={currentStatus}
             onChange={(e) => onStatusChange(e.target.value)}
             aria-label={`${labels.statusLabel}: ${title}`}
@@ -310,7 +326,9 @@ function ReviewItemRow({ row, index, labels }: { row: Row; index: number; labels
   );
 }
 
-function ReviewControls({ review, labels, present }: { review: WeeklyReview; labels: Record<string, string>; present: boolean }) {
+function ReviewControls(
+  { review, labels, present, finalized }: { review: WeeklyReview; labels: Record<string, string>; present: boolean; finalized: boolean },
+) {
   const saved = review.status === 'saved';
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
@@ -324,6 +342,24 @@ function ReviewControls({ review, labels, present }: { review: WeeklyReview; lab
     const res = await saveReview(review.id);
     if (res?.error) setFailed(res.error);
     else setJustSaved(true);
+  });
+
+  // D1: window.confirm — same pattern the settings page already uses for a
+  // consequential one-click action (removing a user). Reopen gets no
+  // confirm: it only ever *un*-locks, nothing is destroyed by it.
+  const finalize = () => {
+    if (!confirm(labels.finalizeConfirm)) return;
+    start(async () => {
+      setFailed(null);
+      const res = await finalizeReview(review.id);
+      if (res?.error) setFailed(res.error);
+    });
+  };
+
+  const reopen = () => start(async () => {
+    setFailed(null);
+    const res = await reopenReview(review.id);
+    if (res?.error) setFailed(res.error);
   });
 
   const upload = (file: File) => start(async () => {
@@ -350,16 +386,48 @@ function ReviewControls({ review, labels, present }: { review: WeeklyReview; lab
         <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-green">{labels.saveKicker}</p>
         <p className="mt-1 text-[10px] leading-[1.45] text-sk-text">{labels.saveSub}</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          {/* Save is a checkpoint, not a lock: it stays enabled after saving so
-              a review can be saved again during the meeting. */}
-          <button
-            type="button"
-            disabled={pending}
-            onClick={save}
-            className="min-h-11 cursor-pointer rounded-[8px] bg-sage px-4 py-2 text-[10px] font-[650] leading-none text-white disabled:opacity-50 sm:min-h-0"
-          >
-            {justSaved || saved ? labels.saved : labels.save}
-          </button>
+          {finalized ? (
+            <>
+              {/* D1: badge + Reopen replace Save + Finalize once locked —
+                  there's nothing left to save, and Save must never be the
+                  thing that silently un-finalizes (see saveReview's guard). */}
+              <span className="rounded-[6px] bg-sk-green-soft px-2 py-1 text-[10px] font-[650] text-sk-green">
+                {labels.finalizedBadge?.replace('{date}', review.finalized_at ? review.finalized_at.slice(0, 10) : '')}
+              </span>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={reopen}
+                className="min-h-11 cursor-pointer rounded-[8px] border border-line bg-sk-surface px-4 py-2 text-[10px] font-[650] leading-none text-sk-ink disabled:opacity-50 sm:min-h-0"
+              >
+                {labels.reopen}
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Save is a checkpoint, not a lock: it stays enabled after
+                  saving so a review can be saved again during the meeting. */}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={save}
+                className="min-h-11 cursor-pointer rounded-[8px] bg-sage px-4 py-2 text-[10px] font-[650] leading-none text-white disabled:opacity-50 sm:min-h-0"
+              >
+                {justSaved || saved ? labels.saved : labels.save}
+              </button>
+              {/* D1: secondary action beside Save, per the checklist —
+                  confirmed inline (window.confirm above), locks every item
+                  for the meeting; Reopen is how it reverses. */}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={finalize}
+                className="min-h-11 cursor-pointer rounded-[8px] border border-sage-line px-4 py-2 text-[10px] font-[650] leading-none text-sage disabled:opacity-50 sm:min-h-0"
+              >
+                {labels.finalize}
+              </button>
+            </>
+          )}
           <span className="font-mono text-[10px] text-sk-muted">{labels.meeting} · <bdi>{review.meeting_date}</bdi></span>
         </div>
         {justSaved && !failed && <p role="status" className="mt-2 text-[10px] text-sk-green">{labels.saved}</p>}

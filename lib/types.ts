@@ -406,8 +406,9 @@ export interface Relationship {
   created_at: string;
 }
 
-// Weekly review: Sprint D (lib/types.ts mirrors supabase/migrations/0005_weekly_review.sql)
-export type WeeklyReviewStatus = 'preparing' | 'saved';
+// Weekly review: Sprint D (lib/types.ts mirrors supabase/migrations/0005_weekly_review.sql,
+// 'final' + finalized_at added by 0016_weekly_finalize.sql / D1)
+export type WeeklyReviewStatus = 'preparing' | 'saved' | 'final';
 
 export interface WeeklyReview {
   id: string;
@@ -415,6 +416,9 @@ export interface WeeklyReview {
   status: WeeklyReviewStatus;
   source_review_id: string | null;
   recording_document_id: string | null;
+  /** Set by finalizeReview, cleared by reopenReview (D1). Null while the
+   *  review is 'preparing' or 'saved'. */
+  finalized_at: string | null;
   created_at: string;
 }
 
