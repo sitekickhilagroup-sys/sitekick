@@ -149,7 +149,6 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     receipt: t('invoices.open_receipt'),
     transfer: t('invoices.transfer'),
     cancel: t('common.cancel'),
-    error: t('common.error_save'),
     status: t('common.status'),
     paidDate: t('invoices.paid_date'),
     notes: t('invoices.notes'),
@@ -168,6 +167,13 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     clearDate: t('invoices.clear_date'),
     paidDateRequired: t('invoices.paid_date_required'),
     invalidAmount: t('invoices.invalid_amount'),
+    errorInvalidStatus: t('invoices.error_invalid_status'),
+    errorInvalidLink: t('invoices.error_invalid_link'),
+    errorInvalidDate: t('invoices.error_invalid_date'),
+    errorNotFound: t('invoices.error_not_found'),
+    errorEmptyPatch: t('invoices.error_empty_patch'),
+    errorNothingToUndo: t('invoices.error_nothing_to_undo'),
+    errorSaveReason: t('invoices.error_save_reason'),
   };
 
   return (

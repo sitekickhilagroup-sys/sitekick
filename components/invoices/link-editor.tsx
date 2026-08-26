@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { updateInvoice, undoInvoiceEdit, type InvoicePatch } from '@/app/actions/invoices';
-import { parseAmountInput } from '@/lib/invoice-rules';
+import { INVOICE_ERRORS, parseAmountInput } from '@/lib/invoice-rules';
 import { SavedChip } from '@/components/work/saved-chip';
 import type { InvoiceStatus } from '@/lib/types';
 
@@ -13,7 +13,6 @@ interface Labels {
   receipt: string;
   transfer: string;
   cancel: string;
-  error: string;
   status: string;
   paidDate: string;
   notes: string;
@@ -32,6 +31,17 @@ interface Labels {
   clearDate: string;
   paidDateRequired: string;
   invalidAmount: string;
+  /** Every rejection updateInvoice/undoInvoiceEdit can return gets its own
+   *  message — see errorMessage() below. errorSaveReason is the fallback for
+   *  a raw Postgres error text neither of them anticipated (still shown, with
+   *  a lead-in, never swallowed into one blanket "Couldn't save"). */
+  errorInvalidStatus: string;
+  errorInvalidLink: string;
+  errorInvalidDate: string;
+  errorNotFound: string;
+  errorEmptyPatch: string;
+  errorNothingToUndo: string;
+  errorSaveReason: string;
 }
 
 export interface LinkEditorOptions {
@@ -101,7 +111,10 @@ export function LinkEditor({
   const [receiptUrlDraft, setReceiptUrlDraft] = useState(receiptUrl ?? '');
   const [transferUrlDraft, setTransferUrlDraft] = useState(transferUrl ?? '');
   const [notesDraft, setNotesDraft] = useState(notes ?? '');
-  const [failed, setFailed] = useState(false);
+  // Holds the exact code updateInvoice/undoInvoiceEdit returned (an
+  // INVOICE_ERRORS value, or raw Postgres text) — not a boolean — so the
+  // message shown is the real reason, not a generic "Couldn't save".
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
   const [pending, start] = useTransition();
 
@@ -120,7 +133,7 @@ export function LinkEditor({
     setReceiptUrlDraft(receiptUrl ?? '');
     setTransferUrlDraft(transferUrl ?? '');
     setNotesDraft(notes ?? '');
-    setFailed(false);
+    setErrorCode(null);
     setEditing(true);
   };
 
@@ -136,10 +149,43 @@ export function LinkEditor({
   const paidNeedsDate = statusDraft === 'paid' && !paidDraft;
   const parsedAmount = parseAmountInput(amountDraft);
   const amountInvalid = parsedAmount === null;
-  const blocked = amountInvalid || paidNeedsDate || (leavingPaid && !paidDateAcked);
+  // Same idea for the three link fields — validateInvoicePatch enforces this
+  // https-only rule server-side regardless, but until this existed it was the
+  // one field group with no client check at all: any of the three reaching
+  // Save with a non-https value used to round-trip only to come back as the
+  // same blanket "Couldn't save" every other rejection did.
+  const okLink = (u: string) => u === '' || /^https:\/\//.test(u);
+  const invoiceUrlInvalid = !okLink(invoiceUrlDraft);
+  const receiptUrlInvalid = !okLink(receiptUrlDraft);
+  const transferUrlInvalid = !okLink(transferUrlDraft);
+  const linkInvalid = invoiceUrlInvalid || receiptUrlInvalid || transferUrlInvalid;
+  const blocked = amountInvalid || paidNeedsDate || linkInvalid || (leavingPaid && !paidDateAcked);
+
+  // Maps a server rejection to a specific, translated message. The known
+  // codes (INVOICE_ERRORS, shared with lib/invoice-rules.ts so this can't
+  // drift from what the action actually returns) each get their own text;
+  // anything else — a raw Postgres constraint/FK message neither
+  // validateInvoicePatch nor updateInvoice anticipated — still reaches the
+  // user, behind a translated lead-in, instead of disappearing into one
+  // generic string. FSI/PDI (⁨…⁩) bidi-isolate that raw text the same way
+  // page.tsx already isolates other dynamic values inside Hebrew sentences.
+  const errorMessage = (code: string): string => {
+    switch (code) {
+      case INVOICE_ERRORS.invalidStatus: return labels.errorInvalidStatus;
+      case INVOICE_ERRORS.invalidLink: return labels.errorInvalidLink;
+      case INVOICE_ERRORS.invalidDate: return labels.errorInvalidDate;
+      case INVOICE_ERRORS.invalidAmount: return labels.invalidAmount;
+      case INVOICE_ERRORS.paidDateRequired: return labels.paidDateRequired;
+      case INVOICE_ERRORS.confirmPaidDate: return labels.confirmPaidDate;
+      case INVOICE_ERRORS.notFound: return labels.errorNotFound;
+      case INVOICE_ERRORS.emptyPatch: return labels.errorEmptyPatch;
+      case INVOICE_ERRORS.nothingToUndo: return labels.errorNothingToUndo;
+      default: return labels.errorSaveReason.replace('{reason}', `⁨${code}⁩`);
+    }
+  };
 
   const save = () => start(async () => {
-    setFailed(false);
+    setErrorCode(null);
     // Only the fields actually touched — sending every field back would
     // silently revert a concurrent change this row hasn't re-rendered yet.
     const patch: InvoicePatch = {};
@@ -163,15 +209,16 @@ export function LinkEditor({
     if (Object.keys(patch).length === 0) { setEditing(false); return; }
 
     const res = await updateInvoice(invoiceId, patch);
-    if ('error' in res) { setFailed(true); return; }
+    if ('error' in res) { setErrorCode(res.error); return; }
     setEditing(false);
     setResult({ message: labels.recorded, undoId: res.undoId });
   });
 
   const undo = () => start(async () => {
+    setErrorCode(null);
     if (!result?.undoId) { setResult(null); return; }
     const res = await undoInvoiceEdit(result.undoId);
-    if ('error' in res) { setFailed(true); return; }
+    if ('error' in res) { setErrorCode(res.error); return; }
     setResult(null);
   });
 
@@ -196,22 +243,50 @@ export function LinkEditor({
       )}
 
       {result && (
-        <SavedChip message={result.message} undoId={result.undoId} pending={pending}
-          onUndo={undo} onDismiss={() => setResult(null)}
-          labels={{ recorded: labels.recorded, undo: labels.undo, cancel: labels.cancel }} />
+        <span className="inline-flex flex-col items-start gap-1">
+          <SavedChip message={result.message} undoId={result.undoId} pending={pending}
+            onUndo={undo} onDismiss={() => { setResult(null); setErrorCode(null); }}
+            labels={{ recorded: labels.recorded, undo: labels.undo, cancel: labels.cancel }} />
+          {/* A failed Undo leaves the chip up (nothing to revert to otherwise)
+              but must still say why — same "no silent failure" rule as the
+              editor's own save error below. */}
+          {errorCode && <span role="alert" className="text-[10px] font-semibold text-coral">{errorMessage(errorCode)}</span>}
+        </span>
       )}
 
       {editing && (
         <>
-          <span aria-hidden="true" onClick={() => setEditing(false)} className="fixed inset-0 z-20 bg-ink/40 sm:bg-transparent" />
+          {/* Dimmed on every size (not just mobile): the desktop dialog below
+              is a centered fixed modal, not a small popover attached to the
+              row, so it needs the same "this is a blocking overlay" cue. */}
+          <span aria-hidden="true" onClick={() => setEditing(false)} className="fixed inset-0 z-20 bg-ink/40" />
+          {/*
+            Positioning: `sm:absolute … sm:top-full` (anchored under the
+            trigger, TaskEditor's pattern) breaks here specifically because
+            this row lives inside page.tsx's `overflow-x-auto` table wrapper.
+            Setting overflow-x forces the browser to compute overflow-y as
+            `auto` too (CSS Overflow spec — an explicit `overflow-y-visible`
+            class cannot opt back out of this), so that ancestor clips any
+            `position: absolute` descendant that extends past its box — which
+            a 12-field, up-to-75dvh-tall form does for any row near the top or
+            bottom of a short table. `position: fixed` is immune to an
+            ancestor's `overflow` (only a transform/filter/contain ancestor
+            would trap it, and none of this table's ancestors have one), so
+            desktop centers the dialog in the viewport with a pure inset+auto-
+            margin trick instead of anchoring to the button's measured
+            position — no ancestor overflow can clip it, and it needs no
+            resize/scroll listeners to stay correct.
+          */}
           <span
             role="dialog"
             aria-label={context ? `${labels.edit} · ${context}` : labels.edit}
             onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); }}
-            className="fixed inset-x-0 bottom-0 z-30 flex max-h-[85dvh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-line bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-start shadow-card sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:max-h-[75dvh] sm:w-80 sm:rounded-lg sm:border sm:p-3"
+            className="fixed inset-x-0 bottom-0 z-30 flex max-h-[85dvh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-line bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-start shadow-card sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[75dvh] sm:w-80 sm:rounded-lg sm:border sm:p-3"
           >
             <span aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 shrink-0 rounded-full bg-line sm:hidden" />
-            <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.edit}</p>
+            <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink3">
+              {labels.edit}{context ? ` · ${context}` : ''}
+            </p>
 
             <label className={fieldCls}>
               <span className={labelCls}>{labels.vendor}</span>
@@ -324,33 +399,36 @@ export function LinkEditor({
               <span className={labelCls}>{labels.invoice}</span>
               <input
                 type="url"
-                aria-invalid={failed || undefined}
+                aria-invalid={invoiceUrlInvalid || undefined}
                 value={invoiceUrlDraft}
                 onChange={(e) => setInvoiceUrlDraft(e.target.value)}
-                className={inputCls(failed)}
+                className={inputCls(invoiceUrlInvalid)}
               />
+              {invoiceUrlInvalid && <span role="alert" className="mt-0.5 block text-[10px] font-semibold text-coral">{labels.errorInvalidLink}</span>}
             </label>
 
             <label className={fieldCls}>
               <span className={labelCls}>{labels.receipt}</span>
               <input
                 type="url"
-                aria-invalid={failed || undefined}
+                aria-invalid={receiptUrlInvalid || undefined}
                 value={receiptUrlDraft}
                 onChange={(e) => setReceiptUrlDraft(e.target.value)}
-                className={inputCls(failed)}
+                className={inputCls(receiptUrlInvalid)}
               />
+              {receiptUrlInvalid && <span role="alert" className="mt-0.5 block text-[10px] font-semibold text-coral">{labels.errorInvalidLink}</span>}
             </label>
 
             <label className={fieldCls}>
               <span className={labelCls}>{labels.transfer}</span>
               <input
                 type="url"
-                aria-invalid={failed || undefined}
+                aria-invalid={transferUrlInvalid || undefined}
                 value={transferUrlDraft}
                 onChange={(e) => setTransferUrlDraft(e.target.value)}
-                className={inputCls(failed)}
+                className={inputCls(transferUrlInvalid)}
               />
+              {transferUrlInvalid && <span role="alert" className="mt-0.5 block text-[10px] font-semibold text-coral">{labels.errorInvalidLink}</span>}
             </label>
 
             <label className={fieldCls}>
@@ -372,7 +450,7 @@ export function LinkEditor({
                 className="min-h-11 rounded-full bg-inset px-3 py-1.5 text-xs text-ink3 sm:min-h-7">
                 {labels.cancel}
               </button>
-              {failed && <span role="alert" className="text-[10px] font-semibold text-coral">{labels.error}</span>}
+              {errorCode && <span role="alert" className="text-[10px] font-semibold text-coral">{errorMessage(errorCode)}</span>}
             </div>
           </span>
         </>

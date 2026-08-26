@@ -75,6 +75,22 @@ describe('validateInvoicePatch — beyond the two given rules', () => {
     expect(validateInvoicePatch({ status: 'received', paid_date: null }, { amount_usd: 0 }))
       .toEqual({ ok: true });
   });
+
+  test('rejects a 3rd decimal digit even as a raw number, bypassing parseAmountInput entirely', () => {
+    // The client (parseAmountInput) already rejects this string before it
+    // becomes a number, but a direct call to the action is the real trust
+    // boundary — this is what stops numeric(12,2) from silently rounding
+    // 181.305 to 181.31 (or 181.30) instead of the write being rejected.
+    expect(validateInvoicePatch({ status: 'received', paid_date: null }, { amount_usd: 181.305 }))
+      .toEqual({ error: 'invalid amount' });
+    expect(validateInvoicePatch({ status: 'received', paid_date: null }, { amount_usd: 181.30 }))
+      .toEqual({ ok: true });
+    // Not a *100/round check: a value whose nearest-double representation
+    // genuinely isn't a clean 2-decimal number (e.g. the classic 0.1 + 0.2
+    // float artifact) is correctly rejected too, without ever multiplying.
+    expect(validateInvoicePatch({ status: 'received', paid_date: null }, { amount_usd: 0.1 + 0.2 }))
+      .toEqual({ error: 'invalid amount' });
+  });
 });
 
 describe('parseAmountInput', () => {

@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { logActivity } from '@/lib/state-writer';
-import { buildInvoiceRow, INVOICE_ROW_COLUMNS, validateInvoicePatch, type InvoicePatch } from '@/lib/invoice-rules';
+import { buildInvoiceRow, INVOICE_ERRORS, INVOICE_ROW_COLUMNS, validateInvoicePatch, type InvoicePatch } from '@/lib/invoice-rules';
 import type { Invoice, InvoiceStatus } from '@/lib/types';
 
 export type { InvoicePatch };
@@ -36,17 +36,17 @@ export async function advanceInvoice(invoiceId: string) {
 // same shape as updateTaskDetails in app/actions/tasks.ts. This replaces the
 // old updateInvoiceDetails, which only ever covered a subset of these columns
 // and had no before-snapshot or undo.
-export async function updateInvoice(invoiceId: string, patch: InvoicePatch) {
+export async function updateInvoice(invoiceId: string, patch: InvoicePatch): Promise<{ error: string } | { ok: true; undoId: string | null }> {
   const user = await requireUser();
   const admin = supabaseAdmin();
   const { data: before } = await admin.from('invoices').select('*').eq('id', invoiceId).maybeSingle();
-  if (!before) return { error: 'invoice not found' };
+  if (!before) return { error: INVOICE_ERRORS.notFound };
 
   const validation = validateInvoicePatch(before as Invoice, patch);
   if ('error' in validation) return validation;
 
   const row = buildInvoiceRow(patch);
-  if (Object.keys(row).length === 0) return { error: 'empty patch' };
+  if (Object.keys(row).length === 0) return { error: INVOICE_ERRORS.emptyPatch };
 
   const { error } = await admin.from('invoices').update(row).eq('id', invoiceId);
   if (error) return { error: error.message };
@@ -61,12 +61,12 @@ export async function updateInvoice(invoiceId: string, patch: InvoicePatch) {
 /** Restores the invoice snapshot taken before updateInvoice's patch applied —
  *  same pattern as undoWorkVerb in app/actions/work.ts, scoped to invoices'
  *  own whitelist of columns (INVOICE_ROW_COLUMNS) and entity_type. */
-export async function undoInvoiceEdit(logId: string) {
+export async function undoInvoiceEdit(logId: string): Promise<{ error: string } | { ok: true }> {
   const user = await requireUser();
   const admin = supabaseAdmin();
   const { data } = await admin.from('activity_log').select('*').eq('id', logId).maybeSingle();
   const entry = data as { entity_type: string; entity_id: string; before_json: Record<string, unknown> | null } | null;
-  if (!entry?.before_json || entry.entity_type !== 'invoice') return { error: 'nothing to undo' };
+  if (!entry?.before_json || entry.entity_type !== 'invoice') return { error: INVOICE_ERRORS.nothingToUndo };
   const before = entry.before_json;
   const restore: Record<string, unknown> = {};
   for (const column of INVOICE_ROW_COLUMNS) restore[column] = before[column] ?? null;
@@ -78,19 +78,4 @@ export async function undoInvoiceEdit(logId: string) {
   });
   revalidatePath('/invoices');
   return { ok: true as const };
-}
-
-// Item 7: invoice/receipt links — Noa pastes Drive/Dropbox share links after
-// scanning paperwork; https:// only (no raw file paths / local drive letters).
-export async function saveInvoiceLinks(invoiceId: string, invoiceUrl: string | null, receiptUrl: string | null) {
-  const user = await requireUser();
-  const ok = (u: string | null) => u === null || u === '' || /^https:\/\//.test(u);
-  if (!ok(invoiceUrl) || !ok(receiptUrl)) return { error: 'links must start with https://' };
-  const admin = supabaseAdmin();
-  const patch = { invoice_url: invoiceUrl || null, receipt_url: receiptUrl || null };
-  const { error } = await admin.from('invoices').update(patch).eq('id', invoiceId);
-  if (error) return { error: error.message };
-  await logActivity(admin, { entity_type: 'invoice', entity_id: invoiceId, actor: user.email ?? user.id, action: 'links', after: patch });
-  revalidatePath('/invoices');
-  return { ok: true };
 }

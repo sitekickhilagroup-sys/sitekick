@@ -54,6 +54,38 @@ export interface InvoicePatch {
 
 const STATUSES: Invoice['status'][] = ['received', 'for_rowan_approval', 'approved', 'paid', 'on_hold'];
 
+// Every error validateInvoicePatch/updateInvoice/undoInvoiceEdit can return,
+// named once so the UI's error-message mapping (link-editor.tsx) can switch
+// on INVOICE_ERRORS.foo instead of a hand-typed string literal that could
+// silently drift out of sync with what the action actually sends back — the
+// exact "generic string swallows the real reason" failure mode this exists
+// to prevent, just one layer up (a typo here would make a KNOWN error look
+// unrecognized, not turn it into a blank message).
+export const INVOICE_ERRORS = {
+  invalidStatus: 'invalid status',
+  invalidLink: 'links must start with https://',
+  invalidDate: 'invalid date',
+  invalidAmount: 'invalid amount',
+  paidDateRequired: 'paid date required',
+  confirmPaidDate: 'confirm paid date',
+  notFound: 'invoice not found',
+  emptyPatch: 'empty patch',
+  nothingToUndo: 'nothing to undo',
+} as const;
+
+// Inspects the number's own decimal-string form rather than `n * 100` —
+// binary floating point makes `181.3 * 100` land a hair off 18130 for some
+// inputs, which would reject a perfectly valid amount. `Number.toString()`
+// always yields the shortest decimal that round-trips to the same double, so
+// counting digits after its '.' reports the amount's *actual* precision with
+// no multiply/divide anywhere.
+function hasAtMostTwoDecimals(n: number): boolean {
+  const s = n.toString();
+  if (s.includes('e') || s.includes('E')) return false; // e.g. very large/small values
+  const dot = s.indexOf('.');
+  return dot === -1 || s.length - dot - 1 <= 2;
+}
+
 /**
  * Shape + cross-field rules for a proposed invoice patch. Pure — takes only
  * the previous status/paid_date (everything the paid-date rule needs) plus
@@ -66,18 +98,24 @@ export function validateInvoicePatch(
   prev: Pick<Invoice, 'status' | 'paid_date'>,
   patch: InvoicePatch,
 ): { ok: true } | { error: string } {
-  if (patch.status !== undefined && !STATUSES.includes(patch.status)) return { error: 'invalid status' };
+  if (patch.status !== undefined && !STATUSES.includes(patch.status)) return { error: INVOICE_ERRORS.invalidStatus };
 
   const okUrl = (u: string | null | undefined) => u == null || u === '' || /^https:\/\//.test(u);
   if (!okUrl(patch.invoice_url) || !okUrl(patch.receipt_url) || !okUrl(patch.transfer_confirmation_url)) {
-    return { error: 'links must start with https://' };
+    return { error: INVOICE_ERRORS.invalidLink };
   }
 
   const okDate = (d: string | null | undefined) => d == null || d === '' || DATE_RE.test(d);
-  if (!okDate(patch.received_date) || !okDate(patch.paid_date)) return { error: 'invalid date' };
+  if (!okDate(patch.received_date) || !okDate(patch.paid_date)) return { error: INVOICE_ERRORS.invalidDate };
 
-  if (patch.amount_usd !== undefined && !(Number.isFinite(patch.amount_usd) && patch.amount_usd >= 0)) {
-    return { error: 'invalid amount' };
+  // The client (parseAmountInput) already rejects a 3rd decimal digit in the
+  // typed string before it ever becomes a number — this re-checks the same
+  // rule against the number itself, because the client is a UX nicety, not
+  // the trust boundary: a direct call to this action can hand amount_usd
+  // 181.305 straight past parseAmountInput, and numeric(12,2) would silently
+  // round it rather than reject it.
+  if (patch.amount_usd !== undefined && !(Number.isFinite(patch.amount_usd) && patch.amount_usd >= 0 && hasAtMostTwoDecimals(patch.amount_usd))) {
+    return { error: INVOICE_ERRORS.invalidAmount };
   }
 
   // Effective status/paid_date this patch would leave the row in — a patch
@@ -90,7 +128,7 @@ export function validateInvoicePatch(
   // row to paid, or the row was already paid and this patch (re-sending the
   // same status, or none at all) tries to blank the date out from under it.
   if (effectiveStatus === 'paid' && !effectivePaidDate) {
-    return { error: 'paid date required' };
+    return { error: INVOICE_ERRORS.paidDateRequired };
   }
 
   // Leaving paid must say what happens to the recorded date: the patch has
@@ -98,7 +136,7 @@ export function validateInvoicePatch(
   // silently dropping it here would leave a stale paid_date sitting under a
   // non-paid status.
   if (prev.status === 'paid' && patch.status !== undefined && patch.status !== 'paid' && !touchesPaidDate) {
-    return { error: 'confirm paid date' };
+    return { error: INVOICE_ERRORS.confirmPaidDate };
   }
 
   return { ok: true };
