@@ -66,6 +66,10 @@ export interface ReviewItemDraft {
   subtopic: string | null;
   status_snapshot: string;
   weekly_note: string | null;
+  /** D2: carried forward same as weekly_note — last week's planned next step
+   *  is exactly the context this week's meeting needs, same reasoning that
+   *  already applies to the note (see the carry loop below). */
+  next_step: string | null;
   sequence: number;
   carried_from: string | null;
 }
@@ -101,6 +105,7 @@ export function buildReviewItems(input: {
       // Last week's note is the context the meeting runs on. It was being
       // dropped on every carry.
       weekly_note: prior.weekly_note,
+      next_step: prior.next_step,
       sequence: ++seq,
       carried_from: prior.id,
     });
@@ -117,6 +122,7 @@ export function buildReviewItems(input: {
       subtopic: subtopicFor(t, null),
       status_snapshot: t.status,
       weekly_note: null,
+      next_step: null,
       sequence: ++seq,
       carried_from: null,
     });

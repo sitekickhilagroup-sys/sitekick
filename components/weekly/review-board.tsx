@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  attachRecording, finalizeReview, reopenReview, saveItemNote, saveReview, saveSubtopicContext,
+  attachRecording, finalizeReview, reopenReview, saveItemNote, saveItemOwnerDue, saveReview, saveSubtopicContext,
   setItemSnapshot, setItemStatus, type SnapshotState,
 } from '@/app/actions/weekly';
 import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
@@ -139,7 +139,7 @@ export function ReviewBoard({ review, groups, labels }: Props) {
                         their numbering at 1 — one continuous counter now. */}
                     <ul className="mt-2 space-y-3">
                       {sub.items.map((row, i) => (
-                        <ReviewItemRow key={row.item.id} row={row} index={i + 1} labels={labels} finalized={finalized} />
+                        <ReviewItemRow key={row.item.id} row={row} index={i + 1} labels={labels} present={present} finalized={finalized} />
                       ))}
                     </ul>
                     {sub.items.length === 0 && labels.noActions && (
@@ -202,16 +202,26 @@ function SubtopicContext({ reviewId, projectId, subtopic, value, placeholder }: 
 
 interface ReviewItemRowProps {
   row: Row; index: number; labels: Record<string, string>;
-  /** D1: the review is locked — item inputs (note, status) render disabled
-   *  and the server refuses the write regardless (see loadEditableReviewItem
-   *  in app/actions/weekly.ts). */
+  /** Monday presentation mode — see the `present` const in ReviewBoard. */
+  present: boolean;
+  /** D1: the review is locked. Wins over `present`: even a Sunday-mode view
+   *  of an already-finalized review renders read-only. */
   finalized: boolean;
 }
 
-function ReviewItemRow({ row, index, labels, finalized }: ReviewItemRowProps) {
+function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRowProps) {
   const { item, title, owner, due } = row;
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
+
+  // D2: Owner/Due are canonical *task* fields (My Work, Project Process read
+  // them too), not review-scoped annotations like the note/next-step — the
+  // checklist ("אם הוגדרו לעריכה") scopes their inline editing to Sunday
+  // prep only, read-only once the meeting is live or the review is
+  // finalized. Note and Next step stay editable in both modes, same as
+  // today's note field, since they're meeting annotations meant to be
+  // captured live.
+  const editableOwnerDue = !present && !finalized;
 
   // Spec §טז: blue = waiting on external, red = blocked, green = completed.
   const statusClass =
@@ -232,7 +242,24 @@ function ReviewItemRow({ row, index, labels, finalized }: ReviewItemRowProps) {
 
   const saveNote = (note: string) => start(async () => {
     setFailed(null);
-    const res = await saveItemNote(item.id, note);
+    const res = await saveItemNote(item.id, { weekly_note: note });
+    if (res?.error) setFailed(res.error);
+  });
+
+  // D2: mirrors saveNote exactly — same extended action, same onBlur trigger
+  // — just the other key of the patch.
+  const saveNextStep = (nextStep: string) => start(async () => {
+    setFailed(null);
+    const res = await saveItemNote(item.id, { next_step: nextStep });
+    if (res?.error) setFailed(res.error);
+  });
+
+  // D2: owner/due write the canonical task, so this is a separate action
+  // from saveNote/saveNextStep (which only ever touch the review item) —
+  // see saveItemOwnerDue's own comment in app/actions/weekly.ts.
+  const saveOwnerDue = (patch: { owner?: string; due?: string }) => start(async () => {
+    setFailed(null);
+    const res = await saveItemOwnerDue(item.id, patch);
     if (res?.error) setFailed(res.error);
   });
 
@@ -270,8 +297,17 @@ function ReviewItemRow({ row, index, labels, finalized }: ReviewItemRowProps) {
     else snap(value as SnapshotState);
   };
 
+  // D2 reading order: Project/Sub-topic render above this row (accordion +
+  // sub-topic header), then Action > Owner > Status > Latest note > Next
+  // step > Due, each its own flex child below in that DOM order. Due used
+  // to share a line with Owner right after Action; it now renders last,
+  // after Next step, to match. The Status *dropdown* used to render after
+  // the note (it was the row's last real control); it now sits right next
+  // to the read-only Status badge, both between Owner and the note, so
+  // "Status" reads as one unit in the required position rather than two.
   return (
     <li className="flex flex-wrap items-start gap-2">
+      {/* Action + Owner */}
       <span className="min-w-0 flex-1 basis-full sm:basis-auto">
         {item.carried_from && labels.itemKicker && (
           <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink3">
@@ -279,31 +315,25 @@ function ReviewItemRow({ row, index, labels, finalized }: ReviewItemRowProps) {
           </span>
         )}
         <span className="block text-sm text-ink">{title}</span>
-        {(owner || due) && (
-          <span className="mt-0.5 block text-[11px] text-ink3">
-            {owner ? `${labels.ownerLabel}: ${owner}` : ''}
-            {owner && due ? ' · ' : ''}
-            {due ? <bdi>{due}</bdi> : null}
-          </span>
+        {editableOwnerDue ? (
+          <label className="mt-1 flex items-center gap-1.5 text-[11px] text-ink3">
+            {labels.ownerLabel}
+            <input
+              type="text"
+              defaultValue={owner ?? ''}
+              onBlur={(e) => saveOwnerDue({ owner: e.target.value })}
+              disabled={pending}
+              aria-label={`${labels.ownerLabel}: ${title}`}
+              className="min-h-11 w-full max-w-[10rem] rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[11px] text-sk-ink outline-none disabled:opacity-50 sm:min-h-0"
+            />
+          </label>
+        ) : (
+          owner && <span className="mt-0.5 block text-[11px] text-ink3">{labels.ownerLabel}: {owner}</span>
         )}
       </span>
-      <span role="status" className={`rounded-[6px] px-2 py-1 text-[9px] font-[650] uppercase leading-none ${statusClass}`}>{statusText}</span>
 
-      {/* Editable in both modes, unless finalized (D1) — §13: the note is
-          multiline — this was an <input>, which forced a week's meeting
-          notes onto one line. */}
-      <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
-        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.noteKicker}</span>
-        <textarea
-          defaultValue={item.weekly_note ?? ''}
-          rows={2}
-          onBlur={(e) => saveNote(e.target.value)}
-          disabled={pending || finalized}
-          aria-label={labels.noteKicker}
-          placeholder={labels.note}
-          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-50"
-        />
-      </span>
+      {/* Status: read-only badge + the dropdown that changes it, together */}
+      <span role="status" className={`rounded-[6px] px-2 py-1 text-[9px] font-[650] uppercase leading-none ${statusClass}`}>{statusText}</span>
       <span className="flex basis-full flex-wrap items-center gap-2 sm:basis-auto">
         <label className="flex items-center gap-1.5 text-[10px] text-sk-muted">
           {labels.statusLabel}
@@ -320,6 +350,60 @@ function ReviewItemRow({ row, index, labels, finalized }: ReviewItemRowProps) {
           </select>
         </label>
       </span>
+
+      {/* Latest note. Editable in both modes — §13: the note is multiline,
+          this was an <input>, which forced a week's meeting notes onto one
+          line. Locked only by `finalized`, never by `present`. */}
+      <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
+        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.noteKicker}</span>
+        <textarea
+          defaultValue={item.weekly_note ?? ''}
+          rows={2}
+          onBlur={(e) => saveNote(e.target.value)}
+          disabled={pending || finalized}
+          aria-label={labels.noteKicker}
+          placeholder={labels.note}
+          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-50"
+        />
+      </span>
+
+      {/* Next step (D2) — mirrors the note field exactly: same styling, same
+          onBlur save, same both-modes editability, only the column differs. */}
+      <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
+        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.nextStepKicker}</span>
+        <textarea
+          defaultValue={item.next_step ?? ''}
+          rows={2}
+          onBlur={(e) => saveNextStep(e.target.value)}
+          disabled={pending || finalized}
+          aria-label={labels.nextStepKicker}
+          placeholder={labels.nextStepPh}
+          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-50"
+        />
+      </span>
+
+      {/* Due — last, per the required order. Sunday-mode input or read-only
+          text; hidden entirely when read-only and empty, same as before. */}
+      {(editableOwnerDue || due) && (
+        <span className="basis-full sm:basis-auto">
+          {editableOwnerDue ? (
+            <label className="flex items-center gap-1.5 text-[11px] text-ink3">
+              {labels.dueLabel}
+              <input
+                type="date"
+                defaultValue={due ?? ''}
+                onBlur={(e) => saveOwnerDue({ due: e.target.value })}
+                disabled={pending}
+                aria-label={`${labels.dueLabel}: ${title}`}
+                className="min-h-11 rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[11px] text-sk-ink outline-none disabled:opacity-50 sm:min-h-0"
+              />
+            </label>
+          ) : (
+            <span className="text-[11px] text-ink3">{labels.dueLabel}: <bdi>{due}</bdi></span>
+          )}
+        </span>
+      )}
+
       {/* §19: surface the real failure, not a generic string. */}
       {failed && <span role="alert" className="basis-full text-[10px] text-coral">{failed}</span>}
     </li>

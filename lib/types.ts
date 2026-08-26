@@ -439,6 +439,9 @@ export interface WeeklyReviewItem {
   subtopic: string | null;
   status_snapshot: string;
   weekly_note: string | null;
+  /** D2: the item's own "what happens next" line, distinct from weekly_note
+   *  (what happened) — added by 0016_weekly_finalize.sql. */
+  next_step: string | null;
   sequence: number;
   carried_from: string | null;
 }

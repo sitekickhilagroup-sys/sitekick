@@ -16,7 +16,8 @@ const mk = (id: string, status: string, stage: string | null = null) =>
 describe('buildReviewItems', () => {
   const prior: WeeklyReviewItem[] = [{
     id: 'i1', weekly_review_id: 'r1', task_id: 't1', project_id: 'p1',
-    subtopic: 'Planning', status_snapshot: 'open', weekly_note: 'chase CE', sequence: 1, carried_from: null,
+    subtopic: 'Planning', status_snapshot: 'open', weekly_note: 'chase CE', next_step: 'confirm signature',
+    sequence: 1, carried_from: null,
   }];
   // A task completed since the last review belongs in *this* review, shown as
   // completed — and it keeps last week's note. The note used to be discarded
@@ -27,6 +28,14 @@ describe('buildReviewItems', () => {
       task_id: 't1', carried_from: 'i1', weekly_note: 'chase CE',
       status_snapshot: 'done', subtopic: 'Planning',
     });
+  });
+
+  // D2: next_step gets the exact same carry-forward treatment as
+  // weekly_note, for the same reason — last week's planned next step is the
+  // context this week's meeting runs on, not something a carry should drop.
+  it('carries next_step forward the same way it carries weekly_note', () => {
+    const out = buildReviewItems({ openTasks: [mk('t1', 'open')], doneSinceTasks: [], priorItems: prior, stageLabels: new Map() });
+    expect(out[0]).toMatchObject({ task_id: 't1', next_step: 'confirm signature' });
   });
 
   // Spec §6: completed work stays in the review where it was completed. Prior
@@ -53,7 +62,9 @@ describe('buildReviewItems', () => {
   it('appends new open tasks after carried ones', () => {
     const out = buildReviewItems({ openTasks: [mk('t2', 'open', 'sk')], doneSinceTasks: [], priorItems: prior, stageLabels: new Map([['sk', 'Plan Check']]) });
     expect(out.map((i) => i.task_id)).toEqual(['t1', 't2']);
-    expect(out[1]).toMatchObject({ subtopic: 'Plan Check', carried_from: null, sequence: 2 });
+    // A brand-new item (no prior row) gets a null next_step, never the
+    // sibling carried item's — buildReviewItems must not cross-contaminate.
+    expect(out[1]).toMatchObject({ subtopic: 'Plan Check', carried_from: null, sequence: 2, next_step: null });
   });
 
   // A7: syncTaskIntoOpenReview (app/actions/weekly.ts) calls buildReviewItems
@@ -68,7 +79,7 @@ describe('buildReviewItems', () => {
     });
     expect(out).toEqual([{
       task_id: 't7', project_id: 'p1', subtopic: 'Plan Check', status_snapshot: 'open',
-      weekly_note: null, sequence: 1, carried_from: null,
+      weekly_note: null, next_step: null, sequence: 1, carried_from: null,
     }]);
   });
 

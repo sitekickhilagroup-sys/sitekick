@@ -105,6 +105,12 @@ export default async function WeeklyPage() {
               // real value comes from review.finalized_at, which only the
               // client component has after ReviewBoard passes `review` down).
               finalizedBadge: t('weekly.finalized_badge'),
+              // D2: Next step field + Owner/Due inline editing.
+              nextStepKicker: t('weekly.next_step_kicker'),
+              nextStepPh: t('weekly.next_step_ph'),
+              // Reuses the same "Due" label /work already shows for this
+              // column, rather than a second weekly-only translation of it.
+              dueLabel: t('work.col_due'),
             }} />
           );
         })()

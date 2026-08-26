@@ -132,21 +132,26 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
 
   // Notes survive re-preparing. A draft now carries the previous review's note
   // forward, but a note already saved against *this* review is newer, so it
-  // wins over the carried one before the upsert overwrites anything.
+  // wins over the carried one before the upsert overwrites anything. Same
+  // rule for next_step (D2) — re-running prepare mid-week to pick up a newly
+  // added task must not clobber a next_step someone already typed this week.
   const { data: existingItemsData, error: existingItemsError } = await admin
     .from('weekly_review_items')
-    .select('task_id,weekly_note')
+    .select('task_id,weekly_note,next_step')
     .eq('weekly_review_id', reviewId);
   if (existingItemsError) return { error: existingItemsError.message };
   const existingNotes = new Map<string, string>();
-  for (const row of (existingItemsData ?? []) as { task_id: string; weekly_note: string | null }[]) {
+  const existingNextSteps = new Map<string, string>();
+  for (const row of (existingItemsData ?? []) as { task_id: string; weekly_note: string | null; next_step: string | null }[]) {
     if (row.weekly_note) existingNotes.set(row.task_id, row.weekly_note);
+    if (row.next_step) existingNextSteps.set(row.task_id, row.next_step);
   }
 
   const items = drafts.map((d) => ({
     ...d,
     weekly_review_id: reviewId,
     weekly_note: existingNotes.get(d.task_id) ?? d.weekly_note,
+    next_step: existingNextSteps.get(d.task_id) ?? d.next_step,
   }));
 
   const { error: upsertError } = await admin
@@ -280,6 +285,7 @@ export async function syncTaskIntoOpenReview(admin: SupabaseClient, taskId: stri
     subtopic: draft.subtopic,
     status_snapshot: draft.status_snapshot,
     weekly_note: draft.weekly_note,
+    next_step: draft.next_step,
     sequence,
     carried_from: draft.carried_from,
   }, { onConflict: 'weekly_review_id,task_id', ignoreDuplicates: true });
@@ -288,16 +294,17 @@ export async function syncTaskIntoOpenReview(admin: SupabaseClient, taskId: stri
 
 /**
  * D1: the server-side half of Finalize's lock. The client disables item
- * inputs once a review is 'final', but note and status/snapshot are each
- * their own Server Action, callable directly by a signed-in browser with
- * any itemId — a disabled <input> is a UI nicety, not a guarantee. Looked
- * up fresh from the item's own weekly_review_id on every call, never
- * trusted from a client-supplied flag. Returns the item row itself (not
- * just a boolean) so callers that need task_id or the current field values
- * don't have to re-query it.
+ * inputs once a review is 'final', but note/next_step, owner/due and
+ * status/snapshot are each their own Server Action, callable directly by a
+ * signed-in browser with any itemId — a disabled <input> is a UI nicety,
+ * not a guarantee. Looked up fresh from the item's own weekly_review_id on
+ * every call, never trusted from a client-supplied flag. Returns the item
+ * row itself (not just a boolean) so callers that need task_id or the
+ * current field values don't have to re-query it.
  *
- * Scope: this gates weekly_review_items writes (note, status_snapshot) —
- * the checklist's "item inputs disabled" for a finalized review. Sub-topic
+ * Scope: this gates weekly_review_items writes (note, next_step,
+ * status_snapshot) and the owner/due edit that rides along with them — the
+ * checklist's "item inputs disabled" for a finalized review. Sub-topic
  * context (weekly_review_subtopics, saveSubtopicContext) and
  * attachRecording stay ungated deliberately: neither is a per-item input,
  * and both are already documented as staying live regardless of
@@ -321,21 +328,66 @@ async function loadEditableReviewItem(
   return { ok: true, item: row };
 }
 
-// D1: the note field is an "item input" too, so it locks the same way
-// status/snapshot do — see loadEditableReviewItem.
-export async function saveItemNote(itemId: string, note: string): Promise<ActionResult> {
+// D2: now also accepts next_step, rather than a parallel action — each
+// field saves independently on its own textarea's onBlur, so a patch only
+// ever carries the one key that just blurred and the two can never clobber
+// each other. Gated the same way status/snapshot are (D1) — see
+// loadEditableReviewItem.
+export async function saveItemNote(itemId: string, patch: { weekly_note?: string; next_step?: string }): Promise<ActionResult> {
   const user = await requireUser();
   const admin = supabaseAdmin();
   const gate = await loadEditableReviewItem(admin, itemId);
   if ('error' in gate) return gate;
-  const weekly_note = note.trim() || null;
-  const { error } = await admin.from('weekly_review_items').update({ weekly_note }).eq('id', itemId);
+
+  const update: Record<string, string | null> = {};
+  if ('weekly_note' in patch) update.weekly_note = (patch.weekly_note ?? '').trim() || null;
+  if ('next_step' in patch) update.next_step = (patch.next_step ?? '').trim() || null;
+  if (Object.keys(update).length === 0) return { ok: true };
+
+  const { error } = await admin.from('weekly_review_items').update(update).eq('id', itemId);
   if (error) return { error: error.message };
   await logActivity(admin, {
     entity_type: 'weekly_review_item', entity_id: itemId, actor: user.email ?? user.id,
-    action: 'note', after: { weekly_note },
+    action: 'next_step' in patch ? 'next_step' : 'note', after: update,
   });
   revalidatePath('/weekly');
+  return { ok: true };
+}
+
+const OWNER_DUE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * D2: Owner + Due edited inline from the review, Sunday-mode only (see
+ * `editableOwnerDue` in review-board.tsx for why). Both live on the
+ * canonical task — the same columns task-editor.tsx's "Edit details" form
+ * writes, not on the review item — so this is a real task mutation and gets
+ * applyWorkVerb's audited snapshot-before/update/logActivity pattern, never
+ * a bare .update() the way a review-only field would.
+ */
+export async function saveItemOwnerDue(itemId: string, patch: { owner?: string; due?: string }): Promise<ActionResult> {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const gate = await loadEditableReviewItem(admin, itemId);
+  if ('error' in gate) return gate;
+  const taskId = gate.item.task_id;
+
+  const clean: Record<string, string | null> = {};
+  if ('owner' in patch) clean.owner = (patch.owner ?? '').trim() || null;
+  if ('due' in patch) {
+    const due = (patch.due ?? '').trim();
+    if (due && !OWNER_DUE_DATE_RE.test(due)) return { error: 'invalid date' };
+    clean.due = due || null;
+  }
+  if (Object.keys(clean).length === 0) return { ok: true };
+
+  const { data: before } = await admin.from('tasks').select('*').eq('id', taskId).maybeSingle();
+  const { error } = await admin.from('tasks').update({ ...clean, last_touched: laToday() }).eq('id', taskId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id,
+    action: 'weekly:owner_due', before, after: clean,
+  });
+  revalidatePath('/weekly'); revalidatePath('/'); revalidatePath('/work'); revalidatePath('/projects/[id]', 'page');
   return { ok: true };
 }
 
@@ -419,10 +471,10 @@ export async function setItemSnapshot(itemId: string, snapshot: SnapshotState): 
   const admin = supabaseAdmin();
   const actor = user.email ?? user.id;
 
-  // D1: reuses the same finalized-review gate note/status share — and since
-  // it already has to fetch the item to check the review's status, that
-  // row's task_id/status_snapshot replace the two-column select this used
-  // to run on its own.
+  // D1: reuses the same finalized-review gate note/next_step/status share —
+  // and since it already has to fetch the item to check the review's
+  // status, that row's task_id/status_snapshot replace the two-column
+  // select this used to run on its own.
   const gate = await loadEditableReviewItem(admin, itemId);
   if ('error' in gate) return gate;
   const itemRow = gate.item;
