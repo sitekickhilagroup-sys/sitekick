@@ -6,7 +6,7 @@ import { FinancialHeader } from '@/components/chrome/financial-header';
 import { PaymentSummary } from '@/components/invoices/payment-summary';
 import { FilterBar } from '@/components/invoices/filter-bar';
 import { StatusChain } from '@/components/invoices/status-chain';
-import { LinkEditor } from '@/components/invoices/link-editor';
+import { LinkEditor, type LinkEditorOptions } from '@/components/invoices/link-editor';
 import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -118,6 +118,45 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     { key: 'invoices', label: t('invoices.tab_invoices') },
     { key: 'payment_summary', label: t('invoices.tab_payment_summary') },
   ];
+
+  // E2: the full invoice editor's Vendor/Project/Entity choices — built once
+  // from the same vendors/projects/invoices this page already loaded above,
+  // never a second round trip. Entities are reused as-is by FilterBar below.
+  const entityOptions = [...new Set(invoices.map((i) => i.entity).filter((e): e is string => !!e))].sort();
+  const editorOptions: LinkEditorOptions = {
+    vendors: vendors
+      .map((v) => ({ id: v.id, name: canonicalByKey.get(vKey(v.name)) ?? canon(v.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    projects: [...projects].sort((a, b) => a.name.localeCompare(b.name)),
+    entities: entityOptions,
+  };
+  const editorLabels = {
+    edit: t('invoices.edit_links'),
+    save: t('common.save'),
+    invoice: t('invoices.open_invoice'),
+    receipt: t('invoices.open_receipt'),
+    transfer: t('invoices.transfer'),
+    cancel: t('common.cancel'),
+    error: t('common.error_save'),
+    status: t('common.status'),
+    paidDate: t('invoices.paid_date'),
+    notes: t('invoices.notes'),
+    vendor: t('common.vendor'),
+    invoiceNo: t('invoices.invoice_no'),
+    project: t('common.project'),
+    general: t('common.general'),
+    entity: t('invoices.entity'),
+    receivedDate: t('invoices.received'),
+    description: t('tasks.description'),
+    amount: t('common.amount'),
+    recorded: t('work.recorded'),
+    undo: t('work.undo'),
+    confirmPaidDate: t('invoices.confirm_paid_date'),
+    keepDate: t('invoices.keep_date'),
+    clearDate: t('invoices.clear_date'),
+    paidDateRequired: t('invoices.paid_date_required'),
+    invalidAmount: t('invoices.invalid_amount'),
+  };
 
   return (
     <>
@@ -238,7 +277,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
       <FilterBar
         options={{
           projects: [...projects.map((p) => p.name), t('common.general')].sort(),
-          entities: [...new Set(invoices.map((i) => i.entity).filter((e): e is string => !!e))].sort(),
+          entities: entityOptions,
           vendors: [...new Set(vendors.map((v) => canonicalByKey.get(vKey(v.name)) ?? canon(v.name)))].sort(),
           statuses: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
         }}
@@ -311,24 +350,23 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                     )}
                     <LinkEditor
                       invoiceId={inv.id}
+                      vendorId={inv.vendor_id}
+                      invoiceNo={inv.number}
+                      projectId={inv.project_id}
+                      entity={inv.entity}
+                      receivedDate={inv.received_date}
+                      description={inv.budget_line}
+                      amountUsd={Number(inv.amount_usd)}
                       status={inv.status as InvoiceStatus}
                       paidDate={inv.paid_date}
                       invoiceUrl={inv.invoice_url}
                       receiptUrl={inv.receipt_url}
+                      transferUrl={inv.transfer_confirmation_url}
                       notes={inv.notes ?? null}
                       statusLabels={statusLabels}
+                      options={editorOptions}
                       context={[vDisplay(inv.vendor_id) || null, inv.number].filter(Boolean).join(' ')}
-                      labels={{
-                        edit: t('invoices.edit_links'),
-                        save: t('common.save'),
-                        invoice: t('invoices.open_invoice'),
-                        receipt: t('invoices.open_receipt'),
-                        cancel: t('common.cancel'),
-                        error: t('common.error_save'),
-                        status: t('common.status'),
-                        paidDate: t('invoices.paid_date'),
-                        notes: t('invoices.notes'),
-                      }}
+                      labels={editorLabels}
                     />
                   </span>
                 </td>

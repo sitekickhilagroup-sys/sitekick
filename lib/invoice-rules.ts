@@ -1,0 +1,143 @@
+// Pure write-shaping + validation for the invoice editor (E2/E3). Kept out of
+// app/actions/invoices.ts (a 'use server' file, which can only export async
+// functions) so this logic is unit-testable without a database or an
+// authenticated request — same reason lib/task-details.ts exists.
+
+import { DATE_RE } from './task-details.ts';
+import type { Invoice } from './types.ts';
+
+// The full set of columns the invoice editor (E2) is allowed to touch. Two
+// entries are deliberately NOT 1:1 with the column name: `invoice_no` and
+// `description` are the UI-facing names QA and the editor use (matching the
+// table's own "Description" header, which already renders `budget_line` —
+// see page.tsx and lib/import/tracker.ts, which maps an import row's
+// "description" the same way), because `invoices` has no `invoice_no` or
+// `description` column — only `number` and `budget_line`. Every other key
+// matches its column name exactly.
+export const INVOICE_PATCH_KEYS = [
+  'vendor_id', 'invoice_no', 'project_id', 'entity', 'received_date',
+  'description', 'amount_usd', 'status', 'paid_date',
+  'invoice_url', 'receipt_url', 'transfer_confirmation_url', 'notes',
+] as const;
+
+type InvoicePatchKey = (typeof INVOICE_PATCH_KEYS)[number];
+
+/** InvoicePatch key -> the actual `invoices` column it writes. */
+const COLUMN_MAP: Record<InvoicePatchKey, string> = {
+  vendor_id: 'vendor_id', invoice_no: 'number', project_id: 'project_id',
+  entity: 'entity', received_date: 'received_date', description: 'budget_line',
+  amount_usd: 'amount_usd', status: 'status', paid_date: 'paid_date',
+  invoice_url: 'invoice_url', receipt_url: 'receipt_url',
+  transfer_confirmation_url: 'transfer_confirmation_url', notes: 'notes',
+};
+
+/** Real `invoices` columns updateInvoice can write — also what
+ *  undoInvoiceEdit whitelists when restoring a before_json snapshot. */
+export const INVOICE_ROW_COLUMNS = Object.values(COLUMN_MAP);
+
+// receipt_url and transfer_confirmation_url are additions beyond the brief's
+// literal InvoicePatch (which listed invoice_url and transfer_confirmation_url
+// but omitted receipt_url): E2 Step 2 keeps "the existing status/paid/links/
+// notes block" — plural "links" — which has always included the receipt URL
+// alongside the invoice URL (see the pre-existing updateInvoiceDetails this
+// replaces), and transfer_confirmation_url already renders as a link on every
+// row with no way to ever set it. Folding both into the one whitelisted patch
+// keeps the editor's save a single audited write instead of splitting one
+// user action across two server calls with two undo ids.
+export interface InvoicePatch {
+  vendor_id?: string | null; invoice_no?: string | null; project_id?: string | null;
+  entity?: string | null; received_date?: string | null; description?: string | null;
+  amount_usd?: number; status?: Invoice['status']; paid_date?: string | null;
+  invoice_url?: string | null; receipt_url?: string | null;
+  transfer_confirmation_url?: string | null; notes?: string | null;
+}
+
+const STATUSES: Invoice['status'][] = ['received', 'for_rowan_approval', 'approved', 'paid', 'on_hold'];
+
+/**
+ * Shape + cross-field rules for a proposed invoice patch. Pure — takes only
+ * the previous status/paid_date (everything the paid-date rule needs) plus
+ * the patch, and returns ok or a single error. Does not touch the database;
+ * FK existence for vendor_id/project_id is left to the DB's own foreign keys
+ * (surfaced as a real update error), the same way an invalid id has always
+ * behaved on this table.
+ */
+export function validateInvoicePatch(
+  prev: Pick<Invoice, 'status' | 'paid_date'>,
+  patch: InvoicePatch,
+): { ok: true } | { error: string } {
+  if (patch.status !== undefined && !STATUSES.includes(patch.status)) return { error: 'invalid status' };
+
+  const okUrl = (u: string | null | undefined) => u == null || u === '' || /^https:\/\//.test(u);
+  if (!okUrl(patch.invoice_url) || !okUrl(patch.receipt_url) || !okUrl(patch.transfer_confirmation_url)) {
+    return { error: 'links must start with https://' };
+  }
+
+  const okDate = (d: string | null | undefined) => d == null || d === '' || DATE_RE.test(d);
+  if (!okDate(patch.received_date) || !okDate(patch.paid_date)) return { error: 'invalid date' };
+
+  if (patch.amount_usd !== undefined && !(Number.isFinite(patch.amount_usd) && patch.amount_usd >= 0)) {
+    return { error: 'invalid amount' };
+  }
+
+  // Effective status/paid_date this patch would leave the row in — a patch
+  // that never mentions a key leaves that key at its previous value.
+  const effectiveStatus = patch.status ?? prev.status;
+  const touchesPaidDate = 'paid_date' in patch;
+  const effectivePaidDate = touchesPaidDate ? patch.paid_date : prev.paid_date;
+
+  // Paid always requires a date — whether this patch is the one moving the
+  // row to paid, or the row was already paid and this patch (re-sending the
+  // same status, or none at all) tries to blank the date out from under it.
+  if (effectiveStatus === 'paid' && !effectivePaidDate) {
+    return { error: 'paid date required' };
+  }
+
+  // Leaving paid must say what happens to the recorded date: the patch has
+  // to carry `paid_date` explicitly (kept as the old value, or nulled) —
+  // silently dropping it here would leave a stale paid_date sitting under a
+  // non-paid status.
+  if (prev.status === 'paid' && patch.status !== undefined && patch.status !== 'paid' && !touchesPaidDate) {
+    return { error: 'confirm paid date' };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Parses the editor's amount text field into a number of dollars with at
+ * most 2 decimal places — the shape amount_usd (`numeric(12,2)`) requires.
+ * Rejects anything else (a third decimal digit, scientific notation, stray
+ * text) outright rather than silently rounding a mistyped cent away, and
+ * never multiplies/divides by 100 to get there — a single string -> number
+ * parse of an already-validated ≤2-decimal literal is exact for every
+ * realistic invoice amount (doubles represent every integer, and so every
+ * whole cent, up to 2^53), so no cent can drift through a float round trip.
+ */
+export function parseAmountInput(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Whitelists a submitted patch down to INVOICE_PATCH_KEYS, maps each key to
+ * its real column (see COLUMN_MAP), null-coalesces every present key, and
+ * trims free-text fields (clearing a text field sends null, never drops the
+ * column). Doesn't validate — call validateInvoicePatch first; this only
+ * shapes an already-accepted patch into the row updateInvoice writes.
+ */
+export function buildInvoiceRow(patch: InvoicePatch): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  for (const key of INVOICE_PATCH_KEYS) {
+    if (!(key in patch)) continue;
+    const value = (patch as Record<string, unknown>)[key];
+    const column = COLUMN_MAP[key];
+    // status is the one string column that is never free text and must never
+    // collapse to null — every other string field is user-typed and treats
+    // "" the same as "not set".
+    row[column] = typeof value === 'string' && key !== 'status' ? (value.trim() || null) : (value ?? null);
+  }
+  return row;
+}

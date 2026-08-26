@@ -34,7 +34,10 @@ const PROCESS_IMPACTS: NonNullable<Task['process_impact']>[] = [
   'external_gate', 'not_blocking', 'verify',
 ];
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Exported for lib/invoice-rules.ts (E2/E3's date-shape check) — one regex
+// for "is this a YYYY-MM-DD string", not a second copy that can drift from
+// this one the way app/actions/invoices.ts's old inline copy already had.
+export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Whitelists a submitted patch down to exactly the columns updateTaskDetails
