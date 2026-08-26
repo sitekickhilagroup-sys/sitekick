@@ -1,12 +1,63 @@
 // Weekly review helpers. nextMonday is date arithmetic on an LA-calendar
 // string (not a new "today" source — callers pass laToday()).
-import type { Task, WeeklyReviewItem } from './types.ts';
+import type { Task, TaskStatus, WeeklyReviewItem } from './types.ts';
 
 export function nextMonday(today: string): string {
   const d = new Date(today + 'T12:00:00Z');
   const add = (8 - d.getUTCDay()) % 7;
   d.setUTCDate(d.getUTCDate() + add);
   return d.toISOString().slice(0, 10);
+}
+
+/** Shared by prepareCurrentReview (bulk, over every project_stages row) and
+ *  syncTaskIntoOpenReview (app/actions/weekly.ts; same query, one task at a
+ *  time) so the first-stage_key-wins tie-break can't drift between the two
+ *  call sites. */
+export function buildStageLabelMap(rows: { stage_key: string; label: string }[]): Map<string, string> {
+  const stageLabels = new Map<string, string>();
+  for (const row of rows) {
+    if (!stageLabels.has(row.stage_key)) stageLabels.set(row.stage_key, row.label);
+  }
+  return stageLabels;
+}
+
+/**
+ * A task under no project (General) always belongs on the review; a task
+ * under a project explicitly marked inactive (0007_alignment.sql) never
+ * does — "a closed project kept turning up in the Monday agenda" is exactly
+ * the bug that column was added to fix (see prepareCurrentReview). Shared
+ * between prepare's bulk per-task filter and syncTaskIntoOpenReview's
+ * single-project lookup so the rule has one definition, not two that can
+ * drift — a second, forgotten copy is exactly how the sync path shipped
+ * without this gate the first time.
+ */
+export function isProjectEligibleForReview(projectId: string | null, projectActive: boolean | null): boolean {
+  return !projectId || projectActive !== false;
+}
+
+export interface ReviewEligibilityInput {
+  status: TaskStatus;
+  projectId: string | null;
+  /** The task's project's `active` flag, or null when it has no project /
+   *  the project's active-ness is unknown. */
+  projectActive: boolean | null;
+  /** Whether this task already has a row on the target review. */
+  alreadyOnReview: boolean;
+}
+
+/**
+ * The full guard syncTaskIntoOpenReview applies before inserting a task
+ * onto the currently-open review: only an 'open' task, only on an active
+ * project (or none), and only once. Factored into one pure function so
+ * every condition — and their combinations — is directly testable; the
+ * missing projects.active leg of this is exactly what let a task under an
+ * inactive project resurrect onto a live review before a code review
+ * caught it.
+ */
+export function isTaskEligibleForOpenReview(input: ReviewEligibilityInput): boolean {
+  if (input.alreadyOnReview) return false;
+  if (input.status !== 'open') return false;
+  return isProjectEligibleForReview(input.projectId, input.projectActive);
 }
 
 export interface ReviewItemDraft {

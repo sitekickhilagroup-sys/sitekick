@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildReviewItems, nextMonday } from './weekly.ts';
+import {
+  buildReviewItems, buildStageLabelMap, isProjectEligibleForReview, isTaskEligibleForOpenReview, nextMonday,
+} from './weekly.ts';
 import type { Task, WeeklyReviewItem } from './types.ts';
 
 describe('nextMonday', () => {
@@ -76,5 +78,73 @@ describe('buildReviewItems', () => {
       stageLabels: new Map(),
     });
     expect(out[0]).toMatchObject({ subtopic: null });
+  });
+});
+
+describe('buildStageLabelMap', () => {
+  it('builds one entry per distinct stage_key', () => {
+    const map = buildStageLabelMap([{ stage_key: 'a', label: 'A' }, { stage_key: 'b', label: 'B' }]);
+    expect([...map.entries()]).toEqual([['a', 'A'], ['b', 'B']]);
+  });
+
+  it('first occurrence of a duplicated stage_key wins', () => {
+    const map = buildStageLabelMap([{ stage_key: 'sk', label: 'First' }, { stage_key: 'sk', label: 'Second' }]);
+    expect(map.get('sk')).toBe('First');
+  });
+
+  it('an empty input produces an empty map', () => {
+    expect(buildStageLabelMap([]).size).toBe(0);
+  });
+});
+
+// A7 code review: syncTaskIntoOpenReview shipped without this gate, so a
+// task under an inactive project (e.g. Flicker, 0007) could resurrect onto
+// a live review — exactly the bug prepareCurrentReview's onActiveProject
+// was written to fix. isProjectEligibleForReview is now the one definition
+// both call sites share.
+describe('isProjectEligibleForReview', () => {
+  it('a task with no project is always eligible, whatever "active" is passed', () => {
+    expect(isProjectEligibleForReview(null, false)).toBe(true);
+    expect(isProjectEligibleForReview(null, true)).toBe(true);
+    expect(isProjectEligibleForReview(null, null)).toBe(true);
+  });
+
+  it('a task under an active project is eligible', () => {
+    expect(isProjectEligibleForReview('p1', true)).toBe(true);
+  });
+
+  it('a task under a project explicitly marked inactive is not eligible', () => {
+    expect(isProjectEligibleForReview('p1', false)).toBe(false);
+  });
+
+  it('a task under a project whose active-ness is unknown (null) defaults to eligible', () => {
+    expect(isProjectEligibleForReview('p1', null)).toBe(true);
+  });
+});
+
+describe('isTaskEligibleForOpenReview', () => {
+  const base = { status: 'open' as const, projectId: 'p1', projectActive: true, alreadyOnReview: false };
+
+  it('an open task on an active project is eligible', () => {
+    expect(isTaskEligibleForOpenReview(base)).toBe(true);
+  });
+
+  it('a non-open task is never eligible, regardless of its project', () => {
+    expect(isTaskEligibleForOpenReview({ ...base, status: 'done' })).toBe(false);
+    expect(isTaskEligibleForOpenReview({ ...base, status: 'dropped' })).toBe(false);
+    expect(isTaskEligibleForOpenReview({ ...base, status: 'merged' })).toBe(false);
+  });
+
+  it('an open task under an inactive project is not eligible', () => {
+    expect(isTaskEligibleForOpenReview({ ...base, projectActive: false })).toBe(false);
+  });
+
+  it('an open task already on the review is not eligible again', () => {
+    expect(isTaskEligibleForOpenReview({ ...base, alreadyOnReview: true })).toBe(false);
+  });
+
+  it('an open task with no project at all (General) is eligible even when projectActive reads false or null', () => {
+    expect(isTaskEligibleForOpenReview({ ...base, projectId: null, projectActive: false })).toBe(true);
+    expect(isTaskEligibleForOpenReview({ ...base, projectId: null, projectActive: null })).toBe(true);
   });
 });

@@ -5,7 +5,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
-import { buildReviewItems, nextMonday } from '@/lib/weekly';
+import {
+  buildReviewItems, buildStageLabelMap, isProjectEligibleForReview, isTaskEligibleForOpenReview, nextMonday,
+} from '@/lib/weekly';
 import { verbToPatch } from '@/lib/work-verbs';
 import { logActivity } from '@/lib/state-writer';
 import type { Task, TaskPriority, WeeklyReviewItem } from '@/lib/types';
@@ -79,22 +81,20 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
   // Monday agenda. Unassigned tasks (General) still come through.
   const { data: projectRows, error: projectsError } = await admin.from('projects').select('id,active');
   if (projectsError) return { error: projectsError.message };
-  const inactive = new Set(
-    ((projectRows ?? []) as { id: string; active: boolean | null }[])
-      .filter((p) => p.active === false)
-      .map((p) => p.id),
+  const activeByProject = new Map(
+    ((projectRows ?? []) as { id: string; active: boolean | null }[]).map((p) => [p.id, p.active]),
   );
-  const onActiveProject = (t: Task) => !t.project_id || !inactive.has(t.project_id);
+  // Same predicate syncTaskIntoOpenReview uses, so the active-project rule
+  // can't drift between the two paths that populate this table.
+  const onActiveProject = (t: Task) =>
+    isProjectEligibleForReview(t.project_id, t.project_id ? (activeByProject.get(t.project_id) ?? null) : null);
 
   const openTasks = ((openTasksData ?? []) as Task[]).filter(onActiveProject);
   doneSinceTasks = doneSinceTasks.filter(onActiveProject);
 
   const { data: stagesData, error: stagesError } = await admin.from('project_stages').select('stage_key,label');
   if (stagesError) return { error: stagesError.message };
-  const stageLabels = new Map<string, string>();
-  for (const row of (stagesData ?? []) as { stage_key: string; label: string }[]) {
-    if (!stageLabels.has(row.stage_key)) stageLabels.set(row.stage_key, row.label);
-  }
+  const stageLabels = buildStageLabelMap((stagesData ?? []) as { stage_key: string; label: string }[]);
 
   const drafts = buildReviewItems({ openTasks, doneSinceTasks, priorItems, stageLabels });
 
@@ -157,14 +157,21 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
  * every write that can put a task into the "should be on this week's review"
  * state: applyWorkVerb, updateTaskDetails, and AddAction's create.
  *
- * Scoped to `status='preparing'` specifically, not "anything not final".
- * 'saved' means the meeting already ran against a fixed list — a task
- * touched afterwards should not silently reappear on a review someone
- * already presented from. D1 later adds a 'final' status for an explicit
- * Finalize action; `.eq('status', 'preparing')` already excludes it (and
- * 'saved') with no change needed here — a negated match like
- * `.neq('status', 'final')` would instead let a 'saved' review keep
- * growing, which is the behavior this scoping deliberately avoids.
+ * Targets whichever review is still open for editing today — status
+ * 'preparing' or 'saved'. Save is a checkpoint, not a lock
+ * (review-board.tsx: "stays enabled after saving so a review can be saved
+ * again during the meeting"), so a review someone has already saved once
+ * must still accept a task edited afterward, or this reintroduces a
+ * narrower version of the exact bug A7 exists to fix. D1 later adds a
+ * 'final' status for an explicit, UI-locking Finalize action; deliberately
+ * *not* listing 'final' here is what keeps a finalized review frozen with
+ * nobody needing to revisit this code.
+ *
+ * Also applies the same projects.active gate prepareCurrentReview enforces
+ * (isProjectEligibleForReview / 0007) — without it, a leftover open task
+ * under an inactive project (e.g. Flicker) would resurrect onto a live
+ * review the moment someone touched it, reintroducing the exact bug
+ * `onActiveProject` was written to fix.
  *
  * Idempotent: the existing-item check short-circuits the common case (a
  * task's 2nd, 3rd, ... write this week), and the upsert's onConflict +
@@ -173,52 +180,59 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
  *
  * Never throws away failures: it throws through the real ones (a failed
  * insert) so a wrapping try/catch at the call site can log them, per the
- * project's silent-failure rule — but a review that's missing or already
- * has the item are legitimate no-ops, not failures.
+ * project's silent-failure rule — but a review that's missing, or already
+ * has the item, or an ineligible task are legitimate no-ops, not failures.
  */
 export async function syncTaskIntoOpenReview(admin: SupabaseClient, taskId: string): Promise<void> {
   const { data: review } = await admin
     .from('weekly_reviews')
     .select('id')
-    .eq('status', 'preparing')
+    .in('status', ['preparing', 'saved'])
     .order('meeting_date', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (!review) return;
 
-  const { data: existing } = await admin
+  // One read covers "already on the review" and "next sequence" from the
+  // same consistent snapshot, rather than two separate reads that could
+  // each observe a different concurrent state.
+  const { data: itemsData } = await admin
     .from('weekly_review_items')
-    .select('id')
-    .eq('weekly_review_id', review.id)
-    .eq('task_id', taskId)
-    .maybeSingle();
-  if (existing) return;
+    .select('task_id,sequence')
+    .eq('weekly_review_id', review.id);
+  const items = (itemsData ?? []) as { task_id: string; sequence: number }[];
+  if (items.some((i) => i.task_id === taskId)) return;
 
   const { data: taskRow } = await admin.from('tasks').select('*').eq('id', taskId).maybeSingle();
   const task = taskRow as Task | null;
-  if (!task || task.status !== 'open') return;
+  if (!task) return;
+
+  let projectActive: boolean | null = null;
+  if (task.project_id) {
+    const { data: projectRow } = await admin.from('projects').select('active').eq('id', task.project_id).maybeSingle();
+    projectActive = (projectRow as { active: boolean | null } | null)?.active ?? null;
+  }
+  // alreadyOnReview is always false here — the items.some() check above
+  // already returned on that case, so this only re-checks status + project.
+  if (!isTaskEligibleForOpenReview({
+    status: task.status, projectId: task.project_id, projectActive, alreadyOnReview: false,
+  })) return;
 
   // Same stage_key -> label lookup prepareCurrentReview builds, unfiltered
   // across projects — matching it exactly (rather than scoping to this
   // task's own project) is what keeps a synced subtopic identical to what
   // the next real prepare would compute for the same task.
   const { data: stagesData } = await admin.from('project_stages').select('stage_key,label');
-  const stageLabels = new Map<string, string>();
-  for (const row of (stagesData ?? []) as { stage_key: string; label: string }[]) {
-    if (!stageLabels.has(row.stage_key)) stageLabels.set(row.stage_key, row.label);
-  }
+  const stageLabels = buildStageLabelMap((stagesData ?? []) as { stage_key: string; label: string }[]);
 
   // Append after whatever is already on the review — never renumber
   // existing rows, since sequence also drives which project/sub-topic group
-  // renders first on the page.
-  const { data: lastItem } = await admin
-    .from('weekly_review_items')
-    .select('sequence')
-    .eq('weekly_review_id', review.id)
-    .order('sequence', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const sequence = ((lastItem as { sequence: number } | null)?.sequence ?? 0) + 1;
+  // renders first on the page. (Read-max-then-increment, same as any other
+  // read-modify-write in this codebase; two concurrent syncs of two
+  // different tasks on the same review could in principle land on the same
+  // number — cosmetic tie in display order, not a duplicate row, since
+  // task_id uniqueness is what the upsert's onConflict actually guards.)
+  const sequence = items.reduce((max, i) => Math.max(max, i.sequence), 0) + 1;
 
   // Reuse prepare's own shaping instead of re-deriving it: calling
   // buildReviewItems with this one task as the sole open task, and nothing
