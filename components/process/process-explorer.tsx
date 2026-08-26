@@ -7,18 +7,16 @@ import { selectConnectedTasks } from '@/lib/process';
 import { ScenarioBox } from '@/components/process/scenario-box';
 import { SavedChip } from '@/components/work/saved-chip';
 import { VerbMenu } from '@/components/work/verb-menu';
-import type { ProjectSubstage, ProjectSubstageStatus, SubstageTemplate, Workstream } from '@/lib/types';
+import type { TaskEditorOptions } from '@/components/work/task-editor';
+import type { ProjectSubstage, ProjectSubstageStatus, SubstageTemplate, Task, Workstream } from '@/lib/types';
 
-export interface ExplorerTask {
-  id: string;
-  title: string;
-  owner: string | null;
-  waiting_for: string | null;
-  priority: string;
-  /** 0015 — which sub-stage this task is classified under, if any. Drives
-   *  which sub-stage's panel a task shows in (mine vs. phase-level fallback). */
-  substage_template_id: string | null;
-}
+// C4: was a narrow { id, title, owner, waiting_for, priority,
+// substage_template_id } projection — TaskEditor (A6) needs the rest of a
+// task's persisted fields (due, project_id, workstream_id, process_impact,
+// …) to seed its form, and getProjectProcess's tasksQ already selects('*'),
+// so the fix is to stop re-narrowing what's already fully loaded rather than
+// growing a second field list that can drift from lib/types.ts's Task.
+export type ExplorerTask = Task;
 
 export interface ExplorerPhase {
   key: string;
@@ -40,6 +38,10 @@ interface Props {
   projectId: string;
   phases: ExplorerPhase[];
   labels: Record<string, string>;
+  /** C4: Project/Phase(filter)/Sub-stage/Workstream/Impact choices for the
+   *  mini-task rows' "Edit details…" item — same option-list shape My Work
+   *  builds once and threads down to VerbMenu (see task-editor.tsx). */
+  editorOptions: TaskEditorOptions;
 }
 
 // Noa's full sub-stage lifecycle (spec §ג), in her order.
@@ -76,7 +78,7 @@ const DOT: Record<ProjectSubstageStatus, string> = {
 // green = current focus, amber = active in parallel) above a master-detail
 // split — numbered sub-stage list on one side, the selected sub-stage's
 // status, explanation and connected actions on the other.
-export function ProcessExplorer({ projectId, phases, labels }: Props) {
+export function ProcessExplorer({ projectId, phases, labels, editorOptions }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -252,6 +254,7 @@ export function ProcessExplorer({ projectId, phases, labels }: Props) {
             instance={selectedSub.instance}
             tasks={selected.tasks}
             labels={labels}
+            editorOptions={editorOptions}
           />
         )}
       </div>
@@ -284,12 +287,13 @@ function ActivateRow({ projectId, template, labels }: { projectId: string; templ
 
 // Her "SELECTED SUB-STAGE" panel: status chip, name, short explanation,
 // the full lifecycle as tappable pills, then the phase's connected actions.
-function SubstageDetail({ projectId, template, instance, tasks, labels }: {
+function SubstageDetail({ projectId, template, instance, tasks, labels, editorOptions }: {
   projectId: string;
   template: SubstageTemplate;
   instance: ProjectSubstage | null;
   tasks: ExplorerTask[];
   labels: Record<string, string>;
+  editorOptions: TaskEditorOptions;
 }) {
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState(false);
@@ -423,7 +427,7 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
           <>
             <ul className="mt-2 space-y-2">
               {shown.map((task) => (
-                <ConnectedTaskRow key={task.id} task={task} labels={labels} />
+                <ConnectedTaskRow key={task.id} task={task} labels={labels} editorOptions={editorOptions} />
               ))}
             </ul>
             {/* Step 1: the rest of `mine` beyond the 4-item cap is one click
@@ -446,7 +450,7 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
             <p className="mt-2 text-[10px] leading-[1.4] text-sk-muted">{labels.phaseLevel}</p>
             <ul className="mt-2 space-y-2">
               {phaseOnly.map((task) => (
-                <ConnectedTaskRow key={task.id} task={task} labels={labels} />
+                <ConnectedTaskRow key={task.id} task={task} labels={labels} editorOptions={editorOptions} />
               ))}
             </ul>
           </>
@@ -465,7 +469,7 @@ function SubstageDetail({ projectId, template, instance, tasks, labels }: {
 // inline Update, blocking chip at the end. Extracted so Step 1's two lists
 // (sub-stage-scoped vs. phase-level fallback) render identical rows instead
 // of forking the markup.
-function ConnectedTaskRow({ task, labels }: { task: ExplorerTask; labels: Record<string, string> }) {
+function ConnectedTaskRow({ task, labels, editorOptions }: { task: ExplorerTask; labels: Record<string, string>; editorOptions: TaskEditorOptions }) {
   return (
     <li className="grid grid-cols-[27px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-[10px] border border-line bg-card p-3">
       <span aria-hidden="true" className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs ${
@@ -491,7 +495,7 @@ function ConnectedTaskRow({ task, labels }: { task: ExplorerTask; labels: Record
           >
             {labels.openRegister}
           </a>
-          <VerbMenu taskId={task.id} labels={labels} />
+          <VerbMenu taskId={task.id} task={task} editorOptions={editorOptions} labels={labels} />
         </div>
       </div>
       {task.priority === 'critical' && (

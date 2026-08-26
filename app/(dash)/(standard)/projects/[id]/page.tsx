@@ -9,6 +9,8 @@ import { ProcessExplorer, type ExplorerPhase } from '@/components/process/proces
 import { SummaryEditor } from '@/components/process/summary-editor';
 import { PhaseSwitcher } from '@/components/process/phase-switcher';
 import { InferButton } from '@/components/process/infer-button';
+import type { TaskEditorOptions } from '@/components/work/task-editor';
+import type { Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -20,18 +22,37 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
   const t = getT(locale);
 
   const supabase = await supabaseServer();
-  const [{ project, phaseViews, tasksByPhase, unactivatedByPhase }, projectsQ] = await Promise.all([
+  const [{ project, phaseViews, tasksByPhase, unactivatedByPhase, templates, workstreams }, projectsQ] = await Promise.all([
     getProjectProcess(supabase, id),
     supabase.from('projects').select('*').order('name'),
   ]);
   if (!project) notFound();
+  const allProjectRows = (projectsQ.data ?? []) as Project[];
   // Inactive projects (spec §ו: Flicker) stay out of the switcher pills, but a
   // direct link to their process page still works — keep the current one visible.
-  const allProjects = ((projectsQ.data ?? []) as { id: string; name: string; active?: boolean }[])
-    .filter((p) => p.active !== false || p.id === id);
+  const allProjects = allProjectRows.filter((p) => p.active !== false || p.id === id);
 
   const currentPhaseView = phaseViews.find((v) => v.phase.key === project.current_phase_key);
   const activeWorkstreams = phaseViews.flatMap((v) => v.workstreams).filter((w) => w.status === 'active');
+
+  // C4: TaskEditor's option lists (A6). projectsQ (above) already selects
+  // every project — same shape My Work's own editorProjectOptions uses,
+  // unfiltered by `active` so an already-open task that belongs to an
+  // inactive project still shows its real name instead of vanishing behind
+  // a filtered-out select. phases/substages/workstreams ride
+  // getProjectProcess's own query batch (lib/process.ts already fetches the
+  // full sub-stage template library and — as of C4 — every project's
+  // workstreams for exactly this reason) — none of the four lists costs an
+  // extra round trip.
+  const editorOptions: TaskEditorOptions = {
+    projects: allProjectRows.map((p) => ({
+      id: p.id, name: p.name, current_phase_key: p.current_phase_key, active: p.active !== false,
+    })),
+    phases: phaseViews.map((v) => ({ key: v.phase.key, label: v.phase.label })),
+    substages: templates.slice().sort((a, b) => a.position - b.position)
+      .map((s) => ({ id: s.id, phase_key: s.phase_key, name: s.name })),
+    workstreams: workstreams.map((w) => ({ id: w.id, project_id: w.project_id, name: w.name })),
+  };
 
   const labels: Record<string, string> = {
     parallel: t('process.parallel'),
@@ -101,7 +122,29 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     not_applicable: t('work.verb.not_applicable'),
     note: t('work.verb.note'),
     ...verbResultLabels(t),
+    'msg.details': t('work.msg.details'),
     update: t('work.update'),
+    // TaskEditor (A6, wired here by C4): editDetails is VerbMenu's 8th item;
+    // project/general/phase/substage/workstream/impact + the six impact
+    // values are the form's field labels and select options — the exact set
+    // work/page.tsx's own rowLabels already carries, reused verbatim so the
+    // two pages can't drift on wording. phase reuses review.f_phase (already
+    // "Phase"/"שלב") rather than adding a duplicate key.
+    editDetails: t('work.edit_details'),
+    project: t('common.project'),
+    general: t('common.general'),
+    waitingOn: t('tasks.waiting'),
+    colDue: t('work.col_due'),
+    phase: t('review.f_phase'),
+    substage: t('work.substage'),
+    workstream: t('work.workstream'),
+    impact: t('work.impact'),
+    'impact.primary_blocker': t('work.why.impact.primary_blocker'),
+    'impact.workstream_blocker': t('work.why.impact.workstream_blocker'),
+    'impact.future_gate': t('work.why.impact.future_gate'),
+    'impact.external_gate': t('work.why.impact.external_gate'),
+    'impact.not_blocking': t('work.why.impact.not_blocking'),
+    'impact.verify': t('work.why.impact.verify'),
     title: t('rel.title'),
     add: t('rel.add'),
     pickTask: t('rel.pick_task'),
@@ -225,6 +268,7 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
       <ProcessExplorer
         projectId={project.id}
         labels={{ ...rowLabels, ...labels }}
+        editorOptions={editorOptions}
         phases={phaseViews.map((view, idx): ExplorerPhase => ({
           key: view.phase.key,
           label: view.phase.label,
@@ -234,13 +278,10 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
           substages: view.substages,
           unactivated: unactivatedByPhase.get(view.phase.key) ?? [],
           workstreams: view.workstreams,
-          tasks: (tasksByPhase.get(view.phase.key) ?? []).map((task) => ({
-            id: task.id, title: task.title, owner: task.owner,
-            waiting_for: task.waiting_for, priority: task.priority,
-            // Already on every row from getProjectProcess's tasksQ (select('*'))
-            // — no new query needed to scope this panel to its own sub-stage.
-            substage_template_id: task.substage_template_id,
-          })),
+          // ExplorerTask is the full Task (C4) — already on every row from
+          // getProjectProcess's tasksQ (select('*')), so no re-projection
+          // and no new query needed to feed TaskEditor's form.
+          tasks: tasksByPhase.get(view.phase.key) ?? [],
         }))}
       />
 

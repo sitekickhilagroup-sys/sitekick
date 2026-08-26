@@ -154,23 +154,39 @@ export async function getProjectProcess(supabase: SupabaseClient, projectId: str
     supabase.from('phases').select('*'),
     supabase.from('substage_templates').select('*'),
     supabase.from('project_substages').select('*').eq('project_id', projectId),
-    supabase.from('workstreams').select('*').eq('project_id', projectId),
+    // C4: unscoped (every project, not just this one) — the process page's
+    // TaskEditor option lists (A6) need every project's workstreams, the
+    // same shape My Work already supplies, so the editor's own project_id
+    // filter (task-editor.tsx) re-narrows correctly if a task is reassigned
+    // to a different project. phaseViews below still only ever sees THIS
+    // project's rows (filtered locally, right below) so the phase rail's
+    // parallel-workstream chips and the "current position" derivation stay
+    // exactly as scoped as before.
+    supabase.from('workstreams').select('*'),
     supabase.from('tasks').select('*').eq('project_id', projectId).eq('status', 'open').order('created_at'),
     supabase.from('stage_phase_map').select('*'),
   ]);
   const project = projectQ.data as Project;
   const templates = (templatesQ.data ?? []) as SubstageTemplate[];
   const instances = (instancesQ.data ?? []) as ProjectSubstage[];
+  const workstreams = (workstreamsQ.data ?? []) as Workstream[];
   const phaseViews = groupProcess({
     phases: (phasesQ.data ?? []) as Phase[],
     templates,
     instances,
-    workstreams: (workstreamsQ.data ?? []) as Workstream[],
+    workstreams: workstreams.filter((w) => w.project_id === projectId),
   });
   const unactivatedByPhase = unactivatedConditionals(templates, instances);
   const stageMap = (mapQ.data ?? []) as { stage_key: string; phase_key: PhaseKey }[];
   const { tasksByPhase, unmappedTasks } = bucketTasksByPhase(
     (tasksQ.data ?? []) as Task[], templates, stageMap, project.current_phase_key ?? null,
   );
-  return { project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase };
+  return {
+    project, phaseViews, tasksByPhase, unmappedTasks, unactivatedByPhase,
+    // C4: the full sub-stage template library and every project's
+    // workstreams — both already fetched above for this project's own view,
+    // exposed as-is so the process page's TaskEditor option lists cost no
+    // additional round trip to tables this function already queries.
+    templates, workstreams,
+  };
 }
