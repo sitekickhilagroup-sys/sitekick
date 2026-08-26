@@ -385,12 +385,14 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                 <span aria-hidden="true" className="text-ink3 rtl:-scale-x-100">→</span>
               </Link>
             ))}
-            <Link href="/invoices" className="inline-flex min-h-11 items-center px-1 text-xs text-mist hover:underline sm:min-h-0">
-              {t('work.open_invoices')} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
-            </Link>
-            <Link href="/invoices?tab=payment_summary" className="inline-flex min-h-11 items-center px-1 text-xs text-mist hover:underline sm:min-h-0">
-              {t('work.open_payment_summary')} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
-            </Link>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Link href="/invoices" className="inline-flex min-h-11 items-center px-1 text-xs text-mist hover:underline sm:min-h-0">
+                {t('work.open_invoices')} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
+              </Link>
+              <Link href="/invoices?tab=payment_summary" className="inline-flex min-h-11 items-center px-1 text-xs text-mist hover:underline sm:min-h-0">
+                {t('work.open_payment_summary')} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
+              </Link>
+            </div>
           </div>
         </details>
       )}
