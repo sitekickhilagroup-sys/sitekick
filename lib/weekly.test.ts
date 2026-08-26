@@ -64,12 +64,38 @@ describe('buildReviewItems', () => {
   // Spec §6: completed work stays in the review where it was completed. Prior
   // items used to be copied regardless of status, so a finished task followed
   // the team forward every week indefinitely.
-  it('does not carry a task that was already completed in an earlier review', () => {
+  //
+  // D6: this is also the "dropped does not carry" case, not just "done" —
+  // the carry condition below (`status !== 'open' && !closedThisWeek`) does
+  // not special-case either string, so a status_snapshot of 'dropped' hits
+  // this exact same branch. Deliberately not duplicating this test with
+  // 'dropped' swapped in: same code path, same assertion, no extra coverage.
+  it('does not carry a task that was already completed (or dropped) in an earlier review', () => {
     const done: WeeklyReviewItem[] = [{
       ...prior[0], id: 'i9', task_id: 't9', status_snapshot: 'done', weekly_note: 'signed',
     }];
     const out = buildReviewItems({ openTasks: [], doneSinceTasks: [], priorItems: done, stageLabels: new Map() });
     expect(out).toEqual([]);
+  });
+
+  // D6: "open / waiting / blocked / carried DO carry" is about the ITEM
+  // surviving into next week, not its snapshot label surviving verbatim.
+  // status_snapshot is only a fallback for when the task itself is not found
+  // in openTasks/doneSinceTasks (see `task?.status ?? prior.status_snapshot`
+  // above) — a still-open task always carries, and always comes back reset
+  // to 'open' for fresh assessment, regardless of what last week's meeting
+  // called it. Locking this protects the precedence itself: if task.status
+  // ever stopped winning over prior.status_snapshot, a 'waiting' or
+  // 'blocked' item would silently stop carrying (they are not the literal
+  // string 'open', and closedThisWeek does not apply to them either).
+  it('waiting, blocked, carried and no_update items carry forward when their task is still open — reset to open, note intact', () => {
+    for (const snapshot of ['waiting', 'blocked', 'carried', 'no_update']) {
+      const out = buildReviewItems({
+        openTasks: [mk('t1', 'open')], doneSinceTasks: [],
+        priorItems: [{ ...prior[0], status_snapshot: snapshot }], stageLabels: new Map(),
+      });
+      expect(out).toMatchObject([{ task_id: 't1', status_snapshot: 'open', weekly_note: 'chase CE', carried_from: 'i1' }]);
+    }
   });
 
   // The other half of §6: the new-item loop iterated openTasks only, so a task
