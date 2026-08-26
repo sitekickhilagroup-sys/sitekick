@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { buildInvoiceRow, INVOICE_PATCH_KEYS, parseAmountInput, validateInvoicePatch } from './invoice-rules.ts';
+import {
+  buildInvoiceRow, canonVendorName, findExactInvoiceDuplicate, findSuspectedInvoiceDuplicate,
+  INVOICE_PATCH_KEYS, parseAmountInput, validateInvoicePatch, vendorGroupKey,
+  type InvoiceDupCandidate,
+} from './invoice-rules.ts';
 
 test('paid requires a payment date', () => {
   expect(validateInvoicePatch({ status: 'received', paid_date: null }, { status: 'paid' }))
@@ -170,5 +174,78 @@ describe('buildInvoiceRow', () => {
 
   test('INVOICE_PATCH_KEYS has no duplicates and matches the InvoicePatch shape used above', () => {
     expect(new Set(INVOICE_PATCH_KEYS).size).toBe(INVOICE_PATCH_KEYS.length);
+  });
+});
+
+describe('canonVendorName / vendorGroupKey', () => {
+  test('trims and collapses internal whitespace', () => {
+    expect(canonVendorName('  Acme   Corp  ')).toBe('Acme Corp');
+  });
+
+  test('vendorGroupKey case-folds on top of canonVendorName', () => {
+    expect(vendorGroupKey('Acme Corp')).toBe('acme corp');
+    expect(vendorGroupKey('  ACME   corp ')).toBe('acme corp');
+  });
+
+  test('does not strip punctuation or corporate suffixes — unlike lib/import/tracker.ts vendorKey', () => {
+    // The documented real-world case (tracker.ts's own comment): these two
+    // strings are "the same vendor" to a human, but this weaker,
+    // page.tsx-matching key deliberately still tells them apart.
+    expect(vendorGroupKey('Thang Le & Associates')).not.toBe(vendorGroupKey('Thang le& Associates'));
+  });
+});
+
+describe('findExactInvoiceDuplicate / findSuspectedInvoiceDuplicate', () => {
+  const existingInvoice = (overrides: Partial<InvoiceDupCandidate> = {}): InvoiceDupCandidate => ({
+    id: 'existing-1', vendorName: 'Acme Corp', invoiceNo: 'INV-1', amountUsd: 100,
+    receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1',
+    ...overrides,
+  });
+
+  test('exact key matches vendor case/whitespace-insensitively plus the exact invoice number', () => {
+    const hit = findExactInvoiceDuplicate(
+      { vendorName: '  acme   corp ', invoiceNo: 'inv-1', amountUsd: 999, receivedDate: null, entity: null, projectId: null },
+      [existingInvoice()],
+    );
+    expect(hit?.id).toBe('existing-1');
+  });
+
+  test('exact key: a different invoice number on the same vendor is not a match', () => {
+    expect(findExactInvoiceDuplicate(
+      { vendorName: 'Acme Corp', invoiceNo: 'INV-2', amountUsd: 100, receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1' },
+      [existingInvoice()],
+    )).toBeNull();
+  });
+
+  test('exact key: never matches when the new invoice has no number, regardless of the candidate', () => {
+    expect(findExactInvoiceDuplicate(
+      { vendorName: 'Acme Corp', invoiceNo: null, amountUsd: 100, receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1' },
+      [existingInvoice({ invoiceNo: null })],
+    )).toBeNull();
+  });
+
+  test('suspicion key matches vendor + amount + received date + entity + project, ignoring invoice number entirely', () => {
+    const hit = findSuspectedInvoiceDuplicate(
+      { vendorName: 'Acme Corp', invoiceNo: 'a-totally-different-number', amountUsd: 100, receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1' },
+      [existingInvoice()],
+    );
+    expect(hit?.id).toBe('existing-1');
+  });
+
+  test('suspicion key: any one differing field breaks the match', () => {
+    const base = { vendorName: 'Acme Corp', invoiceNo: null, amountUsd: 100, receivedDate: '2026-03-01', entity: 'LLC A', projectId: 'p1' };
+    const existing = [existingInvoice()];
+    expect(findSuspectedInvoiceDuplicate({ ...base, amountUsd: 100.01 }, existing)).toBeNull();
+    expect(findSuspectedInvoiceDuplicate({ ...base, receivedDate: '2026-03-02' }, existing)).toBeNull();
+    expect(findSuspectedInvoiceDuplicate({ ...base, entity: 'LLC B' }, existing)).toBeNull();
+    expect(findSuspectedInvoiceDuplicate({ ...base, projectId: 'p2' }, existing)).toBeNull();
+  });
+
+  test('suspicion key: null entity/project and a blank entity string are the same "unset"', () => {
+    const hit = findSuspectedInvoiceDuplicate(
+      { vendorName: 'Acme Corp', invoiceNo: null, amountUsd: 100, receivedDate: '2026-03-01', entity: '  ', projectId: null },
+      [existingInvoice({ entity: null, projectId: null })],
+    );
+    expect(hit?.id).toBe('existing-1');
   });
 });

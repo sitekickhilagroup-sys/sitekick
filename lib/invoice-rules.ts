@@ -71,6 +71,10 @@ export const INVOICE_ERRORS = {
   notFound: 'invoice not found',
   emptyPatch: 'empty patch',
   nothingToUndo: 'nothing to undo',
+  // E4 — createInvoice's own trust boundary: a vendor is how the duplicate
+  // check identifies "the same invoice" at all, so unlike an edit (where
+  // every field is optional) a create cannot go in without one.
+  vendorRequired: 'vendor required',
 } as const;
 
 // Inspects the number's own decimal-string form rather than `n * 100` —
@@ -178,4 +182,81 @@ export function buildInvoiceRow(patch: InvoicePatch): Record<string, unknown> {
     row[column] = typeof value === 'string' && key !== 'status' ? (value.trim() || null) : (value ?? null);
   }
   return row;
+}
+
+// ── E4: Add Invoice duplicate detection ─────────────────────────────────
+//
+// Vendor-name hygiene: trim + collapse whitespace, case-fold for grouping —
+// the exact canonicalization app/(dash)/(focused)/invoices/page.tsx already
+// applies to every vendor name it displays or groups by (its own `canon`/
+// `vKey`). Lifted here, unchanged, so the page and createInvoice's duplicate
+// check share one definition of "the same vendor" instead of two that could
+// drift apart. This is deliberately NOT lib/import/tracker.ts's own
+// `vendorKey` — that one additionally strips punctuation and corporate
+// suffixes ("PREMISE" ~ "PREMISE LLC") for import-time vendor-row merging, a
+// stronger and different notion of identity than this task's spec calls for.
+export function canonVendorName(s: string): string {
+  return s.trim().replace(/\s+/g, ' ');
+}
+
+export function vendorGroupKey(s: string): string {
+  return canonVendorName(s).toLowerCase();
+}
+
+/** One existing invoice, reduced to exactly what the duplicate check
+ *  compares — vendorName already resolved to its canonical display name (the
+ *  same one vDisplay() in page.tsx would show), not a raw vendor_id. */
+export interface InvoiceDupCandidate {
+  id: string;
+  vendorName: string;
+  invoiceNo: string | null;
+  amountUsd: number;
+  receivedDate: string | null;
+  entity: string | null;
+  projectId: string | null;
+}
+
+export type InvoiceDupQuery = Omit<InvoiceDupCandidate, 'id'>;
+
+/** Exact-duplicate key: normalized vendor + invoice number. Only defined
+ *  when an invoice number is present — a numberless invoice can never match
+ *  on this key (only ever the softer suspicion key below), which is exactly
+ *  how "missing invoice_no" ends up requiring needs_verification instead of
+ *  being refused outright. */
+function exactDupKey(vendorName: string, invoiceNo: string | null): string | null {
+  const no = invoiceNo?.trim();
+  return no ? `${vendorGroupKey(vendorName)}::${no.toLowerCase()}` : null;
+}
+
+/** Suspicion key: vendor + amount + received date + entity + project — the
+ *  project's own audit's second, softer identity for "probably the same
+ *  invoice" when there is no invoice number to key on exactly (or the number
+ *  alone didn't match). Every field folds into one string key so the caller
+ *  never needs its own field-by-field comparison. */
+function suspicionDupKey(q: Pick<InvoiceDupCandidate, 'vendorName' | 'amountUsd' | 'receivedDate' | 'entity' | 'projectId'>): string {
+  return [
+    vendorGroupKey(q.vendorName),
+    q.amountUsd.toFixed(2),
+    q.receivedDate ?? '',
+    q.entity ? q.entity.trim().toLowerCase() : '',
+    q.projectId ?? '',
+  ].join('::');
+}
+
+/** The exact-key path: a hit here means createInvoice must refuse to insert
+ *  by default and point the caller at the row it found (spec: never a silent
+ *  second row for something that's actually the same invoice). */
+export function findExactInvoiceDuplicate(query: InvoiceDupQuery, candidates: InvoiceDupCandidate[]): InvoiceDupCandidate | null {
+  const key = exactDupKey(query.vendorName, query.invoiceNo);
+  if (!key) return null;
+  return candidates.find((c) => exactDupKey(c.vendorName, c.invoiceNo) === key) ?? null;
+}
+
+/** The suspicion-key path: a hit here never blocks the insert — the caller
+ *  still creates the row, just flagged needs_verification so a human
+ *  adjudicates instead of the system silently assuming either "same" or
+ *  "different". */
+export function findSuspectedInvoiceDuplicate(query: InvoiceDupQuery, candidates: InvoiceDupCandidate[]): InvoiceDupCandidate | null {
+  const key = suspicionDupKey(query);
+  return candidates.find((c) => suspicionDupKey(c) === key) ?? null;
 }

@@ -228,3 +228,12 @@ body {
 .sk-page .font-mono {
   font-family: "Geist Mono", var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
+
+/* E4 Add-Invoice's "Same invoice — open it": points at the existing row via
+   the URL hash (id="invoice-<id>" on its <tr> in the invoices table) instead
+   of DOM/ref plumbing across components. :target does the highlight for
+   free — no JS timer to clean up, and it clears itself the moment the hash
+   next changes. */
+.sk-page tr:target {
+  background: var(--sage-soft);
+}

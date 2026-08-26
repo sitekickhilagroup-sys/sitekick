@@ -245,6 +245,11 @@ export interface Invoice {
   receipt_url: string | null;
   /** 0007: free-text field on the Update Invoice editor (spec §יב). */
   notes: string | null;
+  /** 0017 (E4) — set on insert when Add Invoice's duplicate check couldn't
+   *  rule out a match (or the invoice has no number at all); never
+   *  auto-resolved, only a human clears it. Not yet live — see migration
+   *  0017_invoice_verify.sql. */
+  needs_verification: boolean;
 }
 
 export interface Digest {

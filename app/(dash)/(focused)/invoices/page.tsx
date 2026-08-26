@@ -7,6 +7,7 @@ import { PaymentSummary } from '@/components/invoices/payment-summary';
 import { FilterBar } from '@/components/invoices/filter-bar';
 import { StatusChain } from '@/components/invoices/status-chain';
 import { LinkEditor, type LinkEditorOptions } from '@/components/invoices/link-editor';
+import { AddInvoice } from '@/components/invoices/add-invoice';
 import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -176,6 +177,38 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     errorSaveReason: t('invoices.error_save_reason'),
   };
 
+  // E4 — Add Invoice header button + duplicate-confirm dialog. Reuses the
+  // same vendor/project/entity options and money formatter already built
+  // above for LinkEditor/the table, not a second copy.
+  const addInvoiceLabels: Record<string, string> = {
+    addInvoice: t('invoices.add_invoice'),
+    vendor: t('common.vendor'),
+    invoiceNo: t('invoices.invoice_no'),
+    project: t('common.project'),
+    general: t('common.general'),
+    entity: t('invoices.entity'),
+    receivedDate: t('invoices.received'),
+    description: t('tasks.description'),
+    amount: t('common.amount'),
+    save: t('common.save'),
+    cancel: t('common.cancel'),
+    invalidAmount: t('invoices.invalid_amount'),
+    noNumberHint: t('invoices.no_number_hint'),
+    dupKicker: t('invoices.dup_kicker'),
+    dupTitle: t('invoices.dup_title'),
+    dupSub: t('invoices.dup_sub'),
+    dupSame: t('invoices.dup_same'),
+    dupNew: t('invoices.dup_new'),
+    back: t('common.cancel'),
+    recorded: t('invoices.recorded'),
+    created: t('invoices.created'),
+    createdVerify: t('invoices.created_verify'),
+    undo: t('work.undo'),
+    errorVendorRequired: t('invoices.error_vendor_required'),
+    errorInvalidDate: t('invoices.error_invalid_date'),
+    errorSaveReason: t('invoices.error_save_reason'),
+  };
+
   return (
     <>
       <FinancialHeader sourceLabel={t('invoices.open_total').replace('{n}', `⁨${invoices.length}⁩`)} />
@@ -224,20 +257,28 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
               {label}
             </Link>
           ))}
-          <details className="relative ms-auto">
-            <summary className="min-h-11 cursor-pointer list-none px-2 py-1.5 text-[10px] text-sk-muted hover:text-sk-ink sm:min-h-0">
-              {t('invoices.more_views')}
-            </summary>
-            <Link
-              href="/invoices?tab=david"
-              aria-current={tab === 'david' ? 'page' : undefined}
-              className={`absolute end-0 z-10 mt-1 block whitespace-nowrap rounded-[8px] border border-line bg-sk-surface px-3 py-2 text-[10px] shadow-card ${
-                tab === 'david' ? 'font-[650] text-sk-green' : 'text-sk-muted hover:text-sk-ink'
-              }`}
-            >
-              {t('invoices.tab_david')}
-            </Link>
-          </details>
+          <span className="ms-auto flex items-center gap-1.5">
+            {/* E4: header button, same row as the tabs rather than a third
+                grid column in the intro block above — that grid is a fixed
+                two-column [title | summary card] pair the spec anchors, and
+                this end-of-tabs-row slot is the low-risk place to add a new
+                primary action without touching it. */}
+            <AddInvoice options={editorOptions} money={moneyExact} labels={addInvoiceLabels} />
+            <details className="relative">
+              <summary className="min-h-11 cursor-pointer list-none px-2 py-1.5 text-[10px] text-sk-muted hover:text-sk-ink sm:min-h-0">
+                {t('invoices.more_views')}
+              </summary>
+              <Link
+                href="/invoices?tab=david"
+                aria-current={tab === 'david' ? 'page' : undefined}
+                className={`absolute end-0 z-10 mt-1 block whitespace-nowrap rounded-[8px] border border-line bg-sk-surface px-3 py-2 text-[10px] shadow-card ${
+                  tab === 'david' ? 'font-[650] text-sk-green' : 'text-sk-muted hover:text-sk-ink'
+                }`}
+              >
+                {t('invoices.tab_david')}
+              </Link>
+            </details>
+          </span>
         </div>
 
         {/* Additive: the aggregation renders above the tab-filtered rows so no
@@ -346,7 +387,10 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
               <tr><td colSpan={6} className="px-3 py-8 text-center text-ink3">{t('invoices.empty')}</td></tr>
             )}
             {rows.map((inv) => (
-              <tr key={inv.id}>
+              // id backs AddInvoice's "Same invoice — open it": the URL hash
+              // points here, and .sk-page tr:target (globals.css) does the
+              // highlight — no ref/state plumbing across components needed.
+              <tr key={inv.id} id={`invoice-${inv.id}`}>
                 <td className="px-3 py-2.5 align-top">
                   <span className="block font-[650] text-sk-ink">{vDisplay(inv.vendor_id)}</span>
                   {inv.number && <span className="block font-mono text-[10px] text-sk-muted">{t('invoices.number')} {inv.number}</span>}
@@ -404,13 +448,25 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                   <span className="block">{inv.received_date ?? inv.invoice_date ?? ''}</span>
                   {inv.paid_date && <span className="block text-[11px] text-ink3">{t('invoices.paid_date')} · {inv.paid_date}</span>}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2.5">
-                  <StatusChain
-                    invoiceId={inv.id}
-                    status={inv.status as InvoiceStatus}
-                    labels={statusLabels}
-                    advanceLabel={t('invoices.advance')}
-                  />
+                <td className="px-3 py-2.5">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <StatusChain
+                      invoiceId={inv.id}
+                      status={inv.status as InvoiceStatus}
+                      labels={statusLabels}
+                      advanceLabel={t('invoices.advance')}
+                    />
+                    {/* E4 Step 3: a suspected/unconfirmed duplicate (or an
+                        invoice added with no number) — flagged, never
+                        auto-resolved; Noa adjudicates. Reads as undefined
+                        (falsy) until migration 0017 actually runs, so this
+                        degrades to "no chip" rather than crashing. */}
+                    {inv.needs_verification && (
+                      <span className="whitespace-nowrap rounded-full bg-apricot-soft px-2 py-0.5 text-[11px] font-semibold text-apricot">
+                        {t('invoices.verify')}
+                      </span>
+                    )}
+                  </span>
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-end align-top font-mono text-[11px] tabular-nums text-sk-ink">
                   {moneyExact(Number(inv.amount_usd))}
