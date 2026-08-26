@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { verbResultLabels } from '@/lib/i18n/verb-labels';
 import { findDuplicatePairs } from '@/lib/dedup';
+import { isBlockingTask } from '@/lib/blockers';
 import { supabaseServer } from '@/lib/supabase/server';
 import { rankToday, scoreTask, type TodayRankContext } from '@/lib/priority';
 import { laToday } from '@/lib/date';
@@ -184,7 +185,14 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   // Spec §ז+§ט: Today shows a clear numeric rank plus "Why now" and "What
   // this unlocks" on every task — all derived from real records, no guesses.
-  const rankById = view === 'today' ? new Map(filtered.map((task, i) => [task.id, i + 1])) : null;
+  // Numbered from orderedGroups (the final rendered, post business-rank-sort
+  // order), not the pre-group `filtered` order: rankToday's fill step can
+  // place a project's 3rd pick after other projects' top-2s, which would
+  // otherwise print e.g. Blair 01, 02, 07 / San Marco 03, 04 reading down
+  // the page — a real number that no longer reads as a clean sequence.
+  const rankById = view === 'today'
+    ? new Map(orderedGroups.flatMap(([, list]) => list).map((task, i) => [task.id, i + 1]))
+    : null;
   const openIds = new Set(tasks.map((task) => task.id));
   const allRels = (relsQ.data ?? []) as Relationship[];
   const unlocksFor = (taskId: string): string[] =>
@@ -199,7 +207,10 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     // Impact (0013) opens the line when classified — the "documented reason"
     // the QA checklist wants for why this task outranks (or yields to) a sibling.
     if (task.process_impact) parts.push(t('work.why.impact.' + task.process_impact));
-    if (task.priority === 'critical') parts.push(t('work.blocking'));
+    // isBlockingTask, not raw priority — impact classification takes
+    // precedence over the legacy heuristic (0013_task_process_impact.sql),
+    // and this must agree with the row's own Blocking badge (work-table-row.tsx).
+    if (isBlockingTask(task)) parts.push(t('work.blocking'));
     if (task.due && task.due < today) parts.push(t('work.due.overdue'));
     else if (task.due === today) parts.push(t('work.due.now'));
     if ((task.follow_up_date && task.follow_up_date <= today) || (task.check_back_on && task.check_back_on <= today)) {

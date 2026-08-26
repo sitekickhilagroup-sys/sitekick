@@ -186,6 +186,18 @@ export function rankToday(tasks: Task[], ctx: TodayRankContext): Task[] {
     .sort((a, b) => a.manual_priority! - b.manual_priority!);
   const rest = eligible.filter((t) => t.manual_priority == null);
 
+  // No business ranks known at all (0015 not applied yet — today's actual
+  // production state) means every project would fall back to the same `?? 99`
+  // slot below, so the per-project walk order would really be whatever order
+  // rows happened to come back from the DB. Degrade to one flat impact/due
+  // weighted sort across every project instead of an arbitrary walk — still
+  // better than the pre-A5 behavior (plain scoreTask, no impact weight) and
+  // never silently drops a project's own blocker the way the walk could.
+  if (ctx.businessRankByProject.size === 0) {
+    const scored = [...rest].sort((a, b) => todayScore(b, ctx) - todayScore(a, ctx));
+    return [...manual, ...scored].slice(0, limit);
+  }
+
   const byProject = new Map<string, Task[]>();
   for (const t of rest) {
     if (!t.project_id) continue;

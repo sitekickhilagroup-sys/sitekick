@@ -238,3 +238,24 @@ test('today: overdue commitment may jump a non-primary sibling inside its projec
   const out = rankToday(tasks, { today: '2026-08-26', businessRankByProject: ranks });
   expect(out[0].id).toBe('late'); // the "documented reason" case
 });
+
+test('today: no business ranks known yet (0015 unapplied) falls back to plain impact/due score, not an arbitrary per-project walk', () => {
+  const tasks = [
+    mk({ id: 'admin', project_id: P.blair, process_impact: 'not_blocking' }),
+    mk({ id: 'b1', project_id: P.blair, process_impact: 'primary_blocker' }),
+    mk({ id: 's1', project_id: P.sanMarco, process_impact: 'workstream_blocker' }),
+  ];
+  const out = rankToday(tasks, { today: '2026-08-26', businessRankByProject: new Map() });
+  expect(out.map((t) => t.id)).toEqual(['b1', 's1', 'admin']);
+});
+
+test('today: a project with no business_rank sorts after every ranked project, not into an arbitrary slot', () => {
+  const tasks = [
+    // Deliberately listed before the ranked project's task, so a pass would
+    // only happen by sorting on rank — not by preserving input order.
+    mk({ id: 'u1', project_id: 'p5', process_impact: 'primary_blocker' }),
+    mk({ id: 'a1', project_id: P.altaMesa, process_impact: 'primary_blocker' }),
+  ];
+  const out = rankToday(tasks, { today: '2026-08-26', businessRankByProject: ranks });
+  expect(out.map((t) => t.id)).toEqual(['a1', 'u1']);
+});
