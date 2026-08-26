@@ -385,6 +385,7 @@
   "work.one_record": "One record can appear in several views without becoming several tasks.",
   "work.blocking_breakdown": "{tasks} blocking tasks · {blockers} live blockers",
   "work.open_invoices": "Open all invoices",
+  "work.open_payment_summary": "Open Payment Summary",
   "work.evidence": "Evidence",
   "work.relationship": "Relationship",
   "work.recommended": "Recommended next move",

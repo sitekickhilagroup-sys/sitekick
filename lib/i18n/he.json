@@ -385,6 +385,7 @@
   "work.one_record": "רשומה אחת יכולה להופיע בכמה תצוגות בלי להפוך לכמה משימות.",
   "work.blocking_breakdown": "{tasks} משימות חוסמות · {blockers} חסמים פעילים",
   "work.open_invoices": "לכל החשבוניות",
+  "work.open_payment_summary": "פתח Payment Summary",
   "work.evidence": "עדות",
   "work.relationship": "קשר",
   "work.recommended": "הצעד הבא המומלץ",
