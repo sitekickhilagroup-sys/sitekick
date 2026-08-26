@@ -383,6 +383,7 @@
   "work.dup_same": "אותה משימה — לא ליצור",
   "work.dup_new": "ליצור חדשה בכל זאת",
   "work.one_record": "רשומה אחת יכולה להופיע בכמה תצוגות בלי להפוך לכמה משימות.",
+  "work.blocking_breakdown": "{tasks} משימות חוסמות · {blockers} חסמים פעילים",
   "work.open_invoices": "לכל החשבוניות",
   "work.evidence": "עדות",
   "work.relationship": "קשר",

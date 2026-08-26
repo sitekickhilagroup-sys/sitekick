@@ -227,9 +227,12 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   };
 
   // Per-view counts + one-line meaning — her demo's tab anatomy.
-  const countOf = (v: WorkView) => (v === 'blocking'
-    ? filterView(tasks, v, today).length + blockers.length
-    : filterView(tasks, v, today).length);
+  const countOf = (v: WorkView) => filterView(tasks, v, today).length;
+  const blockingBreakdown = view === 'blocking'
+    ? t('work.blocking_breakdown')
+        .replace('{tasks}', String(countOf('blocking')))
+        .replace('{blockers}', String(blockers.length))
+    : null;
   const viewTabs: { key: WorkView; label: string; sub: string; count: number }[] = [
     { key: 'today', label: t('work.view.today'), sub: t('work.tab_sub.today'), count: countOf('today') },
     { key: 'blocking', label: t('work.view.blocking'), sub: t('work.tab_sub.blocking'), count: countOf('blocking') },
@@ -309,7 +312,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       {activeTab && (
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[10px] bg-sk-surface-soft px-4 py-2.5">
           <span className="text-[13px] font-[650] text-sk-ink">{activeTab.label}</span>
-          <span className="text-[11px] leading-[1.5] text-sk-muted">{activeTab.sub}</span>
+          <span className="text-[11px] leading-[1.5] text-sk-muted">{blockingBreakdown ?? activeTab.sub}</span>
           <span className="ms-auto text-[11px] leading-[1.5] text-sk-muted">{t('work.one_record')}</span>
         </div>
       )}
