@@ -10,6 +10,8 @@ import {
   INVOICE_ERRORS, INVOICE_ROW_COLUMNS, validateInvoicePatch, vendorKey,
   type InvoiceDupCandidate, type InvoicePatch,
 } from '@/lib/invoice-rules';
+import { parseWorkbook } from '@/lib/parse/xlsx';
+import { reconcile, reconcileKey, type InvoiceRowRef, type ReconcileReport } from '@/lib/reconcile';
 import type { Invoice, InvoiceStatus } from '@/lib/types';
 
 export type { InvoicePatch };
@@ -330,4 +332,191 @@ export async function getInvoiceHistory(invoiceId: string): Promise<{ entries: I
     changedKeys: diffChangedKeys(row.before_json, row.after_json),
   }));
   return { entries };
+}
+
+// ── E6: Source-vs-System reconciliation ──────────────────────────────────
+
+/** vendor_id -> canonical display name, collapsing punctuation/case/company-
+ *  suffix variants the same way page.tsx's own vDisplay does (and
+ *  createInvoice above does inline) — shared by the two functions below so
+ *  a reconciliation report and the write it can trigger can't quietly
+ *  resolve "the same vendor" two different ways. */
+function vendorNameResolver(vendors: { id: string; name: string }[]): (id: string | null) => string {
+  const canonicalByKey = new Map<string, string>();
+  for (const v of vendors) {
+    const k = vendorKey(v.name);
+    if (!canonicalByKey.has(k)) canonicalByKey.set(k, canonVendorName(v.name));
+  }
+  const nameById = new Map(vendors.map((v) => [v.id, canonicalByKey.get(vendorKey(v.name)) ?? canonVendorName(v.name)]));
+  return (id) => (id ? (nameById.get(id) ?? '') : '');
+}
+
+/**
+ * E6 — reconciliation upload. The import never snapshotted the source rows
+ * it wrote (lib/import/tracker.ts's applyInvoiceRows only ever upserts), so
+ * there is nothing stored to diff against: this re-parses the Excel fresh on
+ * every call and diffs it in memory via the pure reconcile() (lib/reconcile.ts).
+ *
+ * Deliberately NOT a call through /api/upload's own .xlsx branch: that route
+ * always calls ingestDocument + applyInvoiceRows as a side effect (storing a
+ * document row and writing/upserting invoices), and a reconciliation REPORT
+ * must never create or change a single row by itself — running it is
+ * supposed to be side-effect-free. This reads the uploaded buffer with the
+ * same parseWorkbook() /api/upload uses, and otherwise only SELECTs (never
+ * writes) before handing everything to reconcile().
+ */
+export async function parseReconciliationSource(
+  formData: FormData,
+): Promise<{ error: string } | { ok: true; report: ReconcileReport }> {
+  await requireUser();
+
+  const file = formData.get('file');
+  if (!(file instanceof File)) return { error: INVOICE_ERRORS.reconcileFileMissing };
+  if (!/\.(xlsx|xls)$/i.test(file.name)) return { error: INVOICE_ERRORS.reconcileBadFileType };
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  let parsed: ReturnType<typeof parseWorkbook>;
+  try {
+    parsed = parseWorkbook(buffer);
+  } catch {
+    // xlsx (SheetJS) throws on a buffer it can't read at all — a renamed
+    // non-Excel file, a corrupted download, etc. Caught here so this returns
+    // a message the user can act on instead of a raw unhandled-exception
+    // failure for what is, from the user's chair, just the wrong file.
+    return { error: INVOICE_ERRORS.reconcileParseFailed };
+  }
+  // findHeaderRow (lib/parse/xlsx.ts) only returns kind:'invoices' for a
+  // sheet whose header row actually has supplier+invoiceno+amount columns —
+  // anything else (a tasks tracker, or no recognizable sheet at all) must
+  // fail loudly here rather than quietly diff an empty source against the
+  // system and render what looks exactly like "no drift found".
+  if (parsed.kind !== 'invoices') return { error: INVOICE_ERRORS.reconcileNotInvoiceSheet };
+
+  const admin = supabaseAdmin();
+  // Read-only. Scoped to tab:'invoices' — the same population the Excel
+  // tracker imports into (applyInvoiceRows hard-codes tab: 'invoices') and
+  // Add Invoice's own duplicate check scopes to; 'david' is a separately-
+  // tracked sheet this flow never touches either way.
+  const [invoicesRes, vendorsRes] = await Promise.all([
+    admin.from('invoices').select('*').eq('tab', 'invoices'),
+    admin.from('vendors').select('id,name'),
+  ]);
+  if (invoicesRes.error) return { error: invoicesRes.error.message };
+  if (vendorsRes.error) return { error: vendorsRes.error.message };
+
+  const vendorName = vendorNameResolver((vendorsRes.data ?? []) as { id: string; name: string }[]);
+  const system = (invoicesRes.data ?? []) as Invoice[];
+  const report = reconcile(parsed.rows, system, vendorName);
+  return { ok: true as const, report };
+}
+
+/**
+ * The write behind "Flag Verify": sets needs_verification=true on one
+ * invoice, audited and undoable the same way as every other write in this
+ * file (logActivity -> undoId; undo restores from before_json). Never
+ * touches any other column, never deletes, never merges.
+ *
+ * needs_verification is deliberately NOT one of INVOICE_PATCH_KEYS
+ * (lib/invoice-rules.ts) — createInvoice above is the only other writer, and
+ * only at insert time (see Invoice['needs_verification']'s own doc comment
+ * in lib/types.ts: "never auto-resolved, only a human clears it") — so this
+ * is its own small audited write/undo pair rather than a detour through
+ * updateInvoice's general whitelist, which would also turn needs_verification
+ * into an editable field on every other invoice-editing surface, not just
+ * this one flag action.
+ */
+export async function flagInvoiceForVerification(invoiceId: string): Promise<{ error: string } | { ok: true; undoId: string | null }> {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const { data: before } = await admin.from('invoices').select('needs_verification').eq('id', invoiceId).maybeSingle();
+  if (!before) return { error: INVOICE_ERRORS.notFound };
+  if (before.needs_verification) return { ok: true as const, undoId: null }; // already flagged — nothing to write or undo
+
+  const { error } = await admin.from('invoices').update({ needs_verification: true }).eq('id', invoiceId);
+  if (error) return { error: error.message };
+  const undoId = await logActivity(admin, {
+    entity_type: 'invoice', entity_id: invoiceId, actor: user.email ?? user.id,
+    action: 'flag_verify', before, after: { needs_verification: true },
+  });
+  revalidatePath('/invoices');
+  return { ok: true as const, undoId };
+}
+
+/** Restores needs_verification from the snapshot flagInvoiceForVerification
+ *  took — scoped to just that one column, not the general INVOICE_ROW_COLUMNS
+ *  restore undoInvoiceEdit performs above, since needs_verification isn't
+ *  part of that whitelist either. */
+export async function undoFlagInvoiceForVerification(logId: string): Promise<{ error: string } | { ok: true }> {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const { data } = await admin.from('activity_log').select('*').eq('id', logId).maybeSingle();
+  const entry = data as { entity_type: string; entity_id: string; action: string; before_json: Record<string, unknown> | null } | null;
+  if (!entry?.before_json || entry.entity_type !== 'invoice' || entry.action !== 'flag_verify') {
+    return { error: INVOICE_ERRORS.nothingToUndo };
+  }
+  const restored = !!entry.before_json.needs_verification;
+  const { error } = await admin.from('invoices').update({ needs_verification: restored }).eq('id', entry.entity_id);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'invoice', entity_id: entry.entity_id, actor: user.email ?? user.id,
+    action: 'undo', after: { needs_verification: restored },
+  });
+  revalidatePath('/invoices');
+  return { ok: true as const };
+}
+
+export interface FlagReconciledRowResult { count: number; undoId: string | null }
+
+/**
+ * E6's entry point for "Flag Verify" as it is actually clicked — from a row
+ * in the reconciliation report, which is only ever an InvoiceRowRef
+ * (vendor/invoice_no/amount_usd/received_date — see lib/reconcile.ts), never
+ * an invoice id. That is deliberate on reconcile()'s side, not an oversight:
+ * a Source-side row has no id to carry (it doesn't exist in the database),
+ * so the report cannot serialize one. Re-deriving the id from a fresh,
+ * read-only scoped query here — rather than threading ids through the report
+ * payload — also means a click sometime after the report loaded resolves
+ * against the CURRENT table, not a stale snapshot from when the file was
+ * uploaded. Uses the exact same key reconcile() used to build the report
+ * (reconcileKey), so "the row you're looking at" and "the row this flags"
+ * can never disagree.
+ *
+ * A key can resolve to more than one invoice — the suspectedDuplicates case
+ * — in which case every matching row is flagged, each with its own audited,
+ * independently-undoable entry (flagInvoiceForVerification is called once
+ * per match): the human is looking at the whole ambiguous group, and
+ * flagging it "needs a closer look" applies to the group, not to one row
+ * arbitrarily singled out of it. A key that matches nothing (most often an
+ * Orphans row, which by definition doesn't exist in the system yet) is a
+ * named error, not a silent no-op.
+ */
+export async function flagReconciledRowForVerification(
+  ref: InvoiceRowRef,
+): Promise<{ error: string } | ({ ok: true } & FlagReconciledRowResult)> {
+  await requireUser();
+  const admin = supabaseAdmin();
+
+  const [invoicesRes, vendorsRes] = await Promise.all([
+    admin.from('invoices').select('id,vendor_id,number,amount_usd,received_date').eq('tab', 'invoices'),
+    admin.from('vendors').select('id,name'),
+  ]);
+  if (invoicesRes.error) return { error: invoicesRes.error.message };
+  if (vendorsRes.error) return { error: vendorsRes.error.message };
+
+  const vendorName = vendorNameResolver((vendorsRes.data ?? []) as { id: string; name: string }[]);
+  const targetKey = reconcileKey(ref.vendor, ref.invoice_no, ref.amount_usd, ref.received_date);
+  const rows = (invoicesRes.data ?? []) as {
+    id: string; vendor_id: string | null; number: string | null; amount_usd: number; received_date: string | null;
+  }[];
+  const matches = rows.filter((r) => reconcileKey(vendorName(r.vendor_id), r.number, Number(r.amount_usd), r.received_date) === targetKey);
+  if (matches.length === 0) return { error: INVOICE_ERRORS.reconcileNoMatch };
+
+  const undoIds: (string | null)[] = [];
+  let lastError: string | null = null;
+  for (const m of matches) {
+    const res = await flagInvoiceForVerification(m.id);
+    if ('error' in res) lastError = res.error; else undoIds.push(res.undoId);
+  }
+  if (undoIds.length === 0) return { error: lastError ?? INVOICE_ERRORS.reconcileNoMatch };
+  return { ok: true as const, count: undoIds.length, undoId: undoIds.length === 1 ? undoIds[0] : null };
 }

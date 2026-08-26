@@ -112,6 +112,20 @@ export const INVOICE_ERRORS = {
   // has not been applied yet. Named separately from a generic DB error so
   // the message can say what to actually do about it.
   migrationPending: 'the verification column is not live in the database yet',
+  // E6 — reconciliation upload (app/actions/invoices.ts's
+  // parseReconciliationSource). Each names a distinct, actionable reason a
+  // malformed upload failed, rather than one blanket "couldn't read file":
+  // silently returning an empty report here would look exactly like "no
+  // drift found", which the task brief calls out by name as a defect.
+  reconcileFileMissing: 'choose a file to reconcile',
+  reconcileBadFileType: 'choose an Excel file (.xlsx or .xls)',
+  reconcileParseFailed: 'could not read this file — is it a valid Excel workbook?',
+  reconcileNotInvoiceSheet: 'no invoice tracker sheet found in this file (expected Supplier / Invoice No. / Amount columns)',
+  // flagReconciledRowForVerification: the row's key matched nothing in the
+  // system invoices table — most often a Source-only row (an orphan) that
+  // was clicked by mistake, since there is nothing in the database yet to
+  // flag.
+  reconcileNoMatch: 'no matching invoice found in the system for this row',
 } as const;
 
 // Inspects the number's own decimal-string form rather than `n * 100` —

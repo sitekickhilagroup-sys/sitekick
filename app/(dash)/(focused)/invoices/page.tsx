@@ -8,8 +8,18 @@ import { FilterBar } from '@/components/invoices/filter-bar';
 import { StatusChain } from '@/components/invoices/status-chain';
 import { LinkEditor, type LinkEditorOptions } from '@/components/invoices/link-editor';
 import { AddInvoice } from '@/components/invoices/add-invoice';
+import { ReconcileReport } from '@/components/invoices/reconcile-report';
 import { canonVendorName, vendorKey } from '@/lib/invoice-rules';
 import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/types';
+
+// E6: the reconciliation report is a demoted view like `david`, but unlike
+// `david` it is not a real value of the `invoices.tab` column — there is no
+// stored population to filter rows against (the report re-reads an uploaded
+// Excel and diffs it in memory; see lib/reconcile.ts). PageTab widens the
+// query-param type just enough to hold that one extra value; InvoiceTab
+// itself (and every filter below keyed off it) stays exactly as narrow as
+// the database column it mirrors.
+type PageTab = InvoiceTab | 'reconciliation';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +70,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     return raw ? (canonicalByKey.get(vendorKey(raw)) ?? canonVendorName(raw)) : '';
   };
 
-  const tab = (typeof sp.tab === 'string' ? sp.tab : 'invoices') as InvoiceTab;
+  const tab = (typeof sp.tab === 'string' ? sp.tab : 'invoices') as PageTab;
   const fProject = typeof sp.project === 'string' ? sp.project : '';
   const fEntity = typeof sp.entity === 'string' ? sp.entity : '';
   const fVendor = typeof sp.vendor === 'string' ? sp.vendor : '';
@@ -74,8 +84,11 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   // or the vendor-pill counts on inv.tab === 'payment_summary' always
   // matched zero. `david` is untouched — a real, separately-tracked workbook
   // tab the spec forbids deleting — so rows genuinely tagged tab='david'
-  // still land only there.
-  const rowsTab = tab === 'payment_summary' ? 'invoices' : tab;
+  // still land only there. Reconciliation falls back to 'invoices' the same
+  // way payment_summary does — it never reads rowsTab/rows/tabRows at all
+  // (the section below is skipped entirely for this tab), so the fallback
+  // only has to be a value InvoiceTab accepts, not a meaningful one.
+  const rowsTab: InvoiceTab = tab === 'payment_summary' ? 'invoices' : tab === 'reconciliation' ? 'invoices' : tab;
 
   const rows = invoices.filter((inv) => {
     if (inv.tab !== rowsTab) return false;
@@ -282,15 +295,31 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
               <summary className="min-h-11 cursor-pointer list-none px-2 py-1.5 text-[10px] text-sk-muted hover:text-sk-ink sm:min-h-0">
                 {t('invoices.more_views')}
               </summary>
-              <Link
-                href="/invoices?tab=david"
-                aria-current={tab === 'david' ? 'page' : undefined}
-                className={`absolute end-0 z-10 mt-1 block whitespace-nowrap rounded-[8px] border border-line bg-sk-surface px-3 py-2 text-[10px] shadow-card ${
-                  tab === 'david' ? 'font-[650] text-sk-green' : 'text-sk-muted hover:text-sk-ink'
-                }`}
-              >
-                {t('invoices.tab_david')}
-              </Link>
+              {/* Two demoted views share this menu — `david` (a real,
+                  separately-tracked workbook tab) and E6's reconciliation
+                  report (not a workbook tab at all, see PageTab above) get
+                  the same treatment: reachable, but out of the primary
+                  tab row the spec anchors. */}
+              <span className="absolute end-0 z-10 mt-1 flex flex-col gap-0.5 whitespace-nowrap rounded-[8px] border border-line bg-sk-surface p-1 shadow-card">
+                <Link
+                  href="/invoices?tab=david"
+                  aria-current={tab === 'david' ? 'page' : undefined}
+                  className={`flex min-h-11 items-center rounded-[6px] px-3 py-1.5 text-[10px] sm:min-h-0 ${
+                    tab === 'david' ? 'font-[650] text-sk-green' : 'text-sk-muted hover:text-sk-ink'
+                  }`}
+                >
+                  {t('invoices.tab_david')}
+                </Link>
+                <Link
+                  href="/invoices?tab=reconciliation"
+                  aria-current={tab === 'reconciliation' ? 'page' : undefined}
+                  className={`flex min-h-11 items-center rounded-[6px] px-3 py-1.5 text-[10px] sm:min-h-0 ${
+                    tab === 'reconciliation' ? 'font-[650] text-sk-green' : 'text-sk-muted hover:text-sk-ink'
+                  }`}
+                >
+                  {t('invoices.tab_reconciliation')}
+                </Link>
+              </span>
             </details>
           </span>
         </div>
@@ -320,7 +349,58 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
           />
         )}
 
-      {vendorPills.length > 1 && (
+      {/* E6: the reconciliation report replaces the filter bar + invoices
+          table for this tab rather than sitting alongside them (unlike
+          Payment Summary's additive aggregation above) — there is no
+          `invoices.tab==='reconciliation'` population for the vendor pills,
+          FilterBar or table below to filter, so rendering them here would
+          just show the (irrelevant) 'invoices' tab rows underneath a report
+          about something else entirely. */}
+      {tab === 'reconciliation' && (
+        <ReconcileReport
+          money={moneyExact}
+          labels={{
+            kicker: t('invoices.recon_kicker'),
+            intro: t('invoices.recon_intro'),
+            chooseFile: t('invoices.recon_choose_file'),
+            uploadHint: t('invoices.recon_upload_hint'),
+            reading: t('invoices.recon_reading'),
+            done: t('invoices.recon_done'),
+            tileSource: t('invoices.recon_tile_source'),
+            tileSystem: t('invoices.recon_tile_system'),
+            tileAdded: t('invoices.recon_tile_added'),
+            tileChanged: t('invoices.recon_tile_changed'),
+            tileSuspected: t('invoices.recon_tile_suspected'),
+            tileOrphans: t('invoices.recon_tile_orphans'),
+            none: t('invoices.recon_none'),
+            groupCount: t('invoices.recon_group_count'),
+            number: t('invoices.number'),
+            changedPrefix: t('invoices.history_changed'),
+            fieldAmount: t('common.amount'),
+            fieldReceived: t('invoices.received'),
+            fieldPaidDate: t('invoices.paid_date'),
+            fieldStatus: t('common.status'),
+            fieldEntity: t('invoices.entity'),
+            fieldDescription: t('tasks.description'),
+            flagVerify: t('invoices.recon_flag_verify'),
+            flagged: t('invoices.recon_flagged'),
+            flaggedCount: t('invoices.recon_flagged_count'),
+            recorded: t('invoices.recorded'),
+            undo: t('work.undo'),
+            cancel: t('common.cancel'),
+            errorFileMissing: t('invoices.error_reconcile_file_missing'),
+            errorBadFileType: t('invoices.error_reconcile_bad_file_type'),
+            errorParseFailed: t('invoices.error_reconcile_parse_failed'),
+            errorNotInvoiceSheet: t('invoices.error_reconcile_not_invoice_sheet'),
+            errorNoMatch: t('invoices.error_reconcile_no_match'),
+            errorNotFound: t('invoices.error_not_found'),
+            errorNothingToUndo: t('invoices.error_nothing_to_undo'),
+            errorSaveReason: t('invoices.error_save_reason'),
+          }}
+        />
+      )}
+
+      {tab !== 'reconciliation' && vendorPills.length > 1 && (
         <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0 sm:pb-0">
           <Link
             href={`/invoices?tab=${tab}`}
@@ -351,6 +431,8 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
         </div>
       )}
 
+      {tab !== 'reconciliation' && (
+      <>
       <FilterBar
         options={{
           projects: [...projects.map((p) => p.name), t('common.general')].sort(),
@@ -490,6 +572,8 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
           </tbody>
         </table>
         </div>
+      </>
+      )}
       </div>
     </>
   );
