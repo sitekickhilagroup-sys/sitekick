@@ -47,10 +47,6 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
     setResult(null);
   });
 
-  if (editingDetails && task && editorOptions) {
-    return <TaskEditor task={task} options={editorOptions} labels={labels} onClose={() => setEditingDetails(false)} />;
-  }
-
   if (result) {
     return (
       <SavedChip message={result.message} undoId={result.undoId} pending={pending}
@@ -76,7 +72,12 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
   }
 
   return (
-    <span className="relative inline-block" onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}>
+    // The single positioned anchor for both overlays below (the open menu
+    // AND TaskEditor) — the trigger button stays rendered as a real, sized
+    // box the whole time an overlay is open, so `sm:end-0 sm:top-full` always
+    // resolves against it instead of a collapsed zero-size element (which
+    // both hid the button and mis-positioned the popover).
+    <span className="relative inline-block" onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); setEditingDetails(false); } }}>
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu"
         className="min-h-11 rounded-[6px] bg-sage px-2.5 py-1 text-[9px] font-[650] leading-none text-white hover:opacity-90 sm:min-h-0">
         {labels.update}
@@ -105,6 +106,9 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
             )}
           </span>
         </>
+      )}
+      {editingDetails && task && editorOptions && (
+        <TaskEditor task={task} options={editorOptions} labels={labels} onClose={() => setEditingDetails(false)} />
       )}
     </span>
   );

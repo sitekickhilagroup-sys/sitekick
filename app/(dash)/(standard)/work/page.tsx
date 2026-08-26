@@ -7,11 +7,12 @@ import { isBlockingTask } from '@/lib/blockers';
 import { supabaseServer } from '@/lib/supabase/server';
 import { rankToday, scoreTask, type TodayRankContext } from '@/lib/priority';
 import { laToday } from '@/lib/date';
+import { resolveTaskPhaseKey } from '@/lib/task-details';
 import { WORK_COLS, WorkTableRow } from '@/components/work/work-table-row';
 import { AddAction } from '@/components/work/add-action';
 import type { RelationRow } from '@/components/work/relation-editor';
 import type { TaskEditorOptions } from '@/components/work/task-editor';
-import type { Blocker, Invoice, Phase, Project, ProjectStage, Relationship, SubstageTemplate, Task, Vendor, Workstream } from '@/lib/types';
+import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relationship, SubstageTemplate, Task, Vendor, Workstream } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,33 +121,53 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   }
   const todayCtx: TodayRankContext = { today, businessRankByProject, currentStageByProject };
 
-  // Phase / sub-stage column: stage_key -> canonical phase via stage_phase_map;
-  // unmapped tasks fall back to their project's current phase.
+  // Phase / sub-stage column: a task's phase is DERIVED, never stored on
+  // tasks.stage_key (that column is the legacy stage tag bridged to phases
+  // via stage_phase_map — never a phase_key itself). Precedence matches
+  // resolveTaskPhaseKey: the sub-stage it's actually on wins; the legacy
+  // stage_key bridge is next; the project's current phase is the last
+  // resort. See lib/task-details.ts for why, and app/actions/tasks.ts for
+  // why the editor never writes stage_key.
   const phaseLabelByKey = new Map(((phasesQ.data ?? []) as Phase[]).map((ph) => [ph.key as string, ph.label]));
-  const phaseKeyByStage = new Map(((stageMapQ.data ?? []) as { stage_key: string; phase_key: string }[])
+  const phaseKeyByStage = new Map(((stageMapQ.data ?? []) as { stage_key: string; phase_key: PhaseKey }[])
     .map((m) => [m.stage_key, m.phase_key]));
+  const substageTemplates = (substageTemplatesQ.data ?? []) as SubstageTemplate[];
+  const phaseKeyBySubstageId = new Map(substageTemplates.map((s) => [s.id, s.phase_key]));
   const prettyStage = (key: string) =>
     key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   const phaseLabelFor = (task: Task): string | null => {
-    const mapped = task.stage_key ? phaseKeyByStage.get(task.stage_key) : null;
-    const key = mapped ?? (task.project_id ? projectById.get(task.project_id)?.current_phase_key : null);
+    const key = resolveTaskPhaseKey({
+      substagePhaseKey: task.substage_template_id ? phaseKeyBySubstageId.get(task.substage_template_id) ?? null : null,
+      legacyPhaseKey: task.stage_key ? phaseKeyByStage.get(task.stage_key) ?? null : null,
+      projectPhaseKey: task.project_id ? projectById.get(task.project_id)?.current_phase_key ?? null : null,
+    });
     return key ? (phaseLabelByKey.get(key) ?? null) : null;
   };
 
-  // TaskEditor's option lists (A6). Project reuses the same active-projects
-  // list AddAction already built inline — hoisted here so both consume one
-  // computation instead of two.
-  const projectOptions = projects.filter((p) => p.active !== false).map((p) => ({ id: p.id, name: p.name }));
+  // TaskEditor's option lists (A6). AddAction only ever creates a task
+  // against an active project, so it keeps the active-only projectOptions
+  // list below unchanged. The editor is different: an already-open task can
+  // belong to a project that has since gone inactive (this page still
+  // renders that task under the project's name — see the render loop below,
+  // which looks projects up with no active filter), so editorOptions gets
+  // every project instead, each flagged active/inactive — TaskEditor offers
+  // active ones as normal choices and injects the task's own current project
+  // even when it's inactive, so its name is never silently hidden.
+  const projectOptions = projects.filter((p) => p.active !== false)
+    .map((p) => ({ id: p.id, name: p.name, current_phase_key: p.current_phase_key }));
+  const editorProjectOptions = projects.map((p) => ({
+    id: p.id, name: p.name, current_phase_key: p.current_phase_key, active: p.active !== false,
+  }));
   const phaseOptions = ((phasesQ.data ?? []) as Phase[])
     .slice().sort((a, b) => a.position - b.position)
     .map((p) => ({ key: p.key, label: p.label }));
-  const substageOptions = ((substageTemplatesQ.data ?? []) as SubstageTemplate[])
+  const substageOptions = substageTemplates
     .slice().sort((a, b) => a.position - b.position)
     .map((s) => ({ id: s.id, phase_key: s.phase_key, name: s.name }));
   const workstreamOptions = ((workstreamsQ.data ?? []) as Pick<Workstream, 'id' | 'project_id' | 'name'>[])
     .map((w) => ({ id: w.id, project_id: w.project_id, name: w.name }));
   const editorOptions: TaskEditorOptions = {
-    projects: projectOptions, phases: phaseOptions, substages: substageOptions, workstreams: workstreamOptions,
+    projects: editorProjectOptions, phases: phaseOptions, substages: substageOptions, workstreams: workstreamOptions,
   };
 
   const filtered = computeView(tasks, view, today, todayCtx);

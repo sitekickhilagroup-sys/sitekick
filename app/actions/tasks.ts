@@ -6,7 +6,10 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { logActivity } from '@/lib/state-writer';
 import { planMerge } from '@/lib/merge';
+import { buildDetailsPatch, validateDetailsIntegrity, type TaskDetailsPatch } from '@/lib/task-details';
 import type { ProcessImpact, Task } from '@/lib/types';
+
+export type { TaskDetailsPatch };
 
 export async function createTask(formData: FormData) {
   const user = await requireUser();
@@ -282,44 +285,61 @@ export async function updateTaskWaiting(taskId: string, waitingFor: string) {
   return { ok: true };
 }
 
-// DETAIL_KEYS is the single place that decides which keys of a submitted
-// TaskDetailsPatch actually reach the database — anything else on the object
-// (and any key not present at all) is ignored, so a caller can send a partial
-// patch safely.
-const DETAIL_KEYS = ['owner', 'waiting_for', 'due', 'project_id', 'stage_key',
-  'substage_template_id', 'workstream_id', 'process_impact'] as const;
-
-export interface TaskDetailsPatch {
-  owner?: string | null; waiting_for?: string | null; due?: string | null;
-  project_id?: string | null; stage_key?: string | null;
-  substage_template_id?: string | null; workstream_id?: string | null;
-  process_impact?: Task['process_impact'];
-}
-
 /**
- * Full "Edit details" write: Owner, Waiting-on, Due, Project, Phase,
- * Sub-stage, Workstream and Impact on process, in one audited patch.
+ * Full "Edit details" write: Owner, Waiting-on, Due, Project, Sub-stage,
+ * Workstream and Impact on process, in one audited patch. (Phase is not in
+ * this list — see task-editor.tsx and lib/task-details.ts's
+ * resolveTaskPhaseKey: a task's phase is derived from substage_template_id,
+ * never stored on tasks.stage_key, which is a separate legacy column.)
  *
  * The seven My Work verbs never covered these fields (Dor #51/#52) and Impact
  * on process had no editor anywhere (Rotem's process-page gap) — this is the
- * one place all eight now go through, mirroring applyWorkVerb's audit shape
+ * one place all of them now go through, mirroring applyWorkVerb's audit shape
  * (snapshot before, write, log after) so Undo works exactly the same way.
+ *
+ * A thin caller around lib/task-details.ts's pure functions: buildDetailsPatch
+ * does the whitelist/coercion/shape validation, validateDetailsIntegrity does
+ * the cross-field checks below against freshly-fetched rows — this action's
+ * own job is only the I/O (fetch before + FK rows, write, log, revalidate)
+ * and resolving "effective" values so a field this patch doesn't touch can't
+ * end up inconsistent with one it does (see the test for the race this closes).
  */
 export async function updateTaskDetails(taskId: string, patch: TaskDetailsPatch) {
   const user = await requireUser();
-  const clean: Record<string, unknown> = {};
-  for (const k of DETAIL_KEYS) if (k in patch) clean[k] = (patch as Record<string, unknown>)[k] ?? null;
-  if (clean.due != null && !/^\d{4}-\d{2}-\d{2}$/.test(String(clean.due))) return { error: 'invalid date' };
-  // Belt-and-suspenders: the editor's <select> only ever offers these six
-  // values, but the action is reused by anything holding a taskId, so a
-  // garbage value is rejected the same way setProcessImpact already rejects one.
-  if (clean.process_impact != null && !PROCESS_IMPACTS.includes(clean.process_impact as ProcessImpact)) {
-    return { error: 'invalid impact' };
-  }
-  if (Object.keys(clean).length === 0) return { error: 'empty patch' };
+  const built = buildDetailsPatch(patch);
+  if ('error' in built) return built;
+  const { clean } = built;
+
   const admin = supabaseAdmin();
   const { data: before } = await admin.from('tasks').select('*').eq('id', taskId).maybeSingle();
   if (!before) return { error: 'task not found' };
+  const beforeRow = before as Task;
+
+  // "Effective" = this patch's value if it touches the key, else the row's
+  // current value — a patch that only changes project_id must still be
+  // checked against whatever workstream_id the row already has.
+  const effectiveProjectId = 'project_id' in clean ? (clean.project_id as string | null) : beforeRow.project_id;
+  const effectiveWorkstreamId = 'workstream_id' in clean ? (clean.workstream_id as string | null) : beforeRow.workstream_id;
+  const effectiveSubstageId = 'substage_template_id' in clean ? (clean.substage_template_id as string | null) : beforeRow.substage_template_id;
+
+  const [workstreamRes, substageRes] = await Promise.all([
+    effectiveWorkstreamId
+      ? admin.from('workstreams').select('project_id,phase_key').eq('id', effectiveWorkstreamId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    effectiveSubstageId
+      ? admin.from('substage_templates').select('phase_key').eq('id', effectiveSubstageId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  if (effectiveWorkstreamId && !workstreamRes.data) return { error: 'workstream not found' };
+  if (effectiveSubstageId && !substageRes.data) return { error: 'sub-stage not found' };
+
+  const integrityError = validateDetailsIntegrity(clean, {
+    effectiveProjectId,
+    workstream: workstreamRes.data as { project_id: string; phase_key: string } | null,
+    substageTemplate: substageRes.data as { phase_key: string } | null,
+  });
+  if (integrityError) return integrityError;
+
   const { error } = await admin.from('tasks').update({ ...clean, last_touched: laToday() }).eq('id', taskId);
   if (error) return { error: error.message };
   const undoId = await logActivity(admin, {

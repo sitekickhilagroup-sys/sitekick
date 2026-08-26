@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { updateTaskDetails, type TaskDetailsPatch } from '@/app/actions/tasks';
 import { undoWorkVerb } from '@/app/actions/work';
+import { resolveTaskPhaseKey } from '@/lib/task-details';
 import type { PhaseKey, ProcessImpact, Task } from '@/lib/types';
 import { SavedChip } from './saved-chip';
 
@@ -17,8 +18,15 @@ const IMPACTS: ProcessImpact[] = [
  * shape from their own already-loaded phase/workstream data.
  */
 export interface TaskEditorOptions {
-  /** Active projects; "General" (project_id null) is implicit — no row for it. */
-  projects: { id: string; name: string }[];
+  /** Every project, including inactive ones — "General" (project_id null) is
+   *  implicit, no row for it. The editor offers active projects as normal
+   *  choices and injects the task's own current project even when it's
+   *  inactive (an open task can already belong to one — My Work still
+   *  renders it under that project's name), the same way it never hides a
+   *  real sub-stage/workstream value either. current_phase_key seeds the
+   *  Phase filter's initial guess when the task has no sub-stage of its own
+   *  yet. */
+  projects: { id: string; name: string; current_phase_key: PhaseKey | null; active: boolean }[];
   /** The 5 canonical phases, in position order. */
   phases: { key: PhaseKey; label: string }[];
   /** Full library; the editor filters to the chosen phase itself. */
@@ -40,17 +48,38 @@ interface Props {
   onClose: () => void;
 }
 
-// Full "Edit details" form: the seven My Work verbs never covered Owner,
-// Waiting-on, Project, Phase, Sub-stage or Workstream, and Impact on process
-// had no editor anywhere (QA #51/#52 + Rotem's process-page gap). One patch,
-// one audited write (updateTaskDetails), the same "Recorded · Undo" outcome
-// as every other My Work action.
+/**
+ * Full "Edit details" form: the seven My Work verbs never covered Owner,
+ * Waiting-on, Project, Sub-stage or Workstream, and Impact on process had no
+ * editor anywhere (QA #51/#52 + Rotem's process-page gap). One patch (only
+ * the fields the user actually touched — see save() below), one audited
+ * write (updateTaskDetails), the same "Recorded · Undo" outcome as every
+ * other My Work action.
+ *
+ * Phase is NOT one of the persisted fields. tasks.stage_key is a legacy
+ * column bridged to phases via stage_phase_map, never a phase itself, so
+ * writing a canonical phase key into it would corrupt every other reader of
+ * that column (priority scoring, dedup matching, the weekly board, the
+ * process page). A task's phase is owned implicitly through
+ * substage_template_id instead. The Phase <select> below is a local-only
+ * filter that narrows the Sub-stage list and is never sent to the server —
+ * see resolveTaskPhaseKey in lib/task-details.ts for the precedence it's
+ * seeded from.
+ *
+ * Positioning contract: this component renders a backdrop plus a
+ * fixed/absolutely-positioned sheet (bottom-sheet below `sm:`, popover above
+ * it) and does NOT wrap itself in a `relative` anchor — it assumes the caller
+ * already provides one, and that the caller's trigger stays rendered/visible
+ * while this is open (see verb-menu.tsx for the reference integration: the
+ * "Update" button and this component are siblings inside one
+ * `relative inline-block` wrapper, so `sm:end-0 sm:top-full` anchors to a
+ * real, correctly-sized box instead of collapsing to nothing).
+ */
 export function TaskEditor({ task, options, labels, onClose }: Props) {
   const [owner, setOwner] = useState(task.owner ?? '');
   const [waitingFor, setWaitingFor] = useState(task.waiting_for ?? '');
   const [due, setDue] = useState(task.due ?? '');
   const [projectId, setProjectId] = useState(task.project_id ?? '');
-  const [stageKey, setStageKey] = useState(task.stage_key ?? '');
   const [substageId, setSubstageId] = useState(task.substage_template_id ?? '');
   const [workstreamId, setWorkstreamId] = useState(task.workstream_id ?? '');
   const [impact, setImpact] = useState<ProcessImpact | ''>(task.process_impact ?? '');
@@ -58,21 +87,61 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
   const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
   const [pending, start] = useTransition();
 
-  const substageChoices = options.substages.filter((s) => s.phase_key === stageKey);
+  // Local-only filter, never persisted. Seeded from the task's *derived*
+  // phase: the sub-stage it's already on wins; failing that, the project's
+  // current phase is a reasonable starting point; failing that, empty (the
+  // Sub-stage list starts unfiltered — see substageSelectOptions below, which
+  // still shows every real value regardless of this filter).
+  const [phaseFilter, setPhaseFilter] = useState<string>(() => {
+    const initialProject = options.projects.find((p) => p.id === (task.project_id ?? ''));
+    const initialSubstage = task.substage_template_id
+      ? options.substages.find((s) => s.id === task.substage_template_id)
+      : undefined;
+    return resolveTaskPhaseKey({
+      substagePhaseKey: initialSubstage?.phase_key ?? null,
+      projectPhaseKey: initialProject?.current_phase_key ?? null,
+    }) ?? '';
+  });
+
+  // Never hide a value the record actually has behind a filtered-out select:
+  // the phase/project filters narrow which NEW choices are offered, but the
+  // control's current value is always present as a real option, even when it
+  // falls outside the current filter (e.g. before the user has touched Phase
+  // at all, or after they explore a different Phase without meaning to move
+  // the sub-stage).
+  const substageChoices = options.substages.filter((s) => s.phase_key === phaseFilter);
+  const currentSubstage = options.substages.find((s) => s.id === substageId);
+  const substageSelectOptions = currentSubstage && !substageChoices.some((s) => s.id === currentSubstage.id)
+    ? [currentSubstage, ...substageChoices]
+    : substageChoices;
+
   const workstreamChoices = options.workstreams.filter((w) => w.project_id === projectId);
+  const currentWorkstream = options.workstreams.find((w) => w.id === workstreamId);
+  const workstreamSelectOptions = currentWorkstream && !workstreamChoices.some((w) => w.id === currentWorkstream.id)
+    ? [currentWorkstream, ...workstreamChoices]
+    : workstreamChoices;
+
+  const projectChoices = options.projects.filter((p) => p.active);
+  const currentProject = options.projects.find((p) => p.id === projectId);
+  const projectSelectOptions = currentProject && !projectChoices.some((p) => p.id === currentProject.id)
+    ? [currentProject, ...projectChoices]
+    : projectChoices;
 
   const save = () => start(async () => {
     setFailed(false);
-    const patch: TaskDetailsPatch = {
-      owner: owner.trim() || null,
-      waiting_for: waitingFor.trim() || null,
-      due: due || null,
-      project_id: projectId || null,
-      stage_key: stageKey || null,
-      substage_template_id: substageId || null,
-      workstream_id: workstreamId || null,
-      process_impact: impact || null,
-    };
+    // Only the fields the user actually touched — sending every field back
+    // (even unchanged ones) would silently revert a concurrent write, e.g. a
+    // verb chip's status/waiting_for change the row hasn't re-rendered yet.
+    const patch: TaskDetailsPatch = {};
+    if (owner !== (task.owner ?? '')) patch.owner = owner.trim() || null;
+    if (waitingFor !== (task.waiting_for ?? '')) patch.waiting_for = waitingFor.trim() || null;
+    if (due !== (task.due ?? '')) patch.due = due || null;
+    if (projectId !== (task.project_id ?? '')) patch.project_id = projectId || null;
+    if (substageId !== (task.substage_template_id ?? '')) patch.substage_template_id = substageId || null;
+    if (workstreamId !== (task.workstream_id ?? '')) patch.workstream_id = workstreamId || null;
+    if (impact !== (task.process_impact ?? '')) patch.process_impact = (impact || null) as ProcessImpact | null;
+    if (Object.keys(patch).length === 0) { onClose(); return; }
+
     const res = await updateTaskDetails(task.id, patch);
     if ('error' in res) { setFailed(true); return; }
     setResult({ message: labels['msg.details'] ?? labels.recorded, undoId: res.undoId });
@@ -93,11 +162,12 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
   }
 
   return (
-    <span className="relative inline-block" onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
+    <>
       <span aria-hidden="true" onClick={onClose} className="fixed inset-0 z-20 bg-ink/40 sm:bg-transparent" />
       <span
         role="dialog"
         aria-label={labels.editDetails}
+        onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
         className="fixed inset-x-0 bottom-0 z-30 flex max-h-[80dvh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-line bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-card sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:max-h-[70dvh] sm:w-80 sm:rounded-lg sm:border sm:p-3"
       >
         <span aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 shrink-0 rounded-full bg-line sm:hidden" />
@@ -126,13 +196,13 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
           <select value={projectId} onChange={(e) => { setProjectId(e.target.value); setWorkstreamId(''); }}
             className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9">
             <option value="">{labels.general}</option>
-            {options.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {projectSelectOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </label>
 
         <label className="block text-xs text-ink2">
           <span className="mb-0.5 block text-[10px] font-medium text-ink3">{labels.phase}</span>
-          <select value={stageKey} onChange={(e) => { setStageKey(e.target.value); setSubstageId(''); }}
+          <select value={phaseFilter} onChange={(e) => setPhaseFilter(e.target.value)}
             className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9">
             <option value="">—</option>
             {options.phases.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -141,19 +211,29 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
 
         <label className="block text-xs text-ink2">
           <span className="mb-0.5 block text-[10px] font-medium text-ink3">{labels.substage}</span>
-          <select value={substageId} onChange={(e) => setSubstageId(e.target.value)} disabled={!stageKey}
-            className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink disabled:opacity-50 sm:min-h-9">
+          <select
+            value={substageId}
+            onChange={(e) => {
+              const id = e.target.value;
+              setSubstageId(id);
+              // Keep the Phase filter honest once a real sub-stage is picked
+              // — it's the sub-stage that owns the phase, not the filter.
+              const picked = options.substages.find((s) => s.id === id);
+              if (picked) setPhaseFilter(picked.phase_key);
+            }}
+            className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9"
+          >
             <option value="">—</option>
-            {substageChoices.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {substageSelectOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </label>
 
         <label className="block text-xs text-ink2">
           <span className="mb-0.5 block text-[10px] font-medium text-ink3">{labels.workstream}</span>
-          <select value={workstreamId} onChange={(e) => setWorkstreamId(e.target.value)} disabled={!projectId}
-            className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink disabled:opacity-50 sm:min-h-9">
+          <select value={workstreamId} onChange={(e) => setWorkstreamId(e.target.value)}
+            className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9">
             <option value="">—</option>
-            {workstreamChoices.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            {workstreamSelectOptions.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
         </label>
 
@@ -178,6 +258,6 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
           {failed && <span role="alert" className="text-[10px] font-semibold text-coral">{labels.errorSave}</span>}
         </div>
       </span>
-    </span>
+    </>
   );
 }

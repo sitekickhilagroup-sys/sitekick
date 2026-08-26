@@ -41,11 +41,16 @@ export async function undoWorkVerb(logId: string) {
   const before = entry.before_json;
   const restore: Record<string, unknown> = {};
   // A6: task-details edits (owner/waiting/due already covered above) also
-  // touch project/phase/sub-stage/workstream/impact — before_json is a full
-  // row snapshot either way, so restoring the extra keys is a no-op for
-  // verb-only edits and a real restore for a details edit.
+  // touch project/sub-stage/workstream/impact — before_json is a full row
+  // snapshot either way, so restoring the extra keys is a no-op for
+  // verb-only edits and a real restore for a details edit. stage_key is
+  // deliberately NOT here: updateTaskDetails never writes that column (it's
+  // the legacy stage tag, not a phase — see lib/task-details.ts), so there is
+  // nothing on that column for a details-edit undo to restore, and touching
+  // it here would let an unrelated verb's undo overwrite a legacy tag no
+  // action in this round ever changed.
   for (const k of ['status', 'waiting_for', 'due', 'last_touched', 'description', 'owner', 'latest_note',
-    'project_id', 'stage_key', 'substage_template_id', 'workstream_id', 'process_impact'] as const) {
+    'project_id', 'substage_template_id', 'workstream_id', 'process_impact'] as const) {
     restore[k] = before[k] ?? null;
   }
   const { error } = await admin.from('tasks').update(restore).eq('id', entry.entity_id);
@@ -54,7 +59,7 @@ export async function undoWorkVerb(logId: string) {
     entity_type: 'task', entity_id: entry.entity_id, actor: user.email ?? user.id,
     action: 'undo', after: restore,
   });
-  revalidatePath('/'); revalidatePath('/work'); revalidatePath('/projects/[id]', 'page');
+  revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
   return { ok: true as const };
 }
 
