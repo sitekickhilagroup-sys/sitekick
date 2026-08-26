@@ -4,27 +4,24 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { verbResultLabels } from '@/lib/i18n/verb-labels';
 import { findDuplicatePairs } from '@/lib/dedup';
 import { supabaseServer } from '@/lib/supabase/server';
-import { scoreTask } from '@/lib/priority';
+import { rankToday, scoreTask, type TodayRankContext } from '@/lib/priority';
 import { laToday } from '@/lib/date';
 import { WORK_COLS, WorkTableRow } from '@/components/work/work-table-row';
 import { AddAction } from '@/components/work/add-action';
 import type { RelationRow } from '@/components/work/relation-editor';
-import type { Blocker, Invoice, Phase, Project, Relationship, Task, Vendor } from '@/lib/types';
+import type { Blocker, Invoice, Phase, Project, ProjectStage, Relationship, Task, Vendor } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 type WorkView = 'today' | 'blocking' | 'followups' | 'waiting' | 'all';
 const VIEWS: WorkView[] = ['today', 'blocking', 'followups', 'waiting', 'all'];
 
-// View queries (spec §Interfaces) — all operate on already-open tasks.
-function filterView(tasks: Task[], view: WorkView, today: string): Task[] {
+// View queries (spec §Interfaces) — all operate on already-open tasks. Today
+// used to be a case here too (a flat score+slice) — it moved out because
+// rankToday() needs business-rank + current-stage context this function
+// doesn't receive. See computeView, its replacement for the 'today' view.
+function filterView(tasks: Task[], view: Exclude<WorkView, 'today'>, today: string): Task[] {
   switch (view) {
-    case 'today':
-      // Spec §ז: Today is 5-8 real actions, not every open task.
-      return [...tasks]
-        .filter((t) => !t.snoozed_until || t.snoozed_until <= today)
-        .sort((a, b) => scoreTask(b, { today }) - scoreTask(a, { today }))
-        .slice(0, 8);
     case 'blocking':
       return tasks.filter((t) => t.priority === 'critical');
     case 'followups':
@@ -36,6 +33,14 @@ function filterView(tasks: Task[], view: WorkView, today: string): Task[] {
     case 'all':
       return tasks;
   }
+}
+
+// Single source of truth for "what does this view show", for every view
+// including today — used for both the tab's count and the rendered list, so
+// the two can't drift. (The Blocking tab had exactly that class of mismatch
+// before this QA round: the count and the render read different functions.)
+function computeView(tasks: Task[], view: WorkView, today: string, todayCtx: TodayRankContext): Task[] {
+  return view === 'today' ? rankToday(tasks, todayCtx) : filterView(tasks, view, today);
 }
 
 export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
@@ -51,7 +56,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const supabase = await supabaseServer();
   // Relationships ride the same batch (table is small — filter in memory
   // below) so the page costs one database round trip, not two.
-  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, vendorsQ] = await Promise.all([
+  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ] = await Promise.all([
     supabase.from('tasks').select('*').eq('status', 'open'),
     supabase.from('projects').select('*'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
@@ -61,6 +66,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     // Her table's "Phase / sub-stage" column: task.stage_key -> canonical phase.
     supabase.from('phases').select('*'),
     supabase.from('stage_phase_map').select('*'),
+    // Today ranking needs each project's current stage, derived the same way
+    // topActions() does it (stages.find(s => s.status === 'current')).
+    supabase.from('project_stages').select('*'),
     // Payment Run vendor-group breakdown needs names.
     supabase.from('vendors').select('id,name'),
   ]);
@@ -90,6 +98,23 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const projectNames = new Map(projects.map((p) => [p.id, p.name]));
   const projectById = new Map(projects.map((p) => [p.id, p]));
 
+  // Today ranking context: 0015's business_rank per project, plus each
+  // project's current stage — same derivation topActions() uses.
+  const businessRankByProject = new Map(
+    projects.filter((p) => p.business_rank != null).map((p) => [p.id, p.business_rank!]),
+  );
+  const projectStages = (projectStagesQ.data ?? []) as ProjectStage[];
+  const stagesByProject = new Map<string, ProjectStage[]>();
+  for (const s of projectStages) {
+    const list = stagesByProject.get(s.project_id);
+    if (list) list.push(s); else stagesByProject.set(s.project_id, [s]);
+  }
+  const currentStageByProject = new Map<string, string | null>();
+  for (const [pid, stages] of stagesByProject) {
+    currentStageByProject.set(pid, stages.find((s) => s.status === 'current')?.stage_key ?? null);
+  }
+  const todayCtx: TodayRankContext = { today, businessRankByProject, currentStageByProject };
+
   // Phase / sub-stage column: stage_key -> canonical phase via stage_phase_map;
   // unmapped tasks fall back to their project's current phase.
   const phaseLabelByKey = new Map(((phasesQ.data ?? []) as Phase[]).map((ph) => [ph.key as string, ph.label]));
@@ -103,7 +128,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     return key ? (phaseLabelByKey.get(key) ?? null) : null;
   };
 
-  const filtered = filterView(tasks, view, today);
+  const filtered = computeView(tasks, view, today, todayCtx);
   const scoreOf = (task: Task) => scoreTask(task, { today });
 
   const groups = new Map<string | null, Task[]>();
@@ -112,10 +137,19 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     if (list) list.push(task);
     else groups.set(task.project_id, [task]);
   }
-  const orderedGroups = [...groups.entries()].sort(
-    (a, b) => Math.max(...b[1].map(scoreOf)) - Math.max(...a[1].map(scoreOf)),
-  );
-  for (const [, list] of orderedGroups) list.sort((a, b) => scoreOf(b) - scoreOf(a));
+  // Today orders its project sections by the client's standing business
+  // priority (Blair > San Marco > Rinconia > Alta Mesa), General last —
+  // not by score. Every other view keeps the existing max-score ordering.
+  const orderedGroups = [...groups.entries()];
+  if (view === 'today') {
+    const rankOf = (pid: string | null) => (pid ? businessRankByProject.get(pid) ?? Infinity : Infinity);
+    orderedGroups.sort((a, b) => rankOf(a[0]) - rankOf(b[0]));
+    // Intra-group order already reflects rankToday's impact/due weighting —
+    // re-sorting here with the plain score would silently undo that.
+  } else {
+    orderedGroups.sort((a, b) => Math.max(...b[1].map(scoreOf)) - Math.max(...a[1].map(scoreOf)));
+    for (const [, list] of orderedGroups) list.sort((a, b) => scoreOf(b) - scoreOf(a));
+  }
 
   const isEmpty = view === 'blocking' ? blockers.length === 0 && filtered.length === 0 : filtered.length === 0;
 
@@ -162,6 +196,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       .slice(0, 3);
   const whyNowFor = (task: Task): string | null => {
     const parts: string[] = [];
+    // Impact (0013) opens the line when classified — the "documented reason"
+    // the QA checklist wants for why this task outranks (or yields to) a sibling.
+    if (task.process_impact) parts.push(t('work.why.impact.' + task.process_impact));
     if (task.priority === 'critical') parts.push(t('work.blocking'));
     if (task.due && task.due < today) parts.push(t('work.due.overdue'));
     else if (task.due === today) parts.push(t('work.due.now'));
@@ -231,7 +268,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   };
 
   // Per-view counts + one-line meaning — her demo's tab anatomy.
-  const countOf = (v: WorkView) => filterView(tasks, v, today).length;
+  const countOf = (v: WorkView) => computeView(tasks, v, today, todayCtx).length;
   const blockingBreakdown = view === 'blocking'
     ? t('work.blocking_breakdown')
         .replace('{tasks}', String(countOf('blocking')))

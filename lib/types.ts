@@ -47,6 +47,9 @@ export interface Project {
   summary: string | null;
   /** 0007: false = parked under "Inactive projects" (Flicker). */
   active: boolean;
+  /** 0015 — Noa's standing priority: 1=Blair, 2=San Marco, 3=Rinconia,
+   *  4=Alta Mesa. Null = unranked (sorts last, with General, on Today). */
+  business_rank: number | null;
 }
 
 export interface ProjectStage {

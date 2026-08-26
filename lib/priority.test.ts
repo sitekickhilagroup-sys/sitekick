@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { followUpAlerts, scoreBlocker, scoreTask, topActions } from './priority';
+import { describe, expect, it, test } from 'vitest';
+import { followUpAlerts, rankToday, scoreBlocker, scoreTask, topActions } from './priority';
 import type { Blocker, ProjectStage, Relationship, Task } from './types';
 
 const TODAY = '2026-08-20';
@@ -191,4 +191,50 @@ describe('topActions — relationship unlocks bonus', () => {
     expect(a1.score).toBe(0);
     expect(a1.why.unlocks).toBeUndefined();
   });
+});
+
+const P = { blair: 'p1', sanMarco: 'p2', rinconia: 'p3', altaMesa: 'p4' };
+const ranks = new Map([[P.blair, 1], [P.sanMarco, 2], [P.rinconia, 3], [P.altaMesa, 4]]);
+const mk = (over: Partial<Task> & { id: string }): Task => ({
+  project_id: null, document_id: null, title: 'x', description: null, owner: null,
+  waiting_for: null, due: null, stage_key: null, priority: 'normal', status: 'open',
+  planned: false, follow_up_date: null, check_back_on: null, source: null,
+  last_touched: '2026-08-26', created_at: '', manual_priority: null, snoozed_until: null,
+  process_impact: null, merged_into: null, merged_at: null, merged_by: null,
+  latest_note: null, substage_template_id: null, workstream_id: null, ...over,
+});
+
+test('today: two per project in business order; blockers beat finance rows', () => {
+  const tasks = [
+    mk({ id: 'fin', title: 'Construction Financing', project_id: P.blair, process_impact: 'not_blocking' }),
+    mk({ id: 'b1', project_id: P.blair, process_impact: 'primary_blocker' }),
+    mk({ id: 'b2', project_id: P.blair, process_impact: 'workstream_blocker' }),
+    mk({ id: 's1', project_id: P.sanMarco, process_impact: 'primary_blocker' }),
+    mk({ id: 's2', project_id: P.sanMarco, process_impact: 'external_gate' }),
+    mk({ id: 'r1', project_id: P.rinconia, process_impact: 'primary_blocker' }),
+    mk({ id: 'r2', project_id: P.rinconia, process_impact: 'workstream_blocker' }),
+    mk({ id: 'a1', project_id: P.altaMesa, process_impact: 'primary_blocker' }),
+    mk({ id: 'a2', project_id: P.altaMesa, process_impact: 'workstream_blocker' }),
+    mk({ id: 'gen', title: 'General admin' }),
+  ];
+  const out = rankToday(tasks, { today: '2026-08-26', businessRankByProject: ranks });
+  expect(out.map((t) => t.id)).toEqual(['b1', 'b2', 's1', 's2', 'r1', 'r2', 'a1', 'a2']);
+});
+
+test('today: manual_priority overrides everything, in its own order', () => {
+  const tasks = [
+    mk({ id: 'b1', project_id: P.blair, process_impact: 'primary_blocker' }),
+    mk({ id: 'noa', project_id: P.altaMesa, manual_priority: 1 }),
+  ];
+  const out = rankToday(tasks, { today: '2026-08-26', businessRankByProject: ranks });
+  expect(out[0].id).toBe('noa');
+});
+
+test('today: overdue commitment may jump a non-primary sibling inside its project', () => {
+  const tasks = [
+    mk({ id: 'b1', project_id: P.blair, process_impact: 'workstream_blocker' }),
+    mk({ id: 'late', project_id: P.blair, process_impact: 'not_blocking', due: '2026-08-01' }),
+  ];
+  const out = rankToday(tasks, { today: '2026-08-26', businessRankByProject: ranks });
+  expect(out[0].id).toBe('late'); // the "documented reason" case
 });
