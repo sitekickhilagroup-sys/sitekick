@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { verbToPatch, type WorkVerb } from '@/lib/work-verbs';
 import { logActivity } from '@/lib/state-writer';
+import { syncTaskIntoOpenReview } from '@/app/actions/weekly';
 
 const VALID_VERBS: WorkVerb[] = ['completed', 'sent_email', 'waiting', 'delayed', 'scheduled', 'not_applicable', 'note'];
 
@@ -28,6 +29,14 @@ export async function applyWorkVerb(taskId: string, verb: WorkVerb, input: strin
     action: mapped.action, before, after: verb === 'note' ? { note: input } : mapped.patch,
   });
   revalidatePath('/'); revalidatePath('/work'); revalidatePath('/projects/[id]', 'page');
+  // A7: the verb already landed — a weekly-sync hiccup must never turn a
+  // successful task write into an error toast, so it's caught and logged,
+  // never returned.
+  try {
+    await syncTaskIntoOpenReview(admin, taskId);
+  } catch (e) {
+    console.error('[weekly-sync] applyWorkVerb: failed to sync task into open review', { taskId, verb, error: e });
+  }
   return { ok: true as const, undoId };
 }
 

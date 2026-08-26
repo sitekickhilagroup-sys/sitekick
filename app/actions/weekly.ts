@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
@@ -147,6 +148,96 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
 
   revalidatePath('/weekly');
   return { ok: true, reviewId };
+}
+
+/**
+ * A7 (Dor #56): items otherwise only materialize once, at prepare time — a
+ * task created or edited afterwards showed on Project Process / My Work but
+ * never on Weekly until someone re-ran prepare. Called from the tail of
+ * every write that can put a task into the "should be on this week's review"
+ * state: applyWorkVerb, updateTaskDetails, and AddAction's create.
+ *
+ * Scoped to `status='preparing'` specifically, not "anything not final".
+ * 'saved' means the meeting already ran against a fixed list — a task
+ * touched afterwards should not silently reappear on a review someone
+ * already presented from. D1 later adds a 'final' status for an explicit
+ * Finalize action; `.eq('status', 'preparing')` already excludes it (and
+ * 'saved') with no change needed here — a negated match like
+ * `.neq('status', 'final')` would instead let a 'saved' review keep
+ * growing, which is the behavior this scoping deliberately avoids.
+ *
+ * Idempotent: the existing-item check short-circuits the common case (a
+ * task's 2nd, 3rd, ... write this week), and the upsert's onConflict +
+ * ignoreDuplicates is the race-safe backstop — two near-simultaneous writes
+ * for the same never-yet-synced task can't produce two rows.
+ *
+ * Never throws away failures: it throws through the real ones (a failed
+ * insert) so a wrapping try/catch at the call site can log them, per the
+ * project's silent-failure rule — but a review that's missing or already
+ * has the item are legitimate no-ops, not failures.
+ */
+export async function syncTaskIntoOpenReview(admin: SupabaseClient, taskId: string): Promise<void> {
+  const { data: review } = await admin
+    .from('weekly_reviews')
+    .select('id')
+    .eq('status', 'preparing')
+    .order('meeting_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!review) return;
+
+  const { data: existing } = await admin
+    .from('weekly_review_items')
+    .select('id')
+    .eq('weekly_review_id', review.id)
+    .eq('task_id', taskId)
+    .maybeSingle();
+  if (existing) return;
+
+  const { data: taskRow } = await admin.from('tasks').select('*').eq('id', taskId).maybeSingle();
+  const task = taskRow as Task | null;
+  if (!task || task.status !== 'open') return;
+
+  // Same stage_key -> label lookup prepareCurrentReview builds, unfiltered
+  // across projects — matching it exactly (rather than scoping to this
+  // task's own project) is what keeps a synced subtopic identical to what
+  // the next real prepare would compute for the same task.
+  const { data: stagesData } = await admin.from('project_stages').select('stage_key,label');
+  const stageLabels = new Map<string, string>();
+  for (const row of (stagesData ?? []) as { stage_key: string; label: string }[]) {
+    if (!stageLabels.has(row.stage_key)) stageLabels.set(row.stage_key, row.label);
+  }
+
+  // Append after whatever is already on the review — never renumber
+  // existing rows, since sequence also drives which project/sub-topic group
+  // renders first on the page.
+  const { data: lastItem } = await admin
+    .from('weekly_review_items')
+    .select('sequence')
+    .eq('weekly_review_id', review.id)
+    .order('sequence', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sequence = ((lastItem as { sequence: number } | null)?.sequence ?? 0) + 1;
+
+  // Reuse prepare's own shaping instead of re-deriving it: calling
+  // buildReviewItems with this one task as the sole open task, and nothing
+  // prior, drives it down the exact "new item" branch prepare takes for a
+  // task it has never seen — so the two paths cannot drift apart.
+  const [draft] = buildReviewItems({ openTasks: [task], doneSinceTasks: [], priorItems: [], stageLabels });
+  if (!draft) return;
+
+  const { error } = await admin.from('weekly_review_items').upsert({
+    weekly_review_id: review.id,
+    task_id: draft.task_id,
+    project_id: draft.project_id,
+    subtopic: draft.subtopic,
+    status_snapshot: draft.status_snapshot,
+    weekly_note: draft.weekly_note,
+    sequence,
+    carried_from: draft.carried_from,
+  }, { onConflict: 'weekly_review_id,task_id', ignoreDuplicates: true });
+  if (error) throw error;
 }
 
 export async function saveItemNote(itemId: string, note: string) {

@@ -53,4 +53,28 @@ describe('buildReviewItems', () => {
     expect(out.map((i) => i.task_id)).toEqual(['t1', 't2']);
     expect(out[1]).toMatchObject({ subtopic: 'Plan Check', carried_from: null, sequence: 2 });
   });
+
+  // A7: syncTaskIntoOpenReview (app/actions/weekly.ts) calls buildReviewItems
+  // with exactly one open task and no doneSince/prior items, to reuse the
+  // identical "brand-new item" branch prepare itself takes for that task —
+  // that's what makes a synced item indistinguishable from a prepared one.
+  // This locks down the shape that call depends on.
+  it('shapes a lone new open task the same way syncTaskIntoOpenReview relies on', () => {
+    const out = buildReviewItems({
+      openTasks: [mk('t7', 'open', 'sk')], doneSinceTasks: [], priorItems: [],
+      stageLabels: new Map([['sk', 'Plan Check']]),
+    });
+    expect(out).toEqual([{
+      task_id: 't7', project_id: 'p1', subtopic: 'Plan Check', status_snapshot: 'open',
+      weekly_note: null, sequence: 1, carried_from: null,
+    }]);
+  });
+
+  it('a lone new open task with no matching stage label gets a null subtopic, not undefined', () => {
+    const out = buildReviewItems({
+      openTasks: [mk('t8', 'open', 'no_such_stage')], doneSinceTasks: [], priorItems: [],
+      stageLabels: new Map(),
+    });
+    expect(out[0]).toMatchObject({ subtopic: null });
+  });
 });

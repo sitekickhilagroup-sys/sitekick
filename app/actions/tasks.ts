@@ -7,6 +7,7 @@ import { laToday } from '@/lib/date';
 import { logActivity } from '@/lib/state-writer';
 import { planMerge } from '@/lib/merge';
 import { buildDetailsPatch, validateDetailsIntegrity, type TaskDetailsPatch } from '@/lib/task-details';
+import { syncTaskIntoOpenReview } from '@/app/actions/weekly';
 import type { ProcessImpact, Task } from '@/lib/types';
 
 export type { TaskDetailsPatch };
@@ -241,6 +242,14 @@ export async function createTaskChecked(input: {
   });
   revalidatePath('/work');
   revalidatePath('/');
+  // A7: the task already exists — a weekly-sync hiccup must never turn a
+  // successful create into an error toast, so it's caught and logged, never
+  // returned.
+  try {
+    await syncTaskIntoOpenReview(admin, data.id);
+  } catch (e) {
+    console.error('[weekly-sync] createTaskChecked: failed to sync task into open review', { taskId: data.id, error: e });
+  }
   return { ok: true, id: data.id };
 }
 
@@ -347,5 +356,12 @@ export async function updateTaskDetails(taskId: string, patch: TaskDetailsPatch)
     action: 'edit:details', before, after: clean,
   });
   revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
+  // A7: the details edit already landed — a weekly-sync hiccup must never
+  // turn it into an error toast, so it's caught and logged, never returned.
+  try {
+    await syncTaskIntoOpenReview(admin, taskId);
+  } catch (e) {
+    console.error('[weekly-sync] updateTaskDetails: failed to sync task into open review', { taskId, error: e });
+  }
   return { ok: true as const, undoId };
 }
