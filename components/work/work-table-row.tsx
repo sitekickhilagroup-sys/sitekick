@@ -5,6 +5,7 @@ import type { Task } from '@/lib/types';
 import { isBlockingTask } from '@/lib/blockers';
 import { WaitingEditor } from '@/components/overview/waiting-editor';
 import { VerbMenu } from './verb-menu';
+import type { TaskEditorOptions } from './task-editor';
 import { RelationEditor, type RelationRow } from './relation-editor';
 
 /**
@@ -23,6 +24,9 @@ interface Props {
   labels: Record<string, string>;
   relations?: RelationRow[];
   taskOptions?: { id: string; title: string }[];
+  /** Project/Phase/Sub-stage/Workstream choices for VerbMenu's "Edit
+   *  details…" item (A6) — one query batch in work/page.tsx. */
+  editorOptions: TaskEditorOptions;
   /** LA-today (YYYY-MM-DD); enables the Now/Overdue due chip. */
   today?: string;
   /** Today view's clear numeric rank (spec §ז). */
@@ -42,7 +46,7 @@ interface Props {
 // Her My Work table row: What must move | Phase / sub-stage | Owner /
 // waiting on | Due | Status & update — with an explicit Details toggle.
 // Below lg everything stacks; the columns only exist on wide screens.
-export function WorkTableRow({ task, labels, relations, taskOptions, today, rank, whyNow, unlocks, phaseLabel, stageLabel, projectHref }: Props) {
+export function WorkTableRow({ task, labels, relations, taskOptions, editorOptions, today, rank, whyNow, unlocks, phaseLabel, stageLabel, projectHref }: Props) {
   const [open, setOpen] = useState(false);
   const dueState = task.due && today
     ? task.due < today ? 'overdue' : task.due === today ? 'now' : 'future'
@@ -143,7 +147,7 @@ export function WorkTableRow({ task, labels, relations, taskOptions, today, rank
               {labels.waiting}
             </span>
           )}
-          <VerbMenu taskId={task.id} labels={labels} />
+          <VerbMenu taskId={task.id} task={task} editorOptions={editorOptions} labels={labels} />
           <button
             type="button"
             aria-expanded={open}

@@ -373,6 +373,10 @@
   "work.why.impact.external_gate": "שער חיצוני",
   "work.why.impact.not_blocking": "לא חוסם",
   "work.why.impact.verify": "לאימות",
+  "work.edit_details": "עריכת פרטים…",
+  "work.impact": "השפעה על התהליך",
+  "work.substage": "תת־שלב",
+  "work.workstream": "מסלול עבודה",
   "work.details": "פרטים",
   "work.today_n": "{n} להיום",
   "work.tasks_today_one": "משימה אחת להיום",
@@ -579,6 +583,7 @@
   "work.msg.scheduled": "נקבע מועד. המשימה יוצאת מרשימת היום וחוזרת בתאריך שנבחר.",
   "work.msg.not_applicable": "סומן כלא רלוונטי. הסיבה נשמרת ביומן.",
   "work.msg.note": "ההערה נשמרה במשימה ומוצגת בשורה; אין שלב אישור.",
+  "work.msg.details": "הפרטים עודכנו.",
   "work.status.open": "פתוחה",
   "work.status.done": "הושלמה",
   "work.status.dropped": "לא רלוונטי"

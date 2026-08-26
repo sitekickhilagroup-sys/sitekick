@@ -3,14 +3,29 @@
 import { useState, useTransition } from 'react';
 import { applyWorkVerb, undoWorkVerb } from '@/app/actions/work';
 import type { WorkVerb } from '@/lib/work-verbs';
+import type { Task } from '@/lib/types';
+import { SavedChip } from './saved-chip';
+import { TaskEditor, type TaskEditorOptions } from './task-editor';
 
 const NEEDS_TEXT: WorkVerb[] = ['waiting', 'note'];
 const NEEDS_DATE: WorkVerb[] = ['delayed', 'scheduled'];
 const VERBS: WorkVerb[] = ['completed', 'sent_email', 'waiting', 'delayed', 'scheduled', 'not_applicable', 'note'];
 
-export function VerbMenu({ taskId, labels }: { taskId: string; labels: Record<string, string> }) {
+interface Props {
+  taskId: string;
+  labels: Record<string, string>;
+  /** Full task record + option lists for the 8th "Edit details…" item
+   *  (A6). Both are optional and only make sense together — a caller that
+   *  omits them (the process page's connected-actions rows, which only carry
+   *  a narrower ExplorerTask) keeps the original 7-verb menu unchanged. */
+  task?: Task;
+  editorOptions?: TaskEditorOptions;
+}
+
+export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
   const [open, setOpen] = useState(false);
   const [askInput, setAskInput] = useState<WorkVerb | null>(null);
+  const [editingDetails, setEditingDetails] = useState(false);
   const [draft, setDraft] = useState('');
   const [failed, setFailed] = useState(false);
   // What the update meant, in Noa's words, plus the audit row that reverses it.
@@ -32,22 +47,14 @@ export function VerbMenu({ taskId, labels }: { taskId: string; labels: Record<st
     setResult(null);
   });
 
+  if (editingDetails && task && editorOptions) {
+    return <TaskEditor task={task} options={editorOptions} labels={labels} onClose={() => setEditingDetails(false)} />;
+  }
+
   if (result) {
     return (
-      <span role="status" className="inline-flex max-w-72 items-start gap-2 rounded-lg bg-sage-soft px-2.5 py-1.5 text-start">
-        <span className="min-w-0">
-          <strong className="block text-[11px] font-semibold text-sage">{labels.recorded}</strong>
-          <span className="mt-0.5 block text-[10px] leading-relaxed text-ink2">{result.message}</span>
-        </span>
-        {result.undoId && (
-          <button type="button" disabled={pending} onClick={undo}
-            className="min-h-11 shrink-0 rounded-full border border-sage-line px-2 py-0.5 text-[10px] font-semibold text-sage disabled:opacity-50 sm:min-h-0">
-            {labels.undo}
-          </button>
-        )}
-        <button type="button" onClick={() => setResult(null)} aria-label={labels.cancel}
-          className="min-h-11 shrink-0 text-[11px] text-ink3 hover:text-ink sm:min-h-0">✕</button>
-      </span>
+      <SavedChip message={result.message} undoId={result.undoId} pending={pending}
+        onUndo={undo} onDismiss={() => setResult(null)} labels={labels} />
     );
   }
 
@@ -86,6 +93,16 @@ export function VerbMenu({ taskId, labels }: { taskId: string; labels: Record<st
                 {labels[v]}
               </button>
             ))}
+            {task && editorOptions && (
+              <>
+                <span aria-hidden="true" className="my-1 h-px bg-line2 sm:my-0.5" />
+                <button type="button" role="menuitem" disabled={pending}
+                  onClick={() => { setOpen(false); setEditingDetails(true); }}
+                  className="min-h-11 rounded px-2 py-1.5 text-start text-xs text-ink2 hover:bg-card2 hover:text-ink disabled:opacity-50 sm:min-h-0">
+                  {labels.editDetails}
+                </button>
+              </>
+            )}
           </span>
         </>
       )}

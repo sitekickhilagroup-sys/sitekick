@@ -281,3 +281,51 @@ export async function updateTaskWaiting(taskId: string, waitingFor: string) {
   revalidatePath('/');
   return { ok: true };
 }
+
+// DETAIL_KEYS is the single place that decides which keys of a submitted
+// TaskDetailsPatch actually reach the database — anything else on the object
+// (and any key not present at all) is ignored, so a caller can send a partial
+// patch safely.
+const DETAIL_KEYS = ['owner', 'waiting_for', 'due', 'project_id', 'stage_key',
+  'substage_template_id', 'workstream_id', 'process_impact'] as const;
+
+export interface TaskDetailsPatch {
+  owner?: string | null; waiting_for?: string | null; due?: string | null;
+  project_id?: string | null; stage_key?: string | null;
+  substage_template_id?: string | null; workstream_id?: string | null;
+  process_impact?: Task['process_impact'];
+}
+
+/**
+ * Full "Edit details" write: Owner, Waiting-on, Due, Project, Phase,
+ * Sub-stage, Workstream and Impact on process, in one audited patch.
+ *
+ * The seven My Work verbs never covered these fields (Dor #51/#52) and Impact
+ * on process had no editor anywhere (Rotem's process-page gap) — this is the
+ * one place all eight now go through, mirroring applyWorkVerb's audit shape
+ * (snapshot before, write, log after) so Undo works exactly the same way.
+ */
+export async function updateTaskDetails(taskId: string, patch: TaskDetailsPatch) {
+  const user = await requireUser();
+  const clean: Record<string, unknown> = {};
+  for (const k of DETAIL_KEYS) if (k in patch) clean[k] = (patch as Record<string, unknown>)[k] ?? null;
+  if (clean.due != null && !/^\d{4}-\d{2}-\d{2}$/.test(String(clean.due))) return { error: 'invalid date' };
+  // Belt-and-suspenders: the editor's <select> only ever offers these six
+  // values, but the action is reused by anything holding a taskId, so a
+  // garbage value is rejected the same way setProcessImpact already rejects one.
+  if (clean.process_impact != null && !PROCESS_IMPACTS.includes(clean.process_impact as ProcessImpact)) {
+    return { error: 'invalid impact' };
+  }
+  if (Object.keys(clean).length === 0) return { error: 'empty patch' };
+  const admin = supabaseAdmin();
+  const { data: before } = await admin.from('tasks').select('*').eq('id', taskId).maybeSingle();
+  if (!before) return { error: 'task not found' };
+  const { error } = await admin.from('tasks').update({ ...clean, last_touched: laToday() }).eq('id', taskId);
+  if (error) return { error: error.message };
+  const undoId = await logActivity(admin, {
+    entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id,
+    action: 'edit:details', before, after: clean,
+  });
+  revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
+  return { ok: true as const, undoId };
+}

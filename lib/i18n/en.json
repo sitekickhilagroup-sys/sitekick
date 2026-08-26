@@ -373,6 +373,10 @@
   "work.why.impact.external_gate": "External Gate",
   "work.why.impact.not_blocking": "Not Blocking",
   "work.why.impact.verify": "Verify",
+  "work.edit_details": "Edit details…",
+  "work.impact": "Impact on process",
+  "work.substage": "Sub-stage",
+  "work.workstream": "Workstream",
   "work.details": "Details",
   "work.today_n": "{n} today",
   "work.tasks_today_one": "1 task today",
@@ -579,6 +583,7 @@
   "work.msg.scheduled": "Scheduled. It leaves Today and returns on the date you chose.",
   "work.msg.not_applicable": "Marked not applicable. The reason stays in the audit trail.",
   "work.msg.note": "Note saved to the task and shown on the row; nothing to review or approve.",
+  "work.msg.details": "Details updated.",
   "work.status.open": "Open",
   "work.status.done": "Done",
   "work.status.dropped": "Not applicable"

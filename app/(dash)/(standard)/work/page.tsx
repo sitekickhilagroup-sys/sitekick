@@ -10,7 +10,8 @@ import { laToday } from '@/lib/date';
 import { WORK_COLS, WorkTableRow } from '@/components/work/work-table-row';
 import { AddAction } from '@/components/work/add-action';
 import type { RelationRow } from '@/components/work/relation-editor';
-import type { Blocker, Invoice, Phase, Project, ProjectStage, Relationship, Task, Vendor } from '@/lib/types';
+import type { TaskEditorOptions } from '@/components/work/task-editor';
+import type { Blocker, Invoice, Phase, Project, ProjectStage, Relationship, SubstageTemplate, Task, Vendor, Workstream } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,7 +58,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const supabase = await supabaseServer();
   // Relationships ride the same batch (table is small — filter in memory
   // below) so the page costs one database round trip, not two.
-  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ] = await Promise.all([
+  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ, substageTemplatesQ, workstreamsQ] = await Promise.all([
     supabase.from('tasks').select('*').eq('status', 'open'),
     supabase.from('projects').select('*'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
@@ -72,6 +73,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     supabase.from('project_stages').select('*'),
     // Payment Run vendor-group breakdown needs names.
     supabase.from('vendors').select('id,name'),
+    // TaskEditor's Sub-stage / Workstream selects (A6) — same batch, no extra round trip.
+    supabase.from('substage_templates').select('id,phase_key,name,kind,position'),
+    supabase.from('workstreams').select('id,project_id,name'),
   ]);
 
   const tasks = (tasksQ.data ?? []) as Task[];
@@ -127,6 +131,22 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     const mapped = task.stage_key ? phaseKeyByStage.get(task.stage_key) : null;
     const key = mapped ?? (task.project_id ? projectById.get(task.project_id)?.current_phase_key : null);
     return key ? (phaseLabelByKey.get(key) ?? null) : null;
+  };
+
+  // TaskEditor's option lists (A6). Project reuses the same active-projects
+  // list AddAction already built inline — hoisted here so both consume one
+  // computation instead of two.
+  const projectOptions = projects.filter((p) => p.active !== false).map((p) => ({ id: p.id, name: p.name }));
+  const phaseOptions = ((phasesQ.data ?? []) as Phase[])
+    .slice().sort((a, b) => a.position - b.position)
+    .map((p) => ({ key: p.key, label: p.label }));
+  const substageOptions = ((substageTemplatesQ.data ?? []) as SubstageTemplate[])
+    .slice().sort((a, b) => a.position - b.position)
+    .map((s) => ({ id: s.id, phase_key: s.phase_key, name: s.name }));
+  const workstreamOptions = ((workstreamsQ.data ?? []) as Pick<Workstream, 'id' | 'project_id' | 'name'>[])
+    .map((w) => ({ id: w.id, project_id: w.project_id, name: w.name }));
+  const editorOptions: TaskEditorOptions = {
+    projects: projectOptions, phases: phaseOptions, substages: substageOptions, workstreams: workstreamOptions,
   };
 
   const filtered = computeView(tasks, view, today, todayCtx);
@@ -243,7 +263,26 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     not_applicable: t('work.verb.not_applicable'),
     note: t('work.verb.note'),
     ...verbResultLabels(t),
+    'msg.details': t('work.msg.details'),
     update: t('work.update'),
+    // TaskEditor (A6): editDetails is VerbMenu's 8th item; project/general/
+    // phase/substage/workstream/impact + the six impact values are the
+    // form's field labels and select options. phase reuses review.f_phase
+    // (already "Phase"/"שלב") rather than adding a duplicate key.
+    editDetails: t('work.edit_details'),
+    project: t('common.project'),
+    general: t('common.general'),
+    waitingOn: t('tasks.waiting'),
+    phase: t('review.f_phase'),
+    substage: t('work.substage'),
+    workstream: t('work.workstream'),
+    impact: t('work.impact'),
+    'impact.primary_blocker': t('work.why.impact.primary_blocker'),
+    'impact.workstream_blocker': t('work.why.impact.workstream_blocker'),
+    'impact.future_gate': t('work.why.impact.future_gate'),
+    'impact.external_gate': t('work.why.impact.external_gate'),
+    'impact.not_blocking': t('work.why.impact.not_blocking'),
+    'impact.verify': t('work.why.impact.verify'),
     whyNow: t('work.why_now'),
     unlocks: t('work.unlocks'),
     details: t('work.details'),
@@ -309,7 +348,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
         </p>
         <div className="mt-3 flex justify-center sm:absolute sm:end-0 sm:top-2 sm:mt-0">
           <AddAction
-            projects={projects.filter((p) => p.active !== false).map((p) => ({ id: p.id, name: p.name }))}
+            projects={projectOptions}
             labels={{
               addAction: t('work.add_action'),
               titlePh: t('work.add_title_ph'),
@@ -508,6 +547,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                       unlocks={unlocksFor(task.id)}
                       relations={relationsFor(task.id)}
                       taskOptions={taskOptionsFor(task)}
+                      editorOptions={editorOptions}
                       phaseLabel={phaseLabelFor(task)}
                       stageLabel={task.stage_key ? prettyStage(task.stage_key) : null}
                       projectHref={task.project_id ? `/projects/${task.project_id}` : null}

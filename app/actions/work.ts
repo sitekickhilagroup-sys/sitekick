@@ -40,7 +40,12 @@ export async function undoWorkVerb(logId: string) {
   if (!entry?.before_json || entry.entity_type !== 'task') return { error: 'nothing to undo' };
   const before = entry.before_json;
   const restore: Record<string, unknown> = {};
-  for (const k of ['status', 'waiting_for', 'due', 'last_touched', 'description', 'owner', 'latest_note'] as const) {
+  // A6: task-details edits (owner/waiting/due already covered above) also
+  // touch project/phase/sub-stage/workstream/impact — before_json is a full
+  // row snapshot either way, so restoring the extra keys is a no-op for
+  // verb-only edits and a real restore for a details edit.
+  for (const k of ['status', 'waiting_for', 'due', 'last_touched', 'description', 'owner', 'latest_note',
+    'project_id', 'stage_key', 'substage_template_id', 'workstream_id', 'process_impact'] as const) {
     restore[k] = before[k] ?? null;
   }
   const { error } = await admin.from('tasks').update(restore).eq('id', entry.entity_id);
