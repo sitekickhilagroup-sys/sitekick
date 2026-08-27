@@ -431,18 +431,54 @@ export async function saveItemOwnerDue(itemId: string, patch: { owner?: string; 
 
 // Verb applies to the canonical task (spec: updates propagate everywhere —
 // same tasks row /work reads), then the review row snapshots the result.
+//
+// Re-review authorization fix: taskId used to be trusted straight from the
+// caller and used as the write target. loadEditableReviewItem only proves
+// itemId belongs to a review still open for editing — it says nothing about
+// whether the taskId a caller *also* passed actually belongs to that item.
+// A signed-in browser can call this Server Action directly with any two
+// ids, so without deriving the real target from the gated item itself, a
+// valid itemId on an editable review could mark an UNRELATED, never-gated
+// task done — audited, but against a task the gate never checked, while the
+// review item snapshots a status for a task that was never touched.
+// saveItemOwnerDue (above) already gets this right (`const taskId =
+// gate.item.task_id`) — this now matches it. The logic lives in
+// setItemStatusForAdmin so it's callable with a fake admin/actor in tests,
+// the same shape this file's own syncTaskIntoOpenReview and lib/ingest.ts's
+// ingestDocument already use for the same reason.
 export async function setItemStatus(itemId: string, taskId: string, verb: ReviewVerb): Promise<ActionResult> {
   const user = await requireUser();
+  const res = await setItemStatusForAdmin(supabaseAdmin(), user.email ?? user.id, itemId, taskId, verb);
+  // revalidatePath (like requireUser above) needs a real Next.js request
+  // context that only exists for the exported Server Action, not for
+  // setItemStatusForAdmin's own fake-admin tests — kept here for that
+  // reason, gated on success the same way the inline version was (every
+  // error branch below returns before this point either way).
+  if ('ok' in res && res.ok) { revalidatePath('/weekly'); revalidatePath('/'); revalidatePath('/work'); }
+  return res;
+}
+
+export async function setItemStatusForAdmin(
+  admin: SupabaseClient, actor: string, itemId: string, taskId: string, verb: ReviewVerb,
+): Promise<ActionResult> {
   if (!REVIEW_VERBS.includes(verb)) return { error: WEEKLY_ERRORS.invalidVerb };
   const mapped = verbToPatch(verb, null, laToday());
   if ('error' in mapped) return { error: mapped.error };
-  const admin = supabaseAdmin();
   const gate = await loadEditableReviewItem(admin, itemId);
   if ('error' in gate) return gate;
-  const { error } = await admin.from('tasks').update(mapped.patch).eq('id', taskId);
+  // The gated item's own task_id is the only id ever written to below —
+  // taskId is compared only to flag a caller sending a mismatched pair (a
+  // bug, or a probe), never used to pick the write target.
+  if (taskId !== gate.item.task_id) {
+    console.error('[setItemStatus] taskId did not match the gated item\'s own task_id — using the gated one, ignoring the supplied one', {
+      itemId, suppliedTaskId: taskId, actualTaskId: gate.item.task_id,
+    });
+  }
+  const gatedTaskId = gate.item.task_id;
+  const { error } = await admin.from('tasks').update(mapped.patch).eq('id', gatedTaskId);
   if (error) return { error: error.message };
   await logActivity(admin, {
-    entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id,
+    entity_type: 'task', entity_id: gatedTaskId, actor,
     action: mapped.action, after: mapped.patch,
   });
 
@@ -455,7 +491,6 @@ export async function setItemStatus(itemId: string, taskId: string, verb: Review
     if (itemError) return { error: itemError.message };
   }
 
-  revalidatePath('/weekly'); revalidatePath('/'); revalidatePath('/work');
   return { ok: true };
 }
 
