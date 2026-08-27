@@ -93,7 +93,15 @@ export async function applyExtractResult(
     drafts: 0, vendor_hours: 0, deadline_updates: 0,
   };
   const today = ctx.today ?? laToday();
-  if (!project) return summary;
+  if (!project) {
+    // The agent still ran — it read the communication and genuinely found no
+    // project to attach it to. That's a real outcome, not a stalled one, so
+    // the document is stamped processed here too. Without this, a later
+    // dedup hit on the same file (lib/ingest.ts's `processed`) would report
+    // it as never processed even though it was.
+    await admin.from('documents').update({ processed_at: new Date().toISOString() }).eq('id', docId);
+    return summary;
+  }
 
   const blockerIds: string[] = [];
 

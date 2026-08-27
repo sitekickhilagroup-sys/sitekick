@@ -140,4 +140,26 @@ describe('applyExtractResult', () => {
     expect(proposalInserts).toHaveLength(1);
     expect(proposalInserts[0].payload).toMatchObject({ type: 'task_update', target_task_id: 'task-9', confidence: 0.6 });
   });
+
+  it('stamps the document processed even when no project matches, instead of leaving it looking never-run', async () => {
+    const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
+    const admin = fakeAdmin(calls);
+    // project_name from the model matches nothing in the supplied project list.
+    const result = ExtractResultSchema.parse({ ...canned, project_name: 'Some Unlisted Project' });
+    const summary = await applyExtractResult(admin, 'doc1', result, {
+      projects: [{ id: 'p1', name: '2361-2367 San Marco' }],
+      openTasks: [],
+      today: '2026-08-20',
+    });
+    expect(summary.project_id).toBeNull();
+    // Nothing is created or proposed without a resolved project.
+    expect(calls.filter((c) => c.table === 'tasks')).toHaveLength(0);
+    expect(calls.filter((c) => c.table === 'agent_proposals')).toHaveLength(0);
+    // But the agent genuinely ran, so the document is still stamped processed —
+    // otherwise a later dedup hit on the same file reports it as never processed
+    // (lib/ingest.ts's `processed`) even though this ran to completion.
+    const docUpdates = calls.filter((c) => c.table === 'documents' && c.op === 'update');
+    expect(docUpdates).toHaveLength(1);
+    expect(docUpdates[0].payload).toMatchObject({ processed_at: expect.any(String) });
+  });
 });

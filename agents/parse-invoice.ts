@@ -51,7 +51,14 @@ export async function applyInvoiceParse(
   const project = parse.project_name
     ? ctx.projects.find((p) => p.name === parse.project_name) ?? null
     : null;
-  if (!project) return { invoice_id: null };
+  if (!project) {
+    // Same reasoning as applyExtractResult: the agent read the invoice and
+    // genuinely found no project match — a real outcome, not a stalled one —
+    // so it's stamped processed rather than left to read as never processed
+    // on a later dedup hit.
+    await admin.from('documents').update({ processed_at: new Date().toISOString() }).eq('id', docId);
+    return { invoice_id: null };
+  }
 
   const { data: vendor } = await admin.from('vendors')
     .upsert({ name: parse.vendor_name }, { onConflict: 'name' })
