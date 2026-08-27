@@ -243,6 +243,8 @@
   "upload.processing": "Processing…",
   "upload.done": "Processed",
   "upload.failed": "Failed",
+  "upload.stored": "Stored",
+  "upload.no_transcript": "Transcription isn't available yet",
   "settings.title": "Settings",
   "settings.import_requirements": "Import requirement lists",
   "settings.import_help": "Paste the per-project record JSON from the PM (same format as the dashboard file). Existing stage statuses are kept; requirement lists are replaced.",

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 export interface DropzoneLabels {
   drop: string; processing: string; done: string; failed: string;
   project: string; all: string; chooseFile: string; nextStep: string; retry: string;
+  stored: string; noTranscript: string;
 }
 
 interface Props {
@@ -15,13 +16,16 @@ interface Props {
   accept: string;
   title: string;
   formats: string;
+  /** Lifted into IntakePanel — a tab switch through Sheet or Paste must not
+      reset the chosen project, since this component unmounts on those. */
+  project: string;
+  onProjectChange: (project: string) => void;
 }
 
-export function Dropzone({ projects, labels, accept, title, formats }: Props) {
+export function Dropzone({ projects, labels, accept, title, formats, project, onProjectChange }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const [project, setProject] = useState('');
-  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'stored' | 'error'>('idle');
   const [detail, setDetail] = useState('');
   const [dragging, setDragging] = useState(false);
   const last = useRef<File | null>(null);
@@ -37,7 +41,9 @@ export function Dropzone({ projects, labels, accept, title, formats }: Props) {
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const json = await res.json();
       if (res.ok && json.ok !== false) {
-        setState('done');
+        // .mp4 is stored and linked only — no transcription runs — so it
+        // must not claim "Processed" or promise a review that never comes.
+        setState(json.type === 'recording' ? 'stored' : 'done');
         // The queue below is server-rendered, so without this a fresh upload
         // only appears after a manual reload.
         router.refresh();
@@ -61,7 +67,7 @@ export function Dropzone({ projects, labels, accept, title, formats }: Props) {
         {labels.project}
         <select
           value={project}
-          onChange={(e) => setProject(e.target.value)}
+          onChange={(e) => onProjectChange(e.target.value)}
           className="min-h-11 cursor-pointer rounded-[8px] border border-line bg-sk-surface px-2 py-1.5 text-[10px] text-sk-ink sm:min-h-0"
         >
           <option value="">{labels.all}</option>
@@ -108,6 +114,9 @@ export function Dropzone({ projects, labels, accept, title, formats }: Props) {
           {busy && <span className="text-sk-muted">{labels.processing} {detail}</span>}
           {state === 'done' && (
             <span className="text-sk-green">✓ {labels.done} · {detail} — {labels.nextStep}</span>
+          )}
+          {state === 'stored' && (
+            <span className="text-sk-green">✓ {labels.stored} · {detail} — {labels.noTranscript}</span>
           )}
           {state === 'error' && <span className="text-coral">✗ {labels.failed} · {detail}</span>}
         </span>

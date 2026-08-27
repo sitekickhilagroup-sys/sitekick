@@ -37,7 +37,7 @@ export default async function UploadPage() {
   const tabs: IntakeTab[] = [
     { id: 'email', label: t('upload.src_email'), formats: 'OLM · ZIP · EML · JSONL', accept: '.olm,.zip,.eml,.jsonl' },
     { id: 'meeting', label: t('upload.src_rec'), formats: 'MP4 · TXT · DOCX', accept: '.mp4,.txt,.docx' },
-    { id: 'document', label: t('upload.src_doc'), formats: 'PDF · XLSX · DOCX · CSV', accept: '.pdf,.xlsx,.xls,.docx,.csv' },
+    { id: 'document', label: t('upload.src_doc'), formats: 'PDF · XLSX · XLS · DOCX · CSV', accept: '.pdf,.xlsx,.xls,.docx,.csv' },
     { id: 'sheet', label: t('upload.src_sheet'), formats: t('upload.src_sheet_sub'), accept: '' },
   ];
 
@@ -95,6 +95,8 @@ export default async function UploadPage() {
               chooseFile: t('upload.choose_file'),
               nextStep: t('upload.review_ready'),
               retry: t('common.retry'),
+              stored: t('upload.stored'),
+              noTranscript: t('upload.no_transcript'),
             }}
             pasteLabels={{
               kicker: t('paste.kicker'), title: t('paste.title'), sub: t('paste.sub'),

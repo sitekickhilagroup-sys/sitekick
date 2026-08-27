@@ -41,6 +41,10 @@ export function IntakePanel({
   tabs, projects, dropLabels, pasteLabels, sheetInfo, sheetSettings, pasteInstead, pasteTab,
 }: Props) {
   const [channel, setChannel] = useState<IntakeChannel>('email');
+  // Lives here, not inside Dropzone: the Sheet and Paste tabs render a
+  // different component at this same slot, which unmounts Dropzone and would
+  // otherwise reset the chosen project when the user comes back to a file tab.
+  const [project, setProject] = useState('');
   const current = tabs.find((tb) => tb.id === channel) ?? tabs[0];
 
   return (
@@ -89,6 +93,8 @@ export function IntakePanel({
             title={current.label}
             formats={current.formats}
             labels={dropLabels}
+            project={project}
+            onProjectChange={setProject}
           />
         )}
       </div>
