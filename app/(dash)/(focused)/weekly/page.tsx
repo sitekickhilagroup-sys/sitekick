@@ -62,7 +62,11 @@ export default async function WeeklyPage() {
       </h1>
       {!embedded ? (
         <div className="mt-6 rounded-(--radius-card) border border-line bg-card p-6">
-          <PrepareButton label={t('weekly.prepare')} error={t('common.error_save')} />
+          <PrepareButton
+            label={t('weekly.prepare')}
+            errorReason={t('weekly.error_save_reason')}
+            migrationPendingError={t('weekly.error_migration_pending')}
+          />
         </div>
       ) : (
         (() => {
@@ -75,6 +79,17 @@ export default async function WeeklyPage() {
               labels={{
                 contextPh: t('weekly.context_ph'),
                 error: t('common.error_save'),
+                // Smaller-items fix: the five named, deterministic errors
+                // this board's actions can return (WEEKLY_ERRORS in
+                // lib/weekly.ts) now map to a real translated string via
+                // weeklyErrorMessage in review-board.tsx, instead of the raw
+                // English `res.error` this board used to render verbatim.
+                errorReviewFinalized: t('weekly.error_review_finalized'),
+                errorItemNotFound: t('weekly.error_item_not_found'),
+                errorInvalidVerb: t('weekly.error_invalid_verb'),
+                errorInvalidStatus: t('weekly.error_invalid_status'),
+                errorReviewNotFound: t('weekly.error_review_not_found'),
+                errorSaveReason: t('weekly.error_save_reason'),
                 saved: t('weekly.saved'),
                 save: t('weekly.save'),
                 // D4: the upload card now renders "{name} · {date} · Processed"

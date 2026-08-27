@@ -2,6 +2,29 @@
 // string (not a new "today" source — callers pass laToday()).
 import type { Task, TaskStatus, WeeklyReviewItem } from './types.ts';
 
+// Every named, deterministic error app/actions/weekly.ts's actions can
+// return, mirrored after lib/invoice-rules.ts's INVOICE_ERRORS — so a Hebrew
+// UI can map a known reason to a real translated string (see
+// components/weekly/review-board.tsx's weeklyErrorMessage) instead of
+// surfacing raw English. An unexpected DB error (arbitrary Postgres text) has
+// no fixed translation and still falls back to an interpolated generic
+// message, same as invoices.error_save_reason elsewhere in this codebase.
+export const WEEKLY_ERRORS = {
+  reviewFinalized: 'review is finalized',
+  itemNotFound: 'item not found',
+  invalidVerb: 'invalid verb',
+  invalidStatus: 'invalid status',
+  reviewNotFound: 'review not found',
+  // C2 — pre-0016, 'final' is not yet a valid weekly_review_status enum
+  // value: prepareCurrentReview's own .in('status', ['saved','final']) lookup
+  // for a prior review to carry forward from fails with Postgres 22P02
+  // (invalid_text_representation) before any row is read. Named the same way
+  // createInvoice names its own migration-pending case (INVOICE_ERRORS.
+  // migrationPending), so the owner sees what to actually do instead of a
+  // raw Postgres internal.
+  migrationPending: 'the review status column does not accept "final" yet — migration 0016 needs to be applied first',
+} as const;
+
 export function nextMonday(today: string): string {
   const d = new Date(today + 'T12:00:00Z');
   const add = (8 - d.getUTCDay()) % 7;

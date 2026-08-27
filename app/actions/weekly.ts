@@ -7,7 +7,7 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import {
   buildReviewItems, buildStageLabelMap, isProjectEligibleForReview, isReviewEditable, isTaskEligibleForOpenReview,
-  nextMonday,
+  nextMonday, WEEKLY_ERRORS,
 } from '@/lib/weekly';
 import { buildDetailsPatch, type TaskDetailsPatch } from '@/lib/task-details';
 import { verbToPatch } from '@/lib/work-verbs';
@@ -79,7 +79,15 @@ export async function prepareCurrentReview(): Promise<{ ok: true; reviewId: stri
     .order('meeting_date', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (priorError) return { error: priorError.message };
+  if (priorError) {
+    // C2: pre-0016, 'final' isn't a valid enum value yet, so Postgres rejects
+    // the .in() filter above with 22P02 before a single row is read — named
+    // the same way createInvoice names its own migration-pending case (see
+    // WEEKLY_ERRORS.migrationPending), so the caller can show what to
+    // actually do instead of a raw Postgres internal.
+    if (priorError.code === '22P02') return { error: WEEKLY_ERRORS.migrationPending };
+    return { error: priorError.message };
+  }
 
   let reviewId: string;
   if (existingReview) {
@@ -326,7 +334,7 @@ async function assertReviewEditable(admin: SupabaseClient, reviewId: string): Pr
   const { data: review, error: reviewError } = await admin
     .from('weekly_reviews').select('status').eq('id', reviewId).maybeSingle();
   if (reviewError) return { error: reviewError.message };
-  if (!review || !isReviewEditable(review.status)) return { error: 'review is finalized' };
+  if (!review || !isReviewEditable(review.status)) return { error: WEEKLY_ERRORS.reviewFinalized };
   return { ok: true };
 }
 
@@ -344,7 +352,7 @@ async function loadEditableReviewItem(
   const { data: item, error: itemError } = await admin
     .from('weekly_review_items').select('*').eq('id', itemId).maybeSingle();
   if (itemError) return { error: itemError.message };
-  if (!item) return { error: 'item not found' };
+  if (!item) return { error: WEEKLY_ERRORS.itemNotFound };
   const row = item as WeeklyReviewItem;
   const gate = await assertReviewEditable(admin, row.weekly_review_id);
   if ('error' in gate) return gate;
@@ -425,7 +433,7 @@ export async function saveItemOwnerDue(itemId: string, patch: { owner?: string; 
 // same tasks row /work reads), then the review row snapshots the result.
 export async function setItemStatus(itemId: string, taskId: string, verb: ReviewVerb): Promise<ActionResult> {
   const user = await requireUser();
-  if (!REVIEW_VERBS.includes(verb)) return { error: 'invalid verb' };
+  if (!REVIEW_VERBS.includes(verb)) return { error: WEEKLY_ERRORS.invalidVerb };
   const mapped = verbToPatch(verb, null, laToday());
   if ('error' in mapped) return { error: mapped.error };
   const admin = supabaseAdmin();
@@ -508,7 +516,7 @@ export type SnapshotState = (typeof SNAPSHOT_STATES)[number];
 
 export async function setItemSnapshot(itemId: string, snapshot: SnapshotState): Promise<ActionResult> {
   const user = await requireUser();
-  if (!SNAPSHOT_STATES.includes(snapshot)) return { error: 'invalid status' };
+  if (!SNAPSHOT_STATES.includes(snapshot)) return { error: WEEKLY_ERRORS.invalidStatus };
   const admin = supabaseAdmin();
   const actor = user.email ?? user.id;
 
@@ -617,7 +625,7 @@ export async function finalizeReview(reviewId: string): Promise<ActionResult> {
   const { data: before, error: beforeError } = await admin
     .from('weekly_reviews').select('*').eq('id', reviewId).maybeSingle();
   if (beforeError) return { error: beforeError.message };
-  if (!before) return { error: 'review not found' };
+  if (!before) return { error: WEEKLY_ERRORS.reviewNotFound };
   if (!isReviewEditable(before.status)) return { ok: true };
 
   const finalized_at = new Date().toISOString();
@@ -644,7 +652,7 @@ export async function reopenReview(reviewId: string): Promise<ActionResult> {
   const { data: before, error: beforeError } = await admin
     .from('weekly_reviews').select('*').eq('id', reviewId).maybeSingle();
   if (beforeError) return { error: beforeError.message };
-  if (!before) return { error: 'review not found' };
+  if (!before) return { error: WEEKLY_ERRORS.reviewNotFound };
   if (isReviewEditable(before.status)) return { ok: true };
 
   const { error } = await admin

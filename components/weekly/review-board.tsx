@@ -8,7 +8,26 @@ import {
   setItemSnapshot, setItemStatus, type SnapshotState,
 } from '@/app/actions/weekly';
 import { laToday } from '@/lib/date';
+import { WEEKLY_ERRORS } from '@/lib/weekly';
 import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
+
+// Smaller-items fix (whole-branch review): the five named, deterministic
+// errors this board's actions can return now map to a real translated
+// string, the same way link-editor.tsx maps INVOICE_ERRORS — an unexpected
+// DB error (arbitrary Postgres text) still surfaces verbatim, interpolated
+// into errorSaveReason, which stays the right call for a reason nobody could
+// have pre-translated (see the D4 comment on uploadError below for why
+// verbatim-over-generic is this file's deliberate policy for the unknown case).
+function weeklyErrorMessage(code: string, labels: Record<string, string>): string {
+  switch (code) {
+    case WEEKLY_ERRORS.reviewFinalized: return labels.errorReviewFinalized;
+    case WEEKLY_ERRORS.itemNotFound: return labels.errorItemNotFound;
+    case WEEKLY_ERRORS.invalidVerb: return labels.errorInvalidVerb;
+    case WEEKLY_ERRORS.invalidStatus: return labels.errorInvalidStatus;
+    case WEEKLY_ERRORS.reviewNotFound: return labels.errorReviewNotFound;
+    default: return labels.errorSaveReason ? labels.errorSaveReason.replace('{reason}', code) : code;
+  }
+}
 
 interface Row { item: WeeklyReviewItem; title: string; owner?: string | null; due?: string | null }
 interface SubtopicGroup { name: string; projectId?: string | null; context?: string | null; items: Row[] }
@@ -155,6 +174,7 @@ export function ReviewBoard({ review, groups, labels, pendingProposals }: Props)
                       projectId={sub.projectId ?? null}
                       subtopic={sub.name}
                       value={sub.context ?? null}
+                      labels={labels}
                       placeholder={labels.contextPh}
                       finalized={finalized}
                     />
@@ -200,9 +220,9 @@ export function ReviewBoard({ review, groups, labels, pendingProposals }: Props)
 // regardless of what this <textarea>'s disabled state says, so disabling it
 // here isn't optional decoration — see assertReviewEditable in
 // app/actions/weekly.ts.
-function SubtopicContext({ reviewId, projectId, subtopic, value, placeholder, finalized }: {
+function SubtopicContext({ reviewId, projectId, subtopic, value, labels, placeholder, finalized }: {
   reviewId: string; projectId: string | null; subtopic: string; value: string | null;
-  placeholder?: string; finalized: boolean;
+  labels: Record<string, string>; placeholder?: string; finalized: boolean;
 }) {
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
@@ -217,7 +237,7 @@ function SubtopicContext({ reviewId, projectId, subtopic, value, placeholder, fi
         onBlur={(e) => start(async () => {
           setFailed(null);
           const res = await saveSubtopicContext(reviewId, projectId, subtopic, e.target.value);
-          if (res?.error) setFailed(res.error);
+          if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
         })}
         disabled={pending || finalized}
         aria-label={placeholder}
@@ -272,7 +292,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
   const saveNote = (note: string) => start(async () => {
     setFailed(null);
     const res = await saveItemNote(item.id, { weekly_note: note });
-    if (res?.error) setFailed(res.error);
+    if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
   });
 
   // D2: mirrors saveNote exactly — same extended action, same onBlur trigger
@@ -280,7 +300,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
   const saveNextStep = (nextStep: string) => start(async () => {
     setFailed(null);
     const res = await saveItemNote(item.id, { next_step: nextStep });
-    if (res?.error) setFailed(res.error);
+    if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
   });
 
   // D2: owner/due write the canonical task, so this is a separate action
@@ -289,13 +309,13 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
   const saveOwnerDue = (patch: { owner?: string; due?: string }) => start(async () => {
     setFailed(null);
     const res = await saveItemOwnerDue(item.id, patch);
-    if (res?.error) setFailed(res.error);
+    if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
   });
 
   const act = (verb: 'completed' | 'not_applicable') => start(async () => {
     setFailed(null);
     const res = await setItemStatus(item.id, item.task_id, verb);
-    if (res?.error) setFailed(res.error);
+    if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
   });
 
   // Meeting statuses — annotations only; the canonical task is untouched
@@ -303,7 +323,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
   const snap = (state: SnapshotState) => start(async () => {
     setFailed(null);
     const res = await setItemSnapshot(item.id, state);
-    if (res?.error) setFailed(res.error);
+    if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
   });
   // Spec §יא: seven buttons become one dropdown. done/dropped route through
   // the task-mutating verbs; everything else is a review-only snapshot.
@@ -469,7 +489,7 @@ function ReviewControls(
     setFailed(null);
     setJustSaved(false);
     const res = await saveReview(review.id);
-    if (res?.error) setFailed(res.error);
+    if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
     else setJustSaved(true);
   });
 
@@ -481,14 +501,14 @@ function ReviewControls(
     start(async () => {
       setFailed(null);
       const res = await finalizeReview(review.id);
-      if (res?.error) setFailed(res.error);
+      if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
     });
   };
 
   const reopen = () => start(async () => {
     setFailed(null);
     const res = await reopenReview(review.id);
-    if (res?.error) setFailed(res.error);
+    if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
   });
 
   const upload = (file: File) => start(async () => {
