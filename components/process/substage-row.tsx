@@ -56,14 +56,21 @@ export function SubstageRow({ projectId, template, instance, labels }: Props) {
     <li className={`flex flex-wrap items-center gap-2 border-b border-line2 px-1 py-1.5 last:border-b-0 ${pending ? 'opacity-40' : ''}`}>
       <span className="min-w-0 flex-1 text-sm text-ink">{template.name}</span>
       {!instance ? (
+        // Smaller-items fix: an un-activated sub-stage reads "Not activated"
+        // everywhere else in this codebase (spec §14; see the identical fix
+        // in process-explorer.tsx's SubstageDetail/list row) — this row was
+        // the one place still reading the instance-less fallback status
+        // ('upcoming') as if it were real status data, so the same sub-stage
+        // could show two different labels depending on which screen rendered
+        // it.
         <button
           type="button"
           disabled={pending}
           onClick={activate}
-          aria-label={`${template.name}: ${labels['status.upcoming']}`}
+          aria-label={`${template.name}: ${labels.notActivated}`}
           className="min-h-11 cursor-pointer whitespace-nowrap rounded-full bg-card2 px-2.5 py-1 text-xs text-ink3 ring-line transition-shadow hover:ring-2 disabled:opacity-50 sm:min-h-0"
         >
-          {labels['status.upcoming']}
+          {labels.notActivated}
         </button>
       ) : (
         <select

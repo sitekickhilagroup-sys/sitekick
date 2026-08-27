@@ -2,6 +2,7 @@ import { supabaseServer } from './supabase/server.ts';
 import { followUpAlerts, topActions } from './priority.ts';
 import { laToday } from './date.ts';
 import { selectBlockerView, type BlockerCounts } from './blockers.ts';
+import { canonVendorName, vendorKey } from './invoice-rules.ts';
 import type {
   Action, Blocker, BlockerKind, Decision, Invoice, Phase, Project, ProjectEvent, ProjectStage,
   Relationship, StageRequirement, SubstageCatalogRow, Task, Vendor, Workstream,
@@ -246,16 +247,37 @@ export async function getOverviewData(): Promise<OverviewData> {
     Math.max(0, Math.floor((Date.parse(today) - Date.parse(iso.slice(0, 10))) / 86400000));
   // Consultants: same waiting_for-substring match the directory uses, plus
   // open invoice totals per vendor. Only vendors with something live make the list.
+  //
+  // I5: grouped by the same canonical vendor identity /invoices uses
+  // (vendorKey/canonVendorName, lib/invoice-rules.ts) — this used to group by
+  // raw vendors.id instead, so a punctuation-only vendor split (e.g. "Acme
+  // LLC" and "Acme" as two separate rows) read as one merged vendor with
+  // combined open money on /invoices, and two separate consultants with
+  // split money here. Grouping vendor rows by key first (rather than
+  // grouping invoices by resolved name, /invoices's own approach) keeps the
+  // waiting_for substring match — which is per raw vendor NAME, not per
+  // invoice — correct for a group with more than one name in it.
   const vendorRows = (vendorsQ.data ?? []) as Pick<Vendor, 'id' | 'name' | 'discipline'>[];
-  const consultants = vendorRows
-    .map((v) => {
+  const vendorGroupsByKey = new Map<string, Pick<Vendor, 'id' | 'name' | 'discipline'>[]>();
+  for (const v of vendorRows) {
+    const k = vendorKey(v.name);
+    const list = vendorGroupsByKey.get(k);
+    if (list) list.push(v); else vendorGroupsByKey.set(k, [v]);
+  }
+  const consultants = [...vendorGroupsByKey.values()]
+    .map((group) => {
+      // First-seen name wins, same tie-break /invoices's own canonicalByKey
+      // uses (both iterate vendorRows in the same fetched order).
+      const name = canonVendorName(group[0].name);
+      const discipline = group.find((v) => v.discipline)?.discipline ?? null;
+      const ids = new Set(group.map((v) => v.id));
       const waitingCount = openTasks.filter(
-        (t) => t.waiting_for && v.name.toLowerCase().includes(t.waiting_for.toLowerCase()),
+        (t) => !!t.waiting_for && group.some((v) => v.name.toLowerCase().includes(t.waiting_for!.toLowerCase())),
       ).length;
       const openUsd = invoices
-        .filter((inv) => inv.vendor_id === v.id && openStatuses.has(inv.status))
+        .filter((inv) => inv.vendor_id && ids.has(inv.vendor_id) && openStatuses.has(inv.status))
         .reduce((s, inv) => s + Number(inv.amount_usd), 0);
-      return { name: v.name, discipline: v.discipline, waitingCount, openUsd };
+      return { name, discipline, waitingCount, openUsd };
     })
     .filter((c) => c.waitingCount > 0 || c.openUsd > 0)
     .sort((a, b) => b.waitingCount - a.waitingCount || b.openUsd - a.openUsd)

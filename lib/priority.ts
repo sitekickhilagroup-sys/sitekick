@@ -22,6 +22,10 @@ export function scoreTask(t: Task, ctx: ScoreContext): number {
 
   const due = daysUntil(t.due, ctx.today);
   if (due !== null) {
+    // Smaller-items fix: todayScore below (Today's own ranking) adds
+    // another +15 on top of this +35 for the same overdue task — the two
+    // stack, so an overdue task's real weight inside Today is +50. See the
+    // comment on that +15 for why this is called out at both ends.
     if (due < 0) score += 35;
     else if (due <= 2) score += 25;
     else if (due <= 7) score += 12;
@@ -169,6 +173,13 @@ function todayScore(t: Task, ctx: TodayRankContext): number {
     currentStageKey: t.project_id ? ctx.currentStageByProject?.get(t.project_id) ?? null : null,
   });
   if (t.process_impact) s += IMPACT_WEIGHT[t.process_impact];
+  // Smaller-items fix: this +15 STACKS on scoreTask's own overdue bonus
+  // above (+35 for due < 0, inside the scoreTask(...) call this function
+  // just made) — an overdue task entering Today already carries +35 before
+  // this line ever runs, so its real overdue weight here is +50, not +15.
+  // Documented at both ends (see the `due < 0` branch in scoreTask) so
+  // tuning one number without noticing the other doesn't silently retune
+  // Today's ranking by more or less than intended.
   if (t.due && t.due < ctx.today) s += 15; // a dated commitment already missed
   return s;
 }

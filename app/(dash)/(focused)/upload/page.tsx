@@ -166,7 +166,13 @@ export default async function UploadPage() {
                       {ready ? t('upload.st_ready') : doc.processed_at ? t('upload.st_processed') : t('upload.st_uploaded')}
                     </span>
                     {ready ? (
-                      <Link href="/inbox" className="justify-self-end whitespace-nowrap text-[10px] font-[650] text-sk-green hover:underline">
+                      // I8: used to be a literal href="/inbox" — one .zip can
+                      // drop 30-60 pending rows behind a per-document label
+                      // reading "Review THIS when ready", but every document
+                      // opened the exact same unscoped inbox. doc.id was
+                      // right there and unused; inbox/page.tsx now reads and
+                      // validates ?doc= (I2's companion fix).
+                      <Link href={`/inbox?doc=${doc.id}`} className="justify-self-end whitespace-nowrap text-[10px] font-[650] text-sk-green hover:underline">
                         {t('upload.review_ready')} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
                       </Link>
                     ) : (
