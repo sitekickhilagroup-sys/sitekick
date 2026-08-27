@@ -428,7 +428,18 @@ export async function parseReconciliationSource(
 export async function flagInvoiceForVerification(invoiceId: string): Promise<{ error: string } | { ok: true; undoId: string | null }> {
   const user = await requireUser();
   const admin = supabaseAdmin();
-  const { data: before } = await admin.from('invoices').select('needs_verification').eq('id', invoiceId).maybeSingle();
+  const { data: before, error: selectError } = await admin.from('invoices').select('needs_verification').eq('id', invoiceId).maybeSingle();
+  if (selectError) {
+    // Review round 2, finding 1: this used to discard selectError and treat
+    // !before as not-found — which meant an UNAPPLIED migration 0017 (this
+    // codebase's own established live condition: createInvoice's insert
+    // below has a dedicated PGRST204 branch for exactly this column) read as
+    // "invoice not found" for a row visible on screen, and any other SELECT
+    // failure (RLS, network) read the same way. Named the same way
+    // createInvoice already does, not a second guess at the code.
+    if (selectError.code === 'PGRST204') return { error: INVOICE_ERRORS.migrationPending };
+    return { error: selectError.message };
+  }
   if (!before) return { error: INVOICE_ERRORS.notFound };
   if (before.needs_verification) return { ok: true as const, undoId: null }; // already flagged — nothing to write or undo
 
@@ -465,7 +476,28 @@ export async function undoFlagInvoiceForVerification(logId: string): Promise<{ e
   return { ok: true as const };
 }
 
-export interface FlagReconciledRowResult { count: number; undoId: string | null }
+/**
+ * Review round 2, finding 2 + minor 2: every outcome is counted separately
+ * and never silently folded into another —
+ *   - `flagged`: rows this click actually wrote to (needs_verification was
+ *     false, now true). One undoId per row, all returned in `undoIds`.
+ *   - `alreadyFlagged`: rows that were already flagged before this click
+ *     (flagInvoiceForVerification's own no-op branch) — real, but nothing
+ *     THIS click can undo, so never counted in `undoIds`.
+ *   - `failed`: rows where the write itself errored. Previously discarded
+ *     once at least one row succeeded, which let a real partial failure
+ *     read as a plain, complete success.
+ * `failureReason` is the last error hit, present whenever failed > 0, so a
+ * partial failure is never silent even though the call as a whole still
+ * reports `ok: true` (some rows in the group DID end up flagged).
+ */
+export interface FlagReconciledRowResult {
+  flagged: number;
+  alreadyFlagged: number;
+  failed: number;
+  undoIds: string[];
+  failureReason: string | null;
+}
 
 /**
  * E6's entry point for "Flag Verify" as it is actually clicked — from a row
@@ -511,12 +543,41 @@ export async function flagReconciledRowForVerification(
   const matches = rows.filter((r) => reconcileKey(vendorName(r.vendor_id), r.number, Number(r.amount_usd), r.received_date) === targetKey);
   if (matches.length === 0) return { error: INVOICE_ERRORS.reconcileNoMatch };
 
-  const undoIds: (string | null)[] = [];
-  let lastError: string | null = null;
+  let flagged = 0;
+  let alreadyFlagged = 0;
+  let failed = 0;
+  const undoIds: string[] = [];
+  let failureReason: string | null = null;
   for (const m of matches) {
     const res = await flagInvoiceForVerification(m.id);
-    if ('error' in res) lastError = res.error; else undoIds.push(res.undoId);
+    if ('error' in res) { failed++; failureReason = res.error; continue; }
+    if (res.undoId) { flagged++; undoIds.push(res.undoId); } else { alreadyFlagged++; }
   }
-  if (undoIds.length === 0) return { error: lastError ?? INVOICE_ERRORS.reconcileNoMatch };
-  return { ok: true as const, count: undoIds.length, undoId: undoIds.length === 1 ? undoIds[0] : null };
+  if (flagged === 0 && alreadyFlagged === 0) return { error: failureReason ?? INVOICE_ERRORS.reconcileNoMatch };
+  return { ok: true as const, flagged, alreadyFlagged, failed, undoIds, failureReason };
+}
+
+/**
+ * Undoes every id flagReconciledRowForVerification handed back — the
+ * suspectedDuplicates case can flag more than one invoice from a single
+ * click, and undoFlagInvoiceForVerification only ever reverts one logId at
+ * a time. Same honesty rule as the flag loop above: a partial failure here
+ * (2 of 3 undo, 1 errors) is reported as `undone`/`failed` rather than
+ * quietly discarded once at least one succeeds.
+ */
+export interface UndoFlagReconciledRowResult { undone: number; failed: number; failureReason: string | null }
+
+export async function undoFlagReconciledRowForVerification(
+  logIds: string[],
+): Promise<{ error: string } | ({ ok: true } & UndoFlagReconciledRowResult)> {
+  if (logIds.length === 0) return { error: INVOICE_ERRORS.nothingToUndo };
+  let undone = 0;
+  let failed = 0;
+  let failureReason: string | null = null;
+  for (const logId of logIds) {
+    const res = await undoFlagInvoiceForVerification(logId);
+    if ('error' in res) { failed++; failureReason = res.error; } else undone++;
+  }
+  if (undone === 0) return { error: failureReason ?? INVOICE_ERRORS.nothingToUndo };
+  return { ok: true as const, undone, failed, failureReason };
 }

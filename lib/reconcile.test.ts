@@ -36,7 +36,7 @@ function vendorNameFrom(byId: Record<string, string>): (id: string | null) => st
 describe('reconcile — empty input', () => {
   test('no crash, everything zero', () => {
     expect(reconcile([], [], () => '')).toEqual({
-      source: 0, system: 0, added: [], orphans: [], changed: [], suspectedDuplicates: [],
+      source: 0, system: 0, added: [], orphans: [], changed: [], suspectedDuplicates: [], possibleInvoiceNoDrift: [],
     });
   });
 });
@@ -130,6 +130,7 @@ describe('reconcile — added (extra system row)', () => {
     expect(report.added[0]).toEqual({ vendor: 'Thang Le & Associates', invoice_no: 'EXTRA-1', amount_usd: 5250, received_date: '2026-04-15' });
     expect(report.changed).toEqual([]);
     expect(report.orphans).toEqual([]);
+    expect(report.possibleInvoiceNoDrift).toEqual([]);
   });
 });
 
@@ -139,6 +140,7 @@ describe('reconcile — orphans (source row missing from system)', () => {
     const report = reconcile(source, [], () => '');
     expect(report.orphans).toEqual([{ vendor: 'Never Imported Co', invoice_no: 'X-1', amount_usd: 300, received_date: '2026-03-03' }]);
     expect(report.added).toEqual([]);
+    expect(report.possibleInvoiceNoDrift).toEqual([]);
   });
 });
 
@@ -228,19 +230,63 @@ describe('reconcile — vendor missing on the source row', () => {
   });
 });
 
-describe('reconcile — invoice_no present on only one side', () => {
-  test('documented edge case: surfaces as one orphan + one added, not a single "changed" entry', () => {
-    // Source has no invoice_no (falls back to vendor+amount+date); system
-    // has the same vendor/amount/date but DOES carry a number — its key is
-    // therefore invoice_no-shaped, not fallback-shaped, so the two keys
-    // never collide even though a human would call this "the same invoice,
-    // number added later". See reconcile()'s own doc comment.
-    const source: InvoiceRow[] = [sourceRow({ vendor: 'Edge Co', number: null, amount: 88, received_date: '2026-10-01' })];
-    const system: Invoice[] = [systemRow({ vendor_id: 'v-edge', number: '77', amount_usd: 88, received_date: '2026-10-01' })];
-    const report = reconcile(source, system, vendorNameFrom({ 'v-edge': 'Edge Co' }));
+describe('reconcile — invoice_no drift (present on only one side)', () => {
+  // reconcileKey alone can never match these — a row with a number and a
+  // row without one take different key SHAPES, so they'd otherwise surface
+  // as a bare orphan + added pair. pairInvoiceNoDrift (lib/reconcile.ts) is
+  // the second pass that catches this specific shape mismatch. Review round
+  // 2, finding 3: an unpaired Orphans row reads as "add this", and doing so
+  // here would create a duplicate of an invoice already on file — the exact
+  // bug class this whole feature exists to catch.
+
+  test('unambiguous: source blank, system has a number — pairs into changed, not orphan+added', () => {
+    // The review's own scenario.
+    const source: InvoiceRow[] = [sourceRow({ vendor: 'Acme', number: null, amount: 5250, received_date: '2026-04-15' })];
+    const system: Invoice[] = [systemRow({ vendor_id: 'v-acme', number: 'INV-88', amount_usd: 5250, received_date: '2026-04-15' })];
+    const report = reconcile(source, system, vendorNameFrom({ 'v-acme': 'Acme' }));
+    expect(report.orphans).toEqual([]);
+    expect(report.added).toEqual([]);
+    expect(report.changed).toHaveLength(1);
+    expect(report.changed[0].fields).toEqual(['invoice_no']);
+    expect(report.changed[0].ref).toEqual({ vendor: 'Acme', invoice_no: null, amount_usd: 5250, received_date: '2026-04-15' });
+    expect(report.possibleInvoiceNoDrift).toEqual([]);
+  });
+
+  test('unambiguous, reverse direction: source has a number, system blank — still pairs', () => {
+    const source: InvoiceRow[] = [sourceRow({ vendor: 'Beta Co', number: 'INV-50', amount: 900, received_date: '2026-03-15' })];
+    const system: Invoice[] = [systemRow({ vendor_id: 'v-beta', number: null, amount_usd: 900, received_date: '2026-03-15' })];
+    const report = reconcile(source, system, vendorNameFrom({ 'v-beta': 'Beta Co' }));
+    expect(report.orphans).toEqual([]);
+    expect(report.added).toEqual([]);
+    expect(report.changed).toHaveLength(1);
+    expect(report.changed[0].fields).toEqual(['invoice_no']);
+    expect(report.changed[0].ref.invoice_no).toBe('INV-50');
+    expect(report.possibleInvoiceNoDrift).toEqual([]);
+  });
+
+  test('ambiguous: two same-vendor/amount/date candidates on the numbered side — left in place, both flagged as possible matches', () => {
+    // Two DIFFERENT invoice numbers, same vendor+amount+date, so pass 1
+    // treats them as two clean singleton `added` entries (not a
+    // suspectedDuplicates group — their reconcileKeys differ). Which one
+    // (if either) the blank source row actually corresponds to can't be
+    // inferred, so neither gets paired.
+    const source: InvoiceRow[] = [sourceRow({ vendor: 'Acme', number: null, amount: 5250, received_date: '2026-04-15' })];
+    const system: Invoice[] = [
+      systemRow({ vendor_id: 'v-acme', number: 'INV-88', amount_usd: 5250, received_date: '2026-04-15' }),
+      systemRow({ vendor_id: 'v-acme', number: 'INV-89', amount_usd: 5250, received_date: '2026-04-15' }),
+    ];
+    const report = reconcile(source, system, vendorNameFrom({ 'v-acme': 'Acme' }));
+    // Nobody is silently paired, dropped, or merged — a human has to pick.
     expect(report.orphans).toHaveLength(1);
-    expect(report.added).toHaveLength(1);
+    expect(report.added).toHaveLength(2);
     expect(report.changed).toEqual([]);
+    // But the ambiguity is surfaced, not silent: the orphan (which reads as
+    // "add this") and both candidates it might actually already be are all
+    // flagged.
+    expect(report.possibleInvoiceNoDrift).toHaveLength(3);
+    expect(report.possibleInvoiceNoDrift.some((r) => r.invoice_no === null)).toBe(true);
+    expect(report.possibleInvoiceNoDrift.some((r) => r.invoice_no === 'INV-88')).toBe(true);
+    expect(report.possibleInvoiceNoDrift.some((r) => r.invoice_no === 'INV-89')).toBe(true);
   });
 });
 

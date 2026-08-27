@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from 'react';
 import {
-  flagReconciledRowForVerification, parseReconciliationSource, undoFlagInvoiceForVerification,
+  flagReconciledRowForVerification, parseReconciliationSource, undoFlagReconciledRowForVerification,
 } from '@/app/actions/invoices';
 import { INVOICE_ERRORS } from '@/lib/invoice-rules';
 import type { InvoiceRowRef, ReconcileReport as ReconcileReportData } from '@/lib/reconcile';
@@ -18,10 +18,17 @@ export interface ReconcileReportLabels {
   fieldAmount: string; fieldReceived: string; fieldPaidDate: string;
   fieldStatus: string; fieldEntity: string; fieldDescription: string;
   flagVerify: string; flagged: string; flaggedCount: string;
+  /** Review round 2, minor 2 — a multi-row Flag Verify can land on a mix of
+   *  outcomes; each gets its own honest phrase instead of one blended count. */
+  alreadyFlaggedCount: string; flagFailedCount: string;
+  /** Review round 2, finding 3 — shown on an Added/Orphans row that shares a
+   *  vendor+amount+received_date with a row on the other list but couldn't
+   *  be safely paired (ambiguous: more than one candidate on some side). */
+  numberDriftWarning: string;
   recorded: string; undo: string; cancel: string;
   errorFileMissing: string; errorBadFileType: string; errorParseFailed: string;
   errorNotInvoiceSheet: string; errorNoMatch: string; errorNotFound: string;
-  errorNothingToUndo: string; errorSaveReason: string;
+  errorNothingToUndo: string; errorMigrationPending: string; errorSaveReason: string;
 }
 
 interface Props {
@@ -31,9 +38,14 @@ interface Props {
 
 type UploadPhase = 'idle' | 'busy' | 'error';
 
+interface FlagResult {
+  flagged: number; alreadyFlagged: number; failed: number;
+  undoIds: string[]; failureReason: string | null;
+}
+
 interface FlagState {
   pending?: boolean;
-  result?: { count: number; undoId: string | null };
+  result?: FlagResult;
   error?: string;
 }
 
@@ -58,11 +70,16 @@ function uploadErrorMessage(code: string, labels: ReconcileReportLabels): string
   }
 }
 
+// Review round 2, finding 1: flagInvoiceForVerification's own SELECT can now
+// surface migrationPending (0017 not applied yet) instead of a misleading
+// "invoice not found" — needs the same named message createInvoice's insert
+// already shows elsewhere on this page.
 function flagErrorMessage(code: string, labels: ReconcileReportLabels): string {
   switch (code) {
     case INVOICE_ERRORS.reconcileNoMatch: return labels.errorNoMatch;
     case INVOICE_ERRORS.notFound: return labels.errorNotFound;
     case INVOICE_ERRORS.nothingToUndo: return labels.errorNothingToUndo;
+    case INVOICE_ERRORS.migrationPending: return labels.errorMigrationPending;
     default: return labels.errorSaveReason.replace('{reason}', `⁨${code}⁩`);
   }
 }
@@ -90,29 +107,67 @@ function RowLine({ row, labels, money }: { row: InvoiceRowRef; labels: Reconcile
   );
 }
 
+/** Review round 2, finding 3 — sits right on the Added/Orphans row it
+ *  applies to (not a separate list), because that row is exactly the one a
+ *  human might otherwise act on by clicking Add Invoice / Flag Verify. */
+function NumberDriftWarning({ labels }: { labels: ReconcileReportLabels }) {
+  return (
+    <p className="mt-0.5 text-[10px] font-semibold text-apricot">
+      <span aria-hidden="true">⚠ </span>{labels.numberDriftWarning}
+    </p>
+  );
+}
+
 function FlagButton({
   labels, state, onFlag, onUndo, onDismiss,
 }: {
   labels: ReconcileReportLabels; state: FlagState | undefined; onFlag: () => void; onUndo: () => void; onDismiss: () => void;
 }) {
   if (state?.result) {
-    const message = state.result.count > 1
-      ? labels.flaggedCount.replace('{n}', String(state.result.count))
-      : labels.flagged;
+    const { flagged, alreadyFlagged, failed, undoIds, failureReason } = state.result;
+    // Review round 2, minor 2: each real outcome gets its own honest phrase
+    // instead of one blended "N flagged" that hides "some were already
+    // flagged" or silently drops a partial failure.
+    const parts: string[] = [];
+    if (flagged > 0) parts.push(flagged > 1 ? labels.flaggedCount.replace('{n}', String(flagged)) : labels.flagged);
+    if (alreadyFlagged > 0) parts.push(labels.alreadyFlaggedCount.replace('{n}', String(alreadyFlagged)));
+    const message = parts.length > 0 ? parts.join(' · ') : labels.flagged;
     return (
-      <SavedChip
-        message={message}
-        undoId={state.result.undoId}
-        pending={!!state.pending}
-        onUndo={onUndo}
-        // Same as every other SavedChip use in this codebase (add-invoice.tsx,
-        // link-editor.tsx): dismiss only clears the local confirmation, it
-        // never undoes the write — the row stays flagged in the database,
-        // this just lets "Flag Verify" show again instead of the chip
-        // sitting there forever for the rest of the session.
-        onDismiss={onDismiss}
-        labels={{ recorded: labels.recorded, undo: labels.undo, cancel: labels.cancel }}
-      />
+      <span className="mt-1 flex flex-col items-start gap-1">
+        <SavedChip
+          message={message}
+          // Sentinel only — a truthy value here just tells SavedChip to
+          // render the Undo button at all; onUndo (below) always undoes the
+          // FULL undoIds list from state, never just this one id (review
+          // round 2, finding 2: a multi-row flag must be fully reversible).
+          undoId={undoIds.length > 0 ? undoIds[0] : null}
+          pending={!!state.pending}
+          onUndo={onUndo}
+          // Same as every other SavedChip use in this codebase (add-invoice.tsx,
+          // link-editor.tsx): dismiss only clears the local confirmation, it
+          // never undoes the write — the row stays flagged in the database,
+          // this just lets "Flag Verify" show again instead of the chip
+          // sitting there forever for the rest of the session.
+          onDismiss={onDismiss}
+          labels={{ recorded: labels.recorded, undo: labels.undo, cancel: labels.cancel }}
+        />
+        {failed > 0 && (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span role="alert" className="text-[10px] font-semibold text-coral">
+              {labels.flagFailedCount.replace('{n}', String(failed))}
+              {failureReason ? `: ${flagErrorMessage(failureReason, labels)}` : ''}
+            </span>
+            <button
+              type="button"
+              onClick={onFlag}
+              className="min-h-11 shrink-0 rounded-full border border-coral/40 px-2 py-0.5 text-[10px] font-semibold text-coral hover:opacity-80 sm:min-h-0"
+            >
+              {labels.flagVerify}
+            </button>
+          </span>
+        )}
+        {state.error && <span role="alert" className="text-[10px] font-semibold text-coral">{flagErrorMessage(state.error, labels)}</span>}
+      </span>
     );
   }
   return (
@@ -185,18 +240,36 @@ export function ReconcileReport({ labels, money }: Props) {
     start(async () => {
       const res = await flagReconciledRowForVerification(row);
       if ('error' in res) { setFlags((f) => ({ ...f, [key]: { error: res.error } })); return; }
-      setFlags((f) => ({ ...f, [key]: { result: { count: res.count, undoId: res.undoId } } }));
+      setFlags((f) => ({
+        ...f,
+        [key]: {
+          result: {
+            flagged: res.flagged, alreadyFlagged: res.alreadyFlagged, failed: res.failed,
+            undoIds: res.undoIds, failureReason: res.failureReason,
+          },
+        },
+      }));
     });
   };
 
+  // Undoes every id this row's flag click produced — a suspected-duplicate
+  // group can flag more than one invoice from one click, so undo has to
+  // reverse all of them, not just one (review round 2, finding 2).
   const undoFlag = (row: InvoiceRowRef) => {
     const key = rowKey(row);
-    const undoId = flags[key]?.result?.undoId;
-    if (!undoId) return;
+    const undoIds = flags[key]?.result?.undoIds ?? [];
+    if (undoIds.length === 0) return;
     setFlags((f) => ({ ...f, [key]: { ...f[key], pending: true } }));
     start(async () => {
-      const res = await undoFlagInvoiceForVerification(undoId);
+      const res = await undoFlagReconciledRowForVerification(undoIds);
       if ('error' in res) { setFlags((f) => ({ ...f, [key]: { ...f[key], pending: false, error: res.error } })); return; }
+      if (res.failed > 0) {
+        // Partial undo: some rows reverted, some didn't — leave the
+        // confirmation up (it's still accurate for what remains flagged)
+        // rather than clearing it as though everything undid cleanly.
+        setFlags((f) => ({ ...f, [key]: { ...f[key], pending: false, error: res.failureReason ?? undefined } }));
+        return;
+      }
       setFlags((f) => { const next = { ...f }; delete next[key]; return next; });
     });
   };
@@ -210,6 +283,11 @@ export function ReconcileReport({ labels, money }: Props) {
   };
 
   const suspectedRowCount = report ? report.suspectedDuplicates.reduce((n, g) => n + g.length, 0) : 0;
+  // Value-keyed, not reference-keyed: `report` crosses a server action's
+  // serialization boundary, so possibleInvoiceNoDrift's entries aren't
+  // guaranteed to be the SAME object instances as the ones in
+  // orphans/added even when they describe the same row.
+  const driftKeys = new Set((report?.possibleInvoiceNoDrift ?? []).map(rowKey));
 
   return (
     <div className="space-y-4">
@@ -258,6 +336,7 @@ export function ReconcileReport({ labels, money }: Props) {
               {report.added.map((row) => (
                 <li key={rowKey(row)} className="py-2">
                   <RowLine row={row} labels={labels} money={money} />
+                  {driftKeys.has(rowKey(row)) && <NumberDriftWarning labels={labels} />}
                   <FlagButton labels={labels} state={flags[rowKey(row)]} onFlag={() => flag(row)} onUndo={() => undoFlag(row)} onDismiss={() => dismissFlag(row)} />
                 </li>
               ))}
@@ -284,7 +363,12 @@ export function ReconcileReport({ labels, money }: Props) {
             </ul>
           </Section>
 
-          <Section title={labels.tileSuspected} count={report.suspectedDuplicates.length} none={labels.none}>
+          {/* Header count matches the tile above (total rows across every
+              group, review round 2 minor 1) — the per-group row count still
+              shows inside, via labels.groupCount, so nothing is lost, but
+              "Suspected duplicates" never shows two different numbers under
+              the same label on one screen. */}
+          <Section title={labels.tileSuspected} count={suspectedRowCount} none={labels.none}>
             <ul className="space-y-3">
               {report.suspectedDuplicates.map((group, i) => (
                 // Index keys: group order is stable for the life of one
@@ -313,6 +397,7 @@ export function ReconcileReport({ labels, money }: Props) {
               {report.orphans.map((row) => (
                 <li key={rowKey(row)} className="py-2">
                   <RowLine row={row} labels={labels} money={money} />
+                  {driftKeys.has(rowKey(row)) && <NumberDriftWarning labels={labels} />}
                 </li>
               ))}
             </ul>

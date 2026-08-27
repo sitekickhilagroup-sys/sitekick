@@ -385,6 +385,9 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             flagVerify: t('invoices.recon_flag_verify'),
             flagged: t('invoices.recon_flagged'),
             flaggedCount: t('invoices.recon_flagged_count'),
+            alreadyFlaggedCount: t('invoices.recon_already_flagged_count'),
+            flagFailedCount: t('invoices.recon_flag_failed_count'),
+            numberDriftWarning: t('invoices.recon_number_drift_warning'),
             recorded: t('invoices.recorded'),
             undo: t('work.undo'),
             cancel: t('common.cancel'),
@@ -395,6 +398,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             errorNoMatch: t('invoices.error_reconcile_no_match'),
             errorNotFound: t('invoices.error_not_found'),
             errorNothingToUndo: t('invoices.error_nothing_to_undo'),
+            errorMigrationPending: t('invoices.error_migration_pending'),
             errorSaveReason: t('invoices.error_save_reason'),
           }}
         />

@@ -27,6 +27,14 @@ export interface ReconcileReport {
   orphans: InvoiceRowRef[];                // in source, not in system
   changed: Array<{ ref: InvoiceRowRef; fields: string[] }>;
   suspectedDuplicates: InvoiceRowRef[][];  // same-key group >1, either side
+  /** Review round 2, finding 3 — orphan/added rows that share a vendor +
+   *  amount + received_date with a row on the OTHER list but couldn't be
+   *  safely paired into `changed` because more than one candidate exists on
+   *  at least one side (see pairInvoiceNoDrift below). Left in
+   *  orphans/added rather than moved or dropped — this is only a warning
+   *  that one of these Added/Orphans rows might already be on file under a
+   *  different invoice_no, not a resolved match. */
+  possibleInvoiceNoDrift: InvoiceRowRef[];
 }
 
 // Working row: the public InvoiceRowRef plus the fields that matter for
@@ -91,6 +99,85 @@ function groupByKey(rows: WorkRow[]): Map<string, WorkRow[]> {
   return map;
 }
 
+// Ignores invoice_no entirely — this is deliberately a WEAKER key than
+// reconcileKey, used only to find a shape-mismatched candidate (one side has
+// a number, the other doesn't) for the SAME real invoice.
+function bucketKey(ref: InvoiceRowRef): string {
+  return `${vendorKey(ref.vendor)}::${ref.amount_usd.toFixed(2)}::${ref.received_date ?? ''}`;
+}
+
+function groupByBucketKey(rows: InvoiceRowRef[]): Map<string, InvoiceRowRef[]> {
+  const map = new Map<string, InvoiceRowRef[]>();
+  for (const row of rows) {
+    const k = bucketKey(row);
+    const list = map.get(k);
+    if (list) list.push(row); else map.set(k, [row]);
+  }
+  return map;
+}
+
+/**
+ * Second pass (review round 2, finding 3): pairs an Orphans row against an
+ * Added row that are almost certainly the same real invoice, differing only
+ * in whether invoice_no is present — the one shape mismatch reconcileKey
+ * itself can never match on (see reconcile()'s own doc comment above).
+ * Tries both directions symmetrically: orphan-without-number vs
+ * added-with-number, and orphan-with-number vs added-without-number, each
+ * bucketed on vendor + amount + received_date (bucketKey — NOT
+ * reconcileKey, since ignoring invoice_no is the whole point here).
+ *
+ * A bucket pairs into `changed: ['invoice_no']` ONLY when it holds exactly
+ * one candidate on each side — anything else is left exactly where it was
+ * (removed from neither orphans nor added) and every row in that bucket is
+ * reported in possibleInvoiceNoDrift instead, because picking a pair out of
+ * 2+ candidates on either side would be the same unsafe guess
+ * suspectedDuplicates already refuses to make for an ambiguous
+ * reconcileKey group.
+ */
+function pairInvoiceNoDrift(
+  orphansIn: InvoiceRowRef[],
+  addedIn: InvoiceRowRef[],
+): {
+  orphans: InvoiceRowRef[];
+  added: InvoiceRowRef[];
+  changed: Array<{ ref: InvoiceRowRef; fields: string[] }>;
+  possibleInvoiceNoDrift: InvoiceRowRef[];
+} {
+  const changed: Array<{ ref: InvoiceRowRef; fields: string[] }> = [];
+  const paired = { orphans: new Set<InvoiceRowRef>(), added: new Set<InvoiceRowRef>() };
+  const suspect = { orphans: new Set<InvoiceRowRef>(), added: new Set<InvoiceRowRef>() };
+  const hasNo = (r: InvoiceRowRef) => !!r.invoice_no?.trim();
+
+  const directions: [InvoiceRowRef[], InvoiceRowRef[]][] = [
+    [orphansIn.filter((r) => !hasNo(r)), addedIn.filter(hasNo)],   // orphan blank, added has a number
+    [orphansIn.filter(hasNo), addedIn.filter((r) => !hasNo(r))],   // orphan has a number, added blank
+  ];
+
+  for (const [orphanSide, addedSide] of directions) {
+    const orphanBuckets = groupByBucketKey(orphanSide);
+    const addedBuckets = groupByBucketKey(addedSide);
+    for (const [key, oGroup] of orphanBuckets) {
+      const aGroup = addedBuckets.get(key);
+      if (!aGroup) continue;
+      if (oGroup.length === 1 && aGroup.length === 1) {
+        changed.push({ ref: oGroup[0], fields: ['invoice_no'] });
+        paired.orphans.add(oGroup[0]);
+        paired.added.add(aGroup[0]);
+      } else {
+        for (const r of oGroup) suspect.orphans.add(r);
+        for (const r of aGroup) suspect.added.add(r);
+      }
+    }
+  }
+
+  return {
+    orphans: orphansIn.filter((r) => !paired.orphans.has(r)),
+    added: addedIn.filter((r) => !paired.added.has(r)),
+    changed,
+    possibleInvoiceNoDrift: [...suspect.orphans, ...suspect.added],
+  };
+}
+
 /**
  * Source vs system diff (E6). Matching key: reconcileKey above. A key whose
  * count is >1 on ONE side alone is inherently ambiguous — which of 2 (or 3)
@@ -104,13 +191,16 @@ function groupByKey(rows: WorkRow[]): Map<string, WorkRow[]> {
  * A human sees the whole group instead and adjudicates it directly, same as
  * every other "can't safely auto-resolve" case in this codebase.
  *
- * A source row and a system row can only match when BOTH take the same key
- * *shape* — i.e. either both have an invoice_no, or neither does. A row
- * that has an invoice_no on one side but not the other (e.g. the number was
- * dropped or added only on one side during import) therefore surfaces as a
- * separate orphan + added pair rather than one "changed" entry naming
- * invoice_no — a known, narrow edge case of following the brief's key
- * literally; see task-E6-report.md.
+ * A source row and a system row can only match on reconcileKey when BOTH
+ * take the same key *shape* — i.e. either both have an invoice_no, or
+ * neither does. A row that has an invoice_no on one side but not the other
+ * (e.g. blank Invoice No. on import, or the number added/cleared later)
+ * would otherwise surface as a bare orphan + added pair instead of one
+ * "changed" entry — which is actively misleading, not just incomplete: an
+ * Orphans row reads as "add this", and the most likely reading here would
+ * add a duplicate of an invoice that's already on file. pairInvoiceNoDrift
+ * below runs as a second pass over exactly those leftover orphans/added to
+ * catch that specific shape mismatch.
  */
 export function reconcile(
   source: InvoiceRow[],
@@ -189,5 +279,12 @@ export function reconcile(
     if (fields.length > 0) changed.push({ ref: s.ref, fields });
   }
 
-  return { source: source.length, system: system.length, added, orphans, changed, suspectedDuplicates };
+  const pass2 = pairInvoiceNoDrift(orphans, added);
+  return {
+    source: source.length, system: system.length,
+    added: pass2.added, orphans: pass2.orphans,
+    changed: [...changed, ...pass2.changed],
+    suspectedDuplicates,
+    possibleInvoiceNoDrift: pass2.possibleInvoiceNoDrift,
+  };
 }

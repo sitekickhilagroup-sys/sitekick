@@ -10,10 +10,13 @@ const nextConfig: NextConfig = {
     // every other action in this app, but E6's reconciliation upload
     // (app/actions/invoices.ts's parseReconciliationSource) sends the whole
     // invoice-tracker workbook as one action call, not through /api/upload's
-    // route handler (which has its own, separate 20MB check). Raised well
-    // past any plausible tracker .xlsx so a real file never trips Next's
-    // framework-level limit before the action's own error handling runs.
-    serverActions: { bodySizeLimit: '10mb' },
+    // route handler (which has its own, separate 20MB check). Kept modest
+    // (review round 2, judgment call 1) rather than generously loosened: this
+    // limit applies to EVERY Server Action in the app, and the body is
+    // buffered before requireUser() ever runs — 2mb comfortably covers any
+    // plausible tracker .xlsx without widening that pre-auth exposure more
+    // than this one upload actually needs.
+    serverActions: { bodySizeLimit: '2mb' },
   },
   /* config options here */
 };
