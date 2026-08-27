@@ -35,7 +35,8 @@ function vendorNameFrom(byId: Record<string, string>): (id: string | null) => st
 
 describe('reconcile — empty input', () => {
   test('no crash, everything zero', () => {
-    expect(reconcile([], [], () => '')).toEqual({
+    expect(reconcile([], [], () => '', 'Sheet1')).toEqual({
+      sourceSheetName: 'Sheet1',
       source: 0, system: 0, added: [], orphans: [], changed: [], suspectedDuplicates: [], possibleInvoiceNoDrift: [],
     });
   });
@@ -47,6 +48,7 @@ describe('reconcile — clean match', () => {
       [sourceRow({ vendor: 'Acme Corp', number: '1', amount: 100, received_date: '2026-05-01' })],
       [systemRow({ vendor_id: 'v-acme', number: '1', amount_usd: 100, received_date: '2026-05-01' })],
       vendorNameFrom({ 'v-acme': 'Acme Corp' }),
+      'Sheet1',
     );
     expect(report.source).toBe(1);
     expect(report.system).toBe(1);
@@ -66,6 +68,7 @@ describe('reconcile — clean match', () => {
       [sourceRow({ vendor: 'Thang Le & Associates', number: '7', amount: 250, received_date: '2026-06-01' })],
       [systemRow({ vendor_id: 'v1', number: '7', amount_usd: 250, received_date: '2026-06-01' })],
       vendorNameFrom({ v1: 'Thang le& Associates' }),
+      'Sheet1',
     );
     expect(report.added).toEqual([]);
     expect(report.orphans).toEqual([]);
@@ -89,7 +92,7 @@ describe('reconcile — suspected duplicates (the SNO shape)', () => {
     const source: InvoiceRow[] = [sourceRow({ vendor: 'Unrelated Vendor', number: '999', amount: 42, received_date: '2026-01-01' })];
     const report = reconcile(source, system, vendorNameFrom({
       'v-sno-a': 'SNO Electric', 'v-sno-b': 'SNO, Electric', 'v-acme': 'Acme Roofing',
-    }));
+    }), 'Sheet1');
 
     expect(report.system).toBe(5);
     expect(report.suspectedDuplicates).toHaveLength(2);
@@ -111,7 +114,7 @@ describe('reconcile — suspected duplicates (the SNO shape)', () => {
       sourceRow({ vendor: 'Beta LLC', number: '4', amount: 75, received_date: '2026-02-02' }),
       sourceRow({ vendor: 'Beta LLC', number: '4', amount: 75, received_date: '2026-02-02' }),
     ];
-    const report = reconcile(source, [], () => '');
+    const report = reconcile(source, [], () => '', 'Sheet1');
     expect(report.suspectedDuplicates).toHaveLength(1);
     expect(report.suspectedDuplicates[0]).toHaveLength(2);
   });
@@ -125,7 +128,7 @@ describe('reconcile — added (extra system row)', () => {
       // Thang-Le-style extra row — never appeared in the source tracker.
       systemRow({ vendor_id: 'v-thangle', number: 'EXTRA-1', amount_usd: 5250, received_date: '2026-04-15' }),
     ];
-    const report = reconcile(source, system, vendorNameFrom({ 'v-regular': 'Regular Vendor', 'v-thangle': 'Thang Le & Associates' }));
+    const report = reconcile(source, system, vendorNameFrom({ 'v-regular': 'Regular Vendor', 'v-thangle': 'Thang Le & Associates' }), 'Sheet1');
     expect(report.added).toHaveLength(1);
     expect(report.added[0]).toEqual({ vendor: 'Thang Le & Associates', invoice_no: 'EXTRA-1', amount_usd: 5250, received_date: '2026-04-15' });
     expect(report.changed).toEqual([]);
@@ -137,7 +140,7 @@ describe('reconcile — added (extra system row)', () => {
 describe('reconcile — orphans (source row missing from system)', () => {
   test('a source row with no system counterpart lands in orphans', () => {
     const source: InvoiceRow[] = [sourceRow({ vendor: 'Never Imported Co', number: 'X-1', amount: 300, received_date: '2026-03-03' })];
-    const report = reconcile(source, [], () => '');
+    const report = reconcile(source, [], () => '', 'Sheet1');
     expect(report.orphans).toEqual([{ vendor: 'Never Imported Co', invoice_no: 'X-1', amount_usd: 300, received_date: '2026-03-03' }]);
     expect(report.added).toEqual([]);
     expect(report.possibleInvoiceNoDrift).toEqual([]);
@@ -152,7 +155,7 @@ describe('reconcile — changed (paid_date drift)', () => {
     const system: Invoice[] = [systemRow({
       vendor_id: 'v-hvac', number: '55', amount_usd: 1200, received_date: '2026-06-01', paid_date: '2026-06-15',
     })];
-    const report = reconcile(source, system, vendorNameFrom({ 'v-hvac': 'Acme HVAC' }));
+    const report = reconcile(source, system, vendorNameFrom({ 'v-hvac': 'Acme HVAC' }), 'Sheet1');
     expect(report.changed).toHaveLength(1);
     expect(report.changed[0].fields).toEqual(['paid_date']);
     expect(report.changed[0].ref).toEqual({ vendor: 'Acme HVAC', invoice_no: '55', amount_usd: 1200, received_date: '2026-06-01' });
@@ -163,7 +166,7 @@ describe('reconcile — changed (paid_date drift)', () => {
   test('null vs null paid_date on both sides is not a change', () => {
     const source: InvoiceRow[] = [sourceRow({ vendor: 'X', number: '1', paid_date: null })];
     const system: Invoice[] = [systemRow({ vendor_id: 'v1', number: '1', paid_date: null })];
-    const report = reconcile(source, system, vendorNameFrom({ v1: 'X' }));
+    const report = reconcile(source, system, vendorNameFrom({ v1: 'X' }), 'Sheet1');
     expect(report.changed).toEqual([]);
   });
 });
@@ -175,14 +178,14 @@ describe('reconcile — amount float-safety', () => {
     // for the same $181.30 — this must not read as a "changed" amount.
     const system: Invoice[] = [systemRow({ vendor_id: 'v9', number: '9', amount_usd: 0.1 + 181.2, received_date: '2026-07-04' })];
     expect(0.1 + 181.2).not.toBe(181.3); // sanity: this really is a distinct float bit pattern
-    const report = reconcile(source, system, vendorNameFrom({ v9: 'Float Co' }));
+    const report = reconcile(source, system, vendorNameFrom({ v9: 'Float Co' }), 'Sheet1');
     expect(report.changed).toEqual([]);
   });
 
   test('a genuine one-cent difference IS reported as changed, naming amount_usd', () => {
     const source: InvoiceRow[] = [sourceRow({ vendor: 'Float Co', number: '9', amount: 181.3, received_date: '2026-07-04' })];
     const system: Invoice[] = [systemRow({ vendor_id: 'v9', number: '9', amount_usd: 181.31, received_date: '2026-07-04' })];
-    const report = reconcile(source, system, vendorNameFrom({ v9: 'Float Co' }));
+    const report = reconcile(source, system, vendorNameFrom({ v9: 'Float Co' }), 'Sheet1');
     expect(report.changed).toHaveLength(1);
     expect(report.changed[0].fields).toEqual(['amount_usd']);
   });
@@ -198,7 +201,7 @@ describe('reconcile — other changed fields', () => {
       vendor_id: 'v3', number: '3', amount_usd: 50, received_date: '2026-08-02',
       status: 'paid', entity: 'LLC B', budget_line: 'Something else',
     })];
-    const report = reconcile(source, system, vendorNameFrom({ v3: 'Multi Co' }));
+    const report = reconcile(source, system, vendorNameFrom({ v3: 'Multi Co' }), 'Sheet1');
     expect(report.changed).toHaveLength(1);
     expect(report.changed[0].fields.sort()).toEqual(['description', 'entity', 'received_date', 'status'].sort());
   });
@@ -206,14 +209,14 @@ describe('reconcile — other changed fields', () => {
   test('entity/description differing only by case or surrounding whitespace is not a change', () => {
     const source: InvoiceRow[] = [sourceRow({ vendor: 'Case Co', number: '11', entity: '  LLC A  ', description: 'Roof repair' })];
     const system: Invoice[] = [systemRow({ vendor_id: 'v11', number: '11', entity: 'llc a', budget_line: 'ROOF REPAIR' })];
-    const report = reconcile(source, system, vendorNameFrom({ v11: 'Case Co' }));
+    const report = reconcile(source, system, vendorNameFrom({ v11: 'Case Co' }), 'Sheet1');
     expect(report.changed).toEqual([]);
   });
 
   test('several drifting fields on one row all land in the same entry', () => {
     const source: InvoiceRow[] = [sourceRow({ vendor: 'Combo Co', number: '20', paid_date: '2026-09-01', status: 'paid' })];
     const system: Invoice[] = [systemRow({ vendor_id: 'v20', number: '20', paid_date: null, status: 'approved' })];
-    const report = reconcile(source, system, vendorNameFrom({ v20: 'Combo Co' }));
+    const report = reconcile(source, system, vendorNameFrom({ v20: 'Combo Co' }), 'Sheet1');
     expect(report.changed).toHaveLength(1);
     expect(report.changed[0].fields.sort()).toEqual(['paid_date', 'status']);
   });
@@ -223,7 +226,7 @@ describe('reconcile — vendor missing on the source row', () => {
   test('a null vendor does not crash and still keys on invoice_no', () => {
     const source: InvoiceRow[] = [sourceRow({ vendor: null, number: 'NOV-1', amount: 10, received_date: null })];
     const system: Invoice[] = [systemRow({ vendor_id: null, number: 'NOV-1', amount_usd: 10, received_date: null })];
-    const report = reconcile(source, system, () => '');
+    const report = reconcile(source, system, () => '', 'Sheet1');
     expect(report.changed).toEqual([]);
     expect(report.added).toEqual([]);
     expect(report.orphans).toEqual([]);
@@ -243,7 +246,7 @@ describe('reconcile — invoice_no drift (present on only one side)', () => {
     // The review's own scenario.
     const source: InvoiceRow[] = [sourceRow({ vendor: 'Acme', number: null, amount: 5250, received_date: '2026-04-15' })];
     const system: Invoice[] = [systemRow({ vendor_id: 'v-acme', number: 'INV-88', amount_usd: 5250, received_date: '2026-04-15' })];
-    const report = reconcile(source, system, vendorNameFrom({ 'v-acme': 'Acme' }));
+    const report = reconcile(source, system, vendorNameFrom({ 'v-acme': 'Acme' }), 'Sheet1');
     expect(report.orphans).toEqual([]);
     expect(report.added).toEqual([]);
     expect(report.changed).toHaveLength(1);
@@ -255,7 +258,7 @@ describe('reconcile — invoice_no drift (present on only one side)', () => {
   test('unambiguous, reverse direction: source has a number, system blank — still pairs', () => {
     const source: InvoiceRow[] = [sourceRow({ vendor: 'Beta Co', number: 'INV-50', amount: 900, received_date: '2026-03-15' })];
     const system: Invoice[] = [systemRow({ vendor_id: 'v-beta', number: null, amount_usd: 900, received_date: '2026-03-15' })];
-    const report = reconcile(source, system, vendorNameFrom({ 'v-beta': 'Beta Co' }));
+    const report = reconcile(source, system, vendorNameFrom({ 'v-beta': 'Beta Co' }), 'Sheet1');
     expect(report.orphans).toEqual([]);
     expect(report.added).toEqual([]);
     expect(report.changed).toHaveLength(1);
@@ -275,7 +278,7 @@ describe('reconcile — invoice_no drift (present on only one side)', () => {
       systemRow({ vendor_id: 'v-acme', number: 'INV-88', amount_usd: 5250, received_date: '2026-04-15' }),
       systemRow({ vendor_id: 'v-acme', number: 'INV-89', amount_usd: 5250, received_date: '2026-04-15' }),
     ];
-    const report = reconcile(source, system, vendorNameFrom({ 'v-acme': 'Acme' }));
+    const report = reconcile(source, system, vendorNameFrom({ 'v-acme': 'Acme' }), 'Sheet1');
     // Nobody is silently paired, dropped, or merged — a human has to pick.
     expect(report.orphans).toHaveLength(1);
     expect(report.added).toHaveLength(2);
@@ -294,7 +297,7 @@ describe('reconcile — counts include every row, duplicates included', () => {
   test('source/system counts are raw row counts, not post-dedup counts', () => {
     const source: InvoiceRow[] = [sourceRow(), sourceRow(), sourceRow()];
     const system: Invoice[] = [systemRow(), systemRow()];
-    const report = reconcile(source, system, () => 'Acme Corp');
+    const report = reconcile(source, system, () => 'Acme Corp', 'Sheet1');
     expect(report.source).toBe(3);
     expect(report.system).toBe(2);
   });

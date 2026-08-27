@@ -25,6 +25,9 @@ describe('parseWorkbook', () => {
       expect(result.rows[0].status).toBe('for_rowan_approval');
       expect(result.rows[1].status).toBe('paid');
       expect(result.rows[0].vendor).toBe('Crest');
+      // I6: the sheet a reconciliation report compares against has to be
+      // nameable, not just "whichever one matched first".
+      expect(result.sheetName).toBe('Sheet1');
     }
   });
 

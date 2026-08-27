@@ -4,7 +4,7 @@ import { useState, useTransition, type ReactNode } from 'react';
 import {
   flagReconciledRowForVerification, parseReconciliationSource, undoFlagReconciledRowForVerification,
 } from '@/app/actions/invoices';
-import { INVOICE_ERRORS } from '@/lib/invoice-rules';
+import { INVOICE_ERRORS, isReconcileFileTooLarge } from '@/lib/invoice-rules';
 import type { InvoiceRowRef, ReconcileReport as ReconcileReportData } from '@/lib/reconcile';
 import { SavedChip } from '@/components/work/saved-chip';
 
@@ -29,6 +29,10 @@ export interface ReconcileReportLabels {
   errorFileMissing: string; errorBadFileType: string; errorParseFailed: string;
   errorNotInvoiceSheet: string; errorNoMatch: string; errorNotFound: string;
   errorNothingToUndo: string; errorMigrationPending: string; errorSaveReason: string;
+  /** C4 — the file is over next.config.ts's 2mb Server Action body limit. */
+  errorTooLarge: string;
+  /** I6 — "Sheet: {name}" template, filled in with report.sourceSheetName. */
+  sourceSheet: string;
 }
 
 interface Props {
@@ -66,6 +70,9 @@ function uploadErrorMessage(code: string, labels: ReconcileReportLabels): string
     case INVOICE_ERRORS.reconcileBadFileType: return labels.errorBadFileType;
     case INVOICE_ERRORS.reconcileParseFailed: return labels.errorParseFailed;
     case INVOICE_ERRORS.reconcileNotInvoiceSheet: return labels.errorNotInvoiceSheet;
+    // C4: the specific, actionable case — file rejected before the Server
+    // Action ever ran (next.config.ts's 2mb body limit).
+    case INVOICE_ERRORS.reconcileTooLarge: return labels.errorTooLarge;
     default: return labels.errorSaveReason.replace('{reason}', `⁨${code}⁩`);
   }
 }
@@ -225,13 +232,35 @@ export function ReconcileReport({ labels, money }: Props) {
     setPhase('busy');
     setFileName(file.name);
     setErrorCode(null);
+    // C4: a file over next.config.ts's 2mb Server Action body limit never
+    // reaches parseReconciliationSource at all — Next.js rejects the request
+    // before the action's function body runs, so there is no `{ error }`
+    // shape to read a reason from. Checking the size up front, before
+    // spending a round trip on a rejection, gets the specific message
+    // immediately instead of however the framework happens to fail.
+    if (isReconcileFileTooLarge(file.size)) {
+      setPhase('error');
+      setErrorCode(INVOICE_ERRORS.reconcileTooLarge);
+      return;
+    }
     const fd = new FormData();
     fd.append('file', file);
-    const res = await parseReconciliationSource(fd);
-    if ('error' in res) { setPhase('error'); setErrorCode(res.error); return; }
-    setPhase('idle');
-    setReport(res.report);
-    setFlags({});
+    try {
+      const res = await parseReconciliationSource(fd);
+      if ('error' in res) { setPhase('error'); setErrorCode(res.error); return; }
+      setPhase('idle');
+      setReport(res.report);
+      setFlags({});
+    } catch (e) {
+      // C4: no try/catch here before meant a Server Action rejection (the
+      // one case the size pre-check above doesn't already catch — e.g. a
+      // network failure, or the framework's own body-limit edge cases) left
+      // `phase` stuck at 'busy' forever: an invented progress state that
+      // never resolves, and a silent failure at the same time. Always land
+      // back in a real, retryable state, with whatever the runtime told us.
+      setPhase('error');
+      setErrorCode(e instanceof Error ? e.message : String(e));
+    }
   });
 
   const flag = (row: InvoiceRowRef) => {
@@ -314,7 +343,17 @@ export function ReconcileReport({ labels, money }: Props) {
               documents for its own upload control. */}
           <span role="status" className="block max-w-full truncate text-[10px]">
             {phase === 'busy' && <span className="text-sk-muted">{labels.reading} {fileName}</span>}
-            {phase === 'idle' && report && <span className="text-sk-green">✓ {labels.done} · {fileName}</span>}
+            {phase === 'idle' && report && (
+              <span className="text-sk-green">
+                ✓ {labels.done} · {fileName}
+                {/* I6: which sheet was actually compared — parseWorkbook
+                    picks the FIRST sheet whose header matches (lib/parse/
+                    xlsx.ts), so an archive sheet ordered ahead of the live
+                    one would otherwise silently be what this report is
+                    based on, with no way for the reader to tell. */}
+                {' · '}{labels.sourceSheet.replace('{name}', report.sourceSheetName)}
+              </span>
+            )}
             {phase === 'error' && errorCode && <span className="text-coral">✗ {uploadErrorMessage(errorCode, labels)}</span>}
           </span>
         </div>

@@ -33,7 +33,15 @@ export interface TaskRow {
 }
 
 export type XlsxImport =
-  | { kind: 'invoices'; rows: InvoiceRow[] }
+  // I6: which sheet these rows came from — findHeaderRow/the loop below picks
+  // the FIRST sheet in the workbook whose header matches, which was fine when
+  // this only fed an ingest agent (any matching sheet is equally good) but is
+  // now load-bearing for a financial report (E6 reconciliation): an archive
+  // sheet ordered ahead of the live one would make the report claim every
+  // live invoice is missing from source, with no way for the reader to tell
+  // WHICH sheet was actually compared. Not a change to the selection logic
+  // itself — just surfacing what it already picked.
+  | { kind: 'invoices'; rows: InvoiceRow[]; sheetName: string }
   | { kind: 'tasks'; rows: TaskRow[] }
   | { kind: 'text'; text: string };
 
@@ -127,7 +135,7 @@ export function parseWorkbook(buffer: Buffer): XlsxImport {
         paid_date: excelDate(pick(o, 'paymentdate', 'paiddate', 'datepaid')),
         approved_by: str(pick(o, 'approvedby')),
       }));
-    if (out.length > 0) return { kind: 'invoices', rows: out };
+    if (out.length > 0) return { kind: 'invoices', rows: out, sheetName: name };
   }
 
   // 2. Operations / task tracker: header has task description + owner.

@@ -284,7 +284,14 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
               {label}
             </Link>
           ))}
-          <span className="ms-auto flex items-center gap-1.5">
+          {/* Smaller-items fix: was <span> — AddInvoice renders a
+              <div role="dialog"> once open, and the sibling <details> below
+              is never valid nested inside a <span> either; both are
+              flow-content elements a <span>'s phrasing-only content model
+              can't legally hold. This row already sits inside a <div> (the
+              tabs row above), so <div> here changes nothing about the
+              layout — flex is set explicitly either way. */}
+          <div className="ms-auto flex items-center gap-1.5">
             {/* E4: header button, same row as the tabs rather than a third
                 grid column in the intro block above — that grid is a fixed
                 two-column [title | summary card] pair the spec anchors, and
@@ -321,7 +328,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                 </Link>
               </span>
             </details>
-          </span>
+          </div>
         </div>
 
         {/* Additive: the aggregation renders above the tab-filtered rows so no
@@ -400,6 +407,8 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             errorNothingToUndo: t('invoices.error_nothing_to_undo'),
             errorMigrationPending: t('invoices.error_migration_pending'),
             errorSaveReason: t('invoices.error_save_reason'),
+            errorTooLarge: t('invoices.error_reconcile_too_large'),
+            sourceSheet: t('invoices.recon_source_sheet'),
           }}
         />
       )}
@@ -494,7 +503,11 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                 <td className="px-3 py-2.5 align-top">
                   <span className="block font-[650] text-sk-ink">{vDisplay(inv.vendor_id)}</span>
                   {inv.number && <span className="block font-mono text-[10px] text-sk-muted">{t('invoices.number')} {inv.number}</span>}
-                  <span className="mt-1 flex flex-wrap items-center gap-2">
+                  {/* Smaller-items fix: was <span> — LinkEditor's own root
+                      (now also a <div>, see link-editor.tsx) can render a
+                      <details> element once its dialog is open, which is
+                      never valid nested inside a <span>. */}
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
                     {inv.invoice_url ? (
                       <a href={inv.invoice_url} target="_blank" rel="noreferrer" className="text-[10px] font-[650] text-sk-green hover:underline">
                         {t('invoices.open_invoice')} <span aria-hidden="true">↗</span>
@@ -534,7 +547,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                       context={[vDisplay(inv.vendor_id) || null, inv.number].filter(Boolean).join(' ')}
                       labels={editorLabels}
                     />
-                  </span>
+                  </div>
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 text-xs">
                   <span className="block text-ink2">{inv.project_id ? pName.get(inv.project_id) : t('common.general')}</span>

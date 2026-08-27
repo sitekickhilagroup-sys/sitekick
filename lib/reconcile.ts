@@ -21,6 +21,13 @@ export interface InvoiceRowRef {
 }
 
 export interface ReconcileReport {
+  /** I6 — the workbook sheet parseWorkbook actually matched and read (the
+   *  first sheet whose header has supplier+invoice+amount columns; see
+   *  lib/parse/xlsx.ts). Not selection logic, just visibility: a report that
+   *  silently compared against an archive sheet ordered ahead of the live
+   *  one would claim every live invoice is missing from source, with no way
+   *  for the reader to tell which sheet was actually used. */
+  sourceSheetName: string;
   source: number;
   system: number;
   added: InvoiceRowRef[];                 // in system, not in source
@@ -206,6 +213,7 @@ export function reconcile(
   source: InvoiceRow[],
   system: Invoice[],
   vendorName: (id: string | null) => string,
+  sourceSheetName: string,
 ): ReconcileReport {
   const sourceRows: WorkRow[] = source.map((row) => {
     const vendor = row.vendor ?? '';
@@ -281,6 +289,7 @@ export function reconcile(
 
   const pass2 = pairInvoiceNoDrift(orphans, added);
   return {
+    sourceSheetName,
     source: source.length, system: system.length,
     added: pass2.added, orphans: pass2.orphans,
     changed: [...changed, ...pass2.changed],

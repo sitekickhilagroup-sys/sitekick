@@ -126,7 +126,31 @@ export const INVOICE_ERRORS = {
   // was clicked by mistake, since there is nothing in the database yet to
   // flag.
   reconcileNoMatch: 'no matching invoice found in the system for this row',
+  // C4: next.config.ts caps every Server Action body at 2mb — comfortable
+  // for every other action, but parseReconciliationSource is the one action
+  // that posts a whole .xlsx. A file over that limit never reaches the
+  // action at all (Next.js rejects the request before the function body
+  // runs), so this is checked client-side (isReconcileFileTooLarge below)
+  // and never actually returned by the action itself — named so the upload
+  // UI has one consistent error catalog to switch on either way.
+  reconcileTooLarge: 'file is too large to upload',
 } as const;
+
+/** C4 — mirrors next.config.ts's `experimental.serverActions.bodySizeLimit`
+ *  ('2mb') for the ONE action that posts a whole file body
+ *  (parseReconciliationSource). A binary-mb interpretation (2 * 1024 * 1024)
+ *  is used as a conservative client-side pre-check threshold — comfortably
+ *  under whatever the framework actually enforces either way, so a file this
+ *  rejects would have been rejected server-side too. Keep in sync with
+ *  next.config.ts if that limit ever changes. */
+export const RECONCILE_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+
+/** Pure size check so the upload UI can show a specific, immediate message
+ *  instead of spending a round trip on a Server Action rejection that has no
+ *  useful shape to read a reason from (see C4). */
+export function isReconcileFileTooLarge(sizeBytes: number): boolean {
+  return sizeBytes > RECONCILE_MAX_UPLOAD_BYTES;
+}
 
 // Inspects the number's own decimal-string form rather than `n * 100` —
 // binary floating point makes `181.3 * 100` land a hair off 18130 for some

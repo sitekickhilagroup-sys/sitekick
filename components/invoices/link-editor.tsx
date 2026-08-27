@@ -294,7 +294,15 @@ export function LinkEditor({
   const entityListId = `invoice-entity-list-${invoiceId}`;
 
   return (
-    <span className="relative inline-block">
+    // Smaller-items fix: was <span> — this can render a <details> (the
+    // history panel below) and a <div> (the save/cancel row) as descendants
+    // once `editing`, and neither is valid HTML nested inside a <span>
+    // (phrasing content only). <div> keeps every existing utility class
+    // working identically (inline-block is set explicitly either way) while
+    // making the whole subtree valid — see the matching fix to this
+    // component's own call site in invoices/page.tsx, which wraps this in a
+    // <span> too and needed the same swap for the same reason.
+    <div className="relative inline-block">
       {!editing && !result && (
         <button
           type="button"
@@ -342,7 +350,7 @@ export function LinkEditor({
             position — no ancestor overflow can clip it, and it needs no
             resize/scroll listeners to stay correct.
           */}
-          <span
+          <div
             role="dialog"
             aria-label={context ? `${labels.edit} · ${context}` : labels.edit}
             onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); }}
@@ -551,9 +559,9 @@ export function LinkEditor({
                 )}
               </div>
             </details>
-          </span>
+          </div>
         </>
       )}
-    </span>
+    </div>
   );
 }
