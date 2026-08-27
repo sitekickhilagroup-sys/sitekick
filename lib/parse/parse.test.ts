@@ -12,11 +12,14 @@ function wb(rows: unknown[][]): Buffer {
 
 describe('parseWorkbook', () => {
   it('detects invoice tracker with title rows above header', () => {
+    // Header shape mirrors the 2026-08-28 tracker revision: the original
+    // columns plus Transfer Confirmation, Notes, and the derived
+    // "Paid On (calc)" / "Link URL (auto)" helper columns.
     const buffer = wb([
       ['Hilla US Invoices', null, null],
-      ['#', 'Service Month', 'Invoice Received Date', 'Property / Project', 'LLC / Entity', 'Supplier', 'Invoice No.', 'Invoice Link  (paste link)', 'Invoice Amount ($)', 'Status'],
-      [1, 'Sep 25', '2026-08-01', 'Blair', 'Blair LLC', 'Crest', '100', 'https://example.com/inv.pdf', 500, 'For Rowan Approval'],
-      [2, 45992, '2026-08-02', 'San Marco', 'SM LLC', 'KGS', '200', 'Open invoice', 900, 'Paid'],
+      ['#', 'Service Month', 'Invoice Received Date', 'Property / Project', 'LLC / Entity', 'Supplier', 'Invoice No.', 'Invoice Link  (paste link)', 'Invoice Amount ($)', 'Status', 'Payment Date', 'Transfer Confirmation', 'Notes', 'Paid On (calc)', 'Link URL (auto)'],
+      [1, 'Sep 25', '2026-08-01', 'Blair', 'Blair LLC', 'Crest', '100', 'https://example.com/inv.pdf', 500, 'For Rowan Approval', null, 'https://example.com/wire.pdf', 'retainer', null, null],
+      [2, 45992, '2026-08-02', 'San Marco', 'SM LLC', 'KGS', '200', 'Open invoice', 900, 'Paid', null, null, null, '2026-08-10', 'https://example.com/auto.pdf'],
     ]);
     const result = parseWorkbook(buffer);
     expect(result.kind).toBe('invoices');
@@ -30,9 +33,15 @@ describe('parseWorkbook', () => {
       expect(result.rows[0].service_month).toBe('Sep 25');
       expect(result.rows[1].service_month).toBe('2025-12');
       // The link column's placeholder text ("Open invoice") is not a URL and
-      // must not become one; a real https link passes through.
+      // must not become one; the derived Link URL (auto) column backfills it.
       expect(result.rows[0].link).toBe('https://example.com/inv.pdf');
-      expect(result.rows[1].link).toBeNull();
+      expect(result.rows[1].link).toBe('https://example.com/auto.pdf');
+      // Transfer Confirmation and Notes come through (Q10-ג).
+      expect(result.rows[0].transfer_url).toBe('https://example.com/wire.pdf');
+      expect(result.rows[0].notes).toBe('retainer');
+      expect(result.rows[1].transfer_url).toBeNull();
+      // A blank Payment Date falls back to Paid On (calc).
+      expect(result.rows[1].paid_date).toBe('2026-08-10');
       // I6: the sheet a reconciliation report compares against has to be
       // nameable, not just "whichever one matched first".
       expect(result.sheetName).toBe('Sheet1');

@@ -7,6 +7,9 @@ export interface DropzoneLabels {
   drop: string; processing: string; done: string; failed: string;
   project: string; all: string; chooseFile: string; nextStep: string; retry: string;
   stored: string; noTranscript: string; notProcessed: string;
+  /** Typed result cards (Noa, 2026-08-28: her tracker upload succeeded but
+   *  "המסך לא השתנה" — the numbers the route returns were never shown). */
+  invoiceTracker: string; taskTracker: string; emailBatch: string; alreadyUploaded: string;
 }
 
 interface Props {
@@ -27,13 +30,35 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
   const router = useRouter();
   const [state, setState] = useState<'idle' | 'busy' | 'done' | 'stored' | 'unprocessed' | 'error'>('idle');
   const [detail, setDetail] = useState('');
+  const [report, setReport] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const last = useRef<File | null>(null);
+
+  // The route answers with real numbers — upserted/failed for an invoice
+  // tracker, created/updated for a task tracker, stored/processed for an
+  // email batch, deduped for a re-upload. They were dropped on the floor and
+  // the only feedback was a 10px status line, which is exactly what Noa
+  // reported as "המסך לא השתנה". This turns them into a visible sentence.
+  function reportFor(json: Record<string, unknown>): string | null {
+    if (json.deduped) return labels.alreadyUploaded;
+    const n = (v: unknown) => String(typeof v === 'number' ? v : 0);
+    if (json.type === 'invoice_tracker') {
+      return labels.invoiceTracker.replace('{updated}', n(json.upserted)).replace('{failed}', n(json.failed));
+    }
+    if (json.type === 'task_tracker') {
+      return labels.taskTracker.replace('{created}', n(json.created)).replace('{updated}', n(json.updated));
+    }
+    if (json.type === 'email_dump' || json.type === 'email_archive') {
+      return labels.emailBatch.replace('{stored}', n(json.stored)).replace('{processed}', n(json.processed));
+    }
+    return null;
+  }
 
   async function send(file: File) {
     last.current = file;
     setState('busy');
     setDetail(file.name);
+    setReport(null);
     const fd = new FormData();
     fd.append('file', file);
     if (project) fd.append('project', project);
@@ -52,6 +77,7 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
           : json.type === 'stored_unprocessed' ? 'unprocessed'
           : 'done',
         );
+        setReport(reportFor(json));
       } else {
         setState('error');
         setDetail(json.error ?? file.name);
@@ -142,6 +168,13 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
           >
             {labels.retry}
           </button>
+        )}
+
+        {/* The typed result card — what actually happened, in numbers. */}
+        {report && state !== 'busy' && state !== 'error' && (
+          <p role="status" className="mt-1 max-w-md rounded-[10px] bg-sk-green-soft px-4 py-2.5 text-[12px] font-[650] leading-[1.5] text-sk-green">
+            {report}
+          </p>
         )}
       </div>
 

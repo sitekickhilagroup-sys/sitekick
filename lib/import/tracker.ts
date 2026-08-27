@@ -149,6 +149,11 @@ export async function applyInvoiceRows(
       // the sheet is written now.
       paid_date: row.paid_date,
       service_month: row.service_month,
+      // 2026-08-28 tracker revision: Transfer Confirmation + Notes columns.
+      // Written only when the sheet actually has a value — a blank cell must
+      // not wipe a link or note someone attached in the app.
+      ...(row.transfer_url != null ? { transfer_confirmation_url: row.transfer_url } : {}),
+      ...(row.notes != null ? { notes: row.notes } : {}),
     };
     const existingId = row.number?.trim()
       ? byIdentity.get(idKey(vendorId, row.number, row.entity))

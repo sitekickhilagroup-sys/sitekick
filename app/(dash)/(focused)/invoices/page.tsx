@@ -555,8 +555,9 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                 <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-ink2">
                   <span className="block">{inv.received_date ?? inv.invoice_date ?? ''}</span>
                   {inv.paid_date && <span className="block text-[11px] text-ink3">{t('invoices.paid_date')} · {inv.paid_date}</span>}
-                  {/* Q10: her tracker's Service Month column, imported since 0018. */}
-                  {inv.service_month && <span className="block text-[11px] text-ink3">{t('invoices.service_month')} · {inv.service_month}</span>}
+                  {/* service_month is imported and stored (0018) but not shown:
+                      Noa (2026-08-28) — "אני לא צריכה service month, אני עובדת
+                      לפי התאריכים שאני מקבלת את החשבונית". */}
                 </td>
                 <td className="px-3 py-2.5">
                   <span className="flex flex-wrap items-center gap-1.5">

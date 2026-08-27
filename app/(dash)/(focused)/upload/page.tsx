@@ -98,6 +98,10 @@ export default async function UploadPage() {
               stored: t('upload.stored'),
               noTranscript: t('upload.no_transcript'),
               notProcessed: t('upload.not_processed'),
+              invoiceTracker: t('upload.result_invoice_tracker'),
+              taskTracker: t('upload.result_task_tracker'),
+              emailBatch: t('upload.result_email_batch'),
+              alreadyUploaded: t('upload.result_already_uploaded'),
             }}
             pasteLabels={{
               kicker: t('paste.kicker'), title: t('paste.title'), sub: t('paste.sub'),

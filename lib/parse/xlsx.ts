@@ -20,6 +20,11 @@ export interface InvoiceRow {
   /** Q10: the tracker's Service Month column ("Sep 25"); a date-typed cell
    *  arrives as an Excel serial and is normalised to "YYYY-MM". */
   service_month: string | null;
+  /** 2026-08-28 tracker revision: Noa added a Transfer Confirmation link
+   *  column (Q10-ג — the payment-proof link, distinct from the invoice). */
+  transfer_url: string | null;
+  /** Same revision: a free-text Notes column. */
+  notes: string | null;
 }
 
 export interface TaskRow {
@@ -146,13 +151,23 @@ export function parseWorkbook(buffer: Buffer): XlsxImport {
         entity: str(pick(o, 'llc', 'entity')),
         vendor: str(pick(o, 'supplier')),
         number: str(pick(o, 'invoiceno')),
-        link: url(pick(o, 'invoicelink', 'link')),
+        // The paste-link column first; her 2026-08 revision added a derived
+        // "Link URL (auto)" column that backfills rows where the paste cell
+        // is empty or holds placeholder text.
+        // NOTE: the fallback needle must be 'linkurl' alone — a bare 'link'
+        // matches the paste column again (earlier in column order) and the
+        // auto column would never be reached.
+        link: url(pick(o, 'invoicelink', 'link')) ?? url(pick(o, 'linkurl')),
         description: str(pick(o, 'description')),
         amount: Number(pick(o, 'invoiceamount', 'amount')) || 0,
         status: mapInvoiceStatus(pick(o, 'status')),
-        paid_date: excelDate(pick(o, 'paymentdate', 'paiddate', 'datepaid')),
+        // Payment Date is the hand-entered truth; "Paid On (calc)" (derived
+        // from her transfer records) fills the gap when it's blank.
+        paid_date: excelDate(pick(o, 'paymentdate', 'paiddate', 'datepaid')) ?? excelDate(pick(o, 'paidon')),
         approved_by: str(pick(o, 'approvedby')),
         service_month: serviceMonth(pick(o, 'servicemonth')),
+        transfer_url: url(pick(o, 'transferconfirmation')),
+        notes: str(pick(o, 'notes')),
       }));
     if (out.length > 0) return { kind: 'invoices', rows: out, sheetName: name };
   }
