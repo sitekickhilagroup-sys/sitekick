@@ -242,7 +242,7 @@ function SubtopicContext({ reviewId, projectId, subtopic, value, labels, placeho
         disabled={pending || finalized}
         aria-label={placeholder}
         placeholder={placeholder}
-        className="w-full max-w-2xl rounded-[13px] border border-line2 bg-sk-green-soft p-2 text-[11px] leading-[1.5] text-sk-ink outline-none [border-inline-start:3px_solid_var(--sk-green)] disabled:opacity-50"
+        className="w-full max-w-2xl rounded-[13px] border border-line2 bg-sk-green-soft p-2 text-[11px] leading-[1.5] text-sk-ink outline-none [border-inline-start:3px_solid_var(--sk-green)] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted"
       />
       {failed && <p role="alert" className="text-[10px] text-coral">{failed}</p>}
     </div>
@@ -373,7 +373,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
               onBlur={(e) => saveOwnerDue({ owner: e.target.value })}
               disabled={pending}
               aria-label={`${labels.ownerLabel}: ${title}`}
-              className="min-h-11 w-full max-w-[10rem] rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[11px] text-sk-ink outline-none disabled:opacity-50 sm:min-h-0"
+              className="min-h-11 w-full max-w-[10rem] rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[11px] text-sk-ink outline-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted sm:min-h-0"
             />
           </label>
         ) : (
@@ -391,7 +391,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
             value={currentStatus}
             onChange={(e) => onStatusChange(e.target.value)}
             aria-label={`${labels.statusLabel}: ${title}`}
-            className="min-h-11 cursor-pointer rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[10px] text-sk-ink outline-none disabled:opacity-50 sm:min-h-0"
+            className="min-h-11 cursor-pointer rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[10px] text-sk-ink outline-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted sm:min-h-0"
           >
             {statusOptions.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -412,7 +412,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
           disabled={pending || finalized}
           aria-label={labels.noteKicker}
           placeholder={labels.note}
-          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-50"
+          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted"
         />
       </span>
 
@@ -427,7 +427,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
           disabled={pending || finalized}
           aria-label={labels.nextStepKicker}
           placeholder={labels.nextStepPh}
-          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-50"
+          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted"
         />
       </span>
 
@@ -444,7 +444,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
                 onBlur={(e) => saveOwnerDue({ due: e.target.value })}
                 disabled={pending}
                 aria-label={`${labels.dueLabel}: ${title}`}
-                className="min-h-11 rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[11px] text-sk-ink outline-none disabled:opacity-50 sm:min-h-0"
+                className="min-h-11 rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[11px] text-sk-ink outline-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted sm:min-h-0"
               />
             </label>
           ) : (
@@ -555,7 +555,7 @@ function ReviewControls(
                 type="button"
                 disabled={pending}
                 onClick={reopen}
-                className="min-h-11 cursor-pointer rounded-[8px] border border-line bg-sk-surface px-4 py-2 text-[10px] font-[650] leading-none text-sk-ink disabled:opacity-50 sm:min-h-0"
+                className="min-h-11 cursor-pointer rounded-[8px] border border-line bg-sk-surface px-4 py-2 text-[10px] font-[650] leading-none text-sk-ink disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted sm:min-h-0"
               >
                 {labels.reopen}
               </button>
@@ -568,7 +568,7 @@ function ReviewControls(
                 type="button"
                 disabled={pending}
                 onClick={save}
-                className="min-h-11 cursor-pointer rounded-[8px] bg-sage px-4 py-2 text-[10px] font-[650] leading-none text-white disabled:opacity-50 sm:min-h-0"
+                className="min-h-11 cursor-pointer rounded-[8px] bg-sage px-4 py-2 text-[10px] font-[650] leading-none text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted sm:min-h-0"
               >
                 {justSaved || saved ? labels.saved : labels.save}
               </button>
@@ -579,7 +579,7 @@ function ReviewControls(
                 type="button"
                 disabled={pending}
                 onClick={finalize}
-                className="min-h-11 cursor-pointer rounded-[8px] border border-sage-line px-4 py-2 text-[10px] font-[650] leading-none text-sage disabled:opacity-50 sm:min-h-0"
+                className="min-h-11 cursor-pointer rounded-[8px] border border-sage-line px-4 py-2 text-[10px] font-[650] leading-none text-sage disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted sm:min-h-0"
               >
                 {labels.finalize}
               </button>

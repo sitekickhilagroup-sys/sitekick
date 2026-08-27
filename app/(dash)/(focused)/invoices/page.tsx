@@ -10,6 +10,7 @@ import { LinkEditor, type LinkEditorOptions } from '@/components/invoices/link-e
 import { AddInvoice } from '@/components/invoices/add-invoice';
 import { ReconcileReport } from '@/components/invoices/reconcile-report';
 import { canonVendorName, vendorKey } from '@/lib/invoice-rules';
+import { money, moneyExact } from '@/lib/format';
 import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/types';
 
 // E6: the reconciliation report is a demoted view like `david`, but unlike
@@ -23,14 +24,9 @@ type PageTab = InvoiceTab | 'reconciliation';
 
 export const dynamic = 'force-dynamic';
 
-// Headline figures round; row amounts must not. Spec §10 requires decimals
-// preserved on the individual invoice, and a rounded $181 for an invoice of
-// $181.30 is a wrong number on a financial screen.
-const money = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-
-const moneyExact = (n: number) =>
-  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+// money/moneyExact come from lib/format.ts — client components (AddInvoice,
+// ReconcileReport) import them directly instead of receiving them as props,
+// which Next 16 refuses to serialize (the /invoices 500, QA item 03).
 
 // Item 3a: tabs mirror the Excel — Invoices / Payment Summary / David.
 export default async function InvoicesPage({ searchParams }: PageProps<'/invoices'>) {
@@ -297,7 +293,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                 two-column [title | summary card] pair the spec anchors, and
                 this end-of-tabs-row slot is the low-risk place to add a new
                 primary action without touching it. */}
-            <AddInvoice options={editorOptions} money={moneyExact} labels={addInvoiceLabels} />
+            <AddInvoice options={editorOptions} labels={addInvoiceLabels} />
             <details className="relative">
               <summary className="min-h-11 cursor-pointer list-none px-2 py-1.5 text-[10px] text-sk-muted hover:text-sk-ink sm:min-h-0">
                 {t('invoices.more_views')}
@@ -365,7 +361,6 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
           about something else entirely. */}
       {tab === 'reconciliation' && (
         <ReconcileReport
-          money={moneyExact}
           labels={{
             kicker: t('invoices.recon_kicker'),
             intro: t('invoices.recon_intro'),

@@ -639,8 +639,14 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                     : t('work.tasks_today_other').replace('{n}', `⁨${groupTasks.length}⁩`)}
                 </span>
               </div>
-              <div className="mt-2 overflow-hidden rounded-[10px] border border-line bg-sk-surface">
-                <div className={`hidden ${WORK_COLS} gap-x-4 border-b border-line bg-sk-surface-header px-3 py-2 text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted lg:grid`}>
+              {/* QA item 04 (Rotem): overflow-hidden here clipped VerbMenu's
+                  desktop dropdown (sm:absolute top-full) at the card border —
+                  a row near the card bottom showed only the first few verbs.
+                  The clip existed only to tuck the header strip's background
+                  into the rounded corners, so the header rounds itself
+                  instead and the container stays overflow-visible. */}
+              <div className="mt-2 rounded-[10px] border border-line bg-sk-surface">
+                <div className={`hidden ${WORK_COLS} gap-x-4 rounded-t-[9px] border-b border-line bg-sk-surface-header px-3 py-2 text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted lg:grid`}>
                   <span>{t('work.col_what')}</span>
                   <span>{t('work.col_phase')}</span>
                   <span>{t('work.col_owner')}</span>

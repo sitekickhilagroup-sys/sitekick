@@ -3,6 +3,9 @@
 import { useState, useTransition } from 'react';
 import { createInvoice, type InvoiceDupInfo } from '@/app/actions/invoices';
 import { INVOICE_ERRORS, parseAmountInput } from '@/lib/invoice-rules';
+// Imported, not received as a prop: a function prop from the server page is
+// exactly what took /invoices down in Next 16 (QA item 03) — see lib/format.ts.
+import { moneyExact } from '@/lib/format';
 import { SavedChip } from '@/components/work/saved-chip';
 import type { LinkEditorOptions } from '@/components/invoices/link-editor';
 
@@ -10,7 +13,6 @@ interface Props {
   /** Same vendors/projects/entities LinkEditor already builds once in
    *  page.tsx — reused as-is, not a second options object. */
   options: LinkEditorOptions;
-  money: (n: number) => string;
   labels: Record<string, string>;
 }
 
@@ -23,7 +25,7 @@ interface Props {
 // amount + received_date + entity + project) never blocks at all —
 // createInvoice inserts it flagged needs_verification and this dialog never
 // even sees it.
-export function AddInvoice({ options, money, labels }: Props) {
+export function AddInvoice({ options, labels }: Props) {
   const [open, setOpen] = useState(false);
   const [vendorId, setVendorId] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
@@ -270,7 +272,7 @@ export function AddInvoice({ options, money, labels }: Props) {
             <div className="mt-3 rounded-xl border border-line bg-card2 p-3">
               <p className="text-sm font-medium text-ink">{dup.vendor}</p>
               <p className="mt-0.5 text-[11px] text-ink3">
-                {[money(dup.amount_usd), dup.received_date].filter(Boolean).join(' · ')}
+                {[moneyExact(dup.amount_usd), dup.received_date].filter(Boolean).join(' · ')}
               </p>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-2">

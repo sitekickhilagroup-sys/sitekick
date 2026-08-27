@@ -1,5 +1,6 @@
 'use client';
 
+import { moneyExact } from '@/lib/format';
 import { useState, useTransition, type ReactNode } from 'react';
 import {
   flagReconciledRowForVerification, parseReconciliationSource, undoFlagReconciledRowForVerification,
@@ -37,7 +38,6 @@ export interface ReconcileReportLabels {
 
 interface Props {
   labels: ReconcileReportLabels;
-  money: (n: number) => string;
 }
 
 type UploadPhase = 'idle' | 'busy' | 'error';
@@ -100,7 +100,7 @@ function Tile({ label, value }: { label: string; value: number }) {
   );
 }
 
-function RowLine({ row, labels, money }: { row: InvoiceRowRef; labels: ReconcileReportLabels; money: (n: number) => string }) {
+function RowLine({ row, labels }: { row: InvoiceRowRef; labels: ReconcileReportLabels }) {
   return (
     <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
       <span className="min-w-0">
@@ -109,7 +109,7 @@ function RowLine({ row, labels, money }: { row: InvoiceRowRef; labels: Reconcile
           {labels.number} {row.invoice_no ?? '—'}{row.received_date ? ` · ${row.received_date}` : ''}
         </span>
       </span>
-      <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-sk-ink">{money(row.amount_usd)}</span>
+      <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-sk-ink">{moneyExact(row.amount_usd)}</span>
     </span>
   );
 }
@@ -220,7 +220,7 @@ function Section({ title, count, none, children }: { title: string; count: numbe
  * see page.tsx's own comment on rowsTab for why Payment Summary had to stop
  * depending on that column, which this tab never starts depending on.
  */
-export function ReconcileReport({ labels, money }: Props) {
+export function ReconcileReport({ labels }: Props) {
   const [phase, setPhase] = useState<UploadPhase>('idle');
   const [fileName, setFileName] = useState('');
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -374,7 +374,7 @@ export function ReconcileReport({ labels, money }: Props) {
             <ul className="divide-y divide-line2">
               {report.added.map((row) => (
                 <li key={rowKey(row)} className="py-2">
-                  <RowLine row={row} labels={labels} money={money} />
+                  <RowLine row={row} labels={labels} />
                   {driftKeys.has(rowKey(row)) && <NumberDriftWarning labels={labels} />}
                   <FlagButton labels={labels} state={flags[rowKey(row)]} onFlag={() => flag(row)} onUndo={() => undoFlag(row)} onDismiss={() => dismissFlag(row)} />
                 </li>
@@ -391,7 +391,7 @@ export function ReconcileReport({ labels, money }: Props) {
                 };
                 return (
                   <li key={rowKey(row)} className="py-2">
-                    <RowLine row={row} labels={labels} money={money} />
+                    <RowLine row={row} labels={labels} />
                     <p className="mt-0.5 text-[10px] text-sk-muted">
                       {labels.changedPrefix} {fields.map((f) => fieldLabel[f] ?? f).join(', ')}
                     </p>
@@ -421,7 +421,7 @@ export function ReconcileReport({ labels, money }: Props) {
                   <ul className="divide-y divide-line2">
                     {group.map((row, j) => (
                       <li key={`${i}-${j}`} className="py-2">
-                        <RowLine row={row} labels={labels} money={money} />
+                        <RowLine row={row} labels={labels} />
                         <FlagButton labels={labels} state={flags[rowKey(row)]} onFlag={() => flag(row)} onUndo={() => undoFlag(row)} onDismiss={() => dismissFlag(row)} />
                       </li>
                     ))}
@@ -435,7 +435,7 @@ export function ReconcileReport({ labels, money }: Props) {
             <ul className="divide-y divide-line2">
               {report.orphans.map((row) => (
                 <li key={rowKey(row)} className="py-2">
-                  <RowLine row={row} labels={labels} money={money} />
+                  <RowLine row={row} labels={labels} />
                   {driftKeys.has(rowKey(row)) && <NumberDriftWarning labels={labels} />}
                 </li>
               ))}

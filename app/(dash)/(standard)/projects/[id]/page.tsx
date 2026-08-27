@@ -5,6 +5,7 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { verbResultLabels } from '@/lib/i18n/verb-labels';
 import { supabaseServer } from '@/lib/supabase/server';
 import { getProjectProcess } from '@/lib/process';
+import { orderProjectsByRtiProgress } from '@/lib/project-order';
 import { ProcessExplorer, type ExplorerPhase } from '@/components/process/process-explorer';
 import { SummaryEditor } from '@/components/process/summary-editor';
 import { PhaseSwitcher } from '@/components/process/phase-switcher';
@@ -22,15 +23,26 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
   const t = getT(locale);
 
   const supabase = await supabaseServer();
-  const [{ project, phaseViews, tasksByPhase, unactivatedByPhase, templates, workstreams }, projectsQ] = await Promise.all([
+  const [{ project, phaseViews, tasksByPhase, unactivatedByPhase, templates, workstreams }, projectsQ, allInstancesQ] = await Promise.all([
     getProjectProcess(supabase, id),
     supabase.from('projects').select('*').order('name'),
+    // Q12: every project's sub-stage instances, so the switcher can order
+    // projects by real progress toward RTI (getProjectProcess only fetches
+    // this project's own instances).
+    supabase.from('project_substages').select('*'),
   ]);
   if (!project) notFound();
   const allProjectRows = (projectsQ.data ?? []) as Project[];
+  // Q12 (Noa): pills run most-advanced-first — closest to RTI leads.
+  const orderedRows = orderProjectsByRtiProgress(
+    allProjectRows,
+    phaseViews.map((v) => v.phase),
+    templates,
+    allInstancesQ.data ?? [],
+  );
   // Inactive projects (spec §ו: Flicker) stay out of the switcher pills, but a
   // direct link to their process page still works — keep the current one visible.
-  const allProjects = allProjectRows.filter((p) => p.active !== false || p.id === id);
+  const allProjects = orderedRows.filter((p) => p.active !== false || p.id === id);
 
   const currentPhaseView = phaseViews.find((v) => v.phase.key === project.current_phase_key);
   const activeWorkstreams = phaseViews.flatMap((v) => v.workstreams).filter((w) => w.status === 'active');
