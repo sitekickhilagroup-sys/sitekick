@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laDateTime, laToday } from '@/lib/date';
@@ -10,6 +11,7 @@ import {
   INVOICE_ERRORS, INVOICE_ROW_COLUMNS, validateInvoicePatch, vendorKey,
   type InvoiceDupCandidate, type InvoicePatch,
 } from '@/lib/invoice-rules';
+import { fetchAllPages } from '@/lib/paginate';
 import { parseWorkbook } from '@/lib/parse/xlsx';
 import { reconcile, reconcileKey, type InvoiceRowRef, type ReconcileReport } from '@/lib/reconcile';
 import type { Invoice, InvoiceStatus } from '@/lib/types';
@@ -17,6 +19,27 @@ import type { Invoice, InvoiceStatus } from '@/lib/types';
 export type { InvoicePatch };
 
 const CHAIN: InvoiceStatus[] = ['received', 'for_rowan_approval', 'approved', 'paid'];
+
+// I4: both reconciliation entry points below need the COMPLETE current
+// `invoices` set scoped to tab='invoices' — the diff needs every system row
+// to find Orphans, and "Flag Verify" needs to find its match wherever it is.
+// A plain `.select()` silently truncates at Supabase's default REST max-rows
+// (1000), which is exactly why createInvoice below (see exactCandidatesRes/
+// suspicionCandidatesRes) already replaced its own equivalent scan with two
+// targeted queries — this reintroduced the same unbounded shape one function
+// over. Paged through explicitly via fetchAllPages (lib/paginate.ts) so
+// completeness is proven, not assumed.
+const INVOICES_PAGE_SIZE = 1000;
+async function fetchAllInvoices<T>(admin: SupabaseClient, columns: string): Promise<{ data: T[] } | { error: string }> {
+  return fetchAllPages<T>(INVOICES_PAGE_SIZE, async (offset, limit) => {
+    const { data, error } = await admin
+      .from('invoices')
+      .select(columns)
+      .eq('tab', 'invoices')
+      .range(offset, offset + limit - 1);
+    return { data: data as T[] | null, error };
+  });
+}
 
 export async function advanceInvoice(invoiceId: string) {
   const user = await requireUser();
@@ -31,7 +54,10 @@ export async function advanceInvoice(invoiceId: string) {
   const { error } = await admin.from('invoices').update(patch).eq('id', invoiceId);
   if (error) return { error: error.message };
   await logActivity(admin, { entity_type: 'invoice', entity_id: invoiceId, actor: user.email ?? user.id, action: 'advance', after: patch });
-  revalidatePath('/invoices');
+  // I3: work/page.tsx's Payment Run card and lib/queries.ts's home open-money
+  // panel both read `invoices` too — every invoice-writing action here now
+  // revalidates every route that reads what it wrote, not just /invoices.
+  revalidatePath('/invoices'); revalidatePath('/'); revalidatePath('/work');
   return { ok: true };
 }
 
@@ -45,7 +71,15 @@ export async function advanceInvoice(invoiceId: string) {
 export async function updateInvoice(invoiceId: string, patch: InvoicePatch): Promise<{ error: string } | { ok: true; undoId: string | null }> {
   const user = await requireUser();
   const admin = supabaseAdmin();
-  const { data: before } = await admin.from('invoices').select('*').eq('id', invoiceId).maybeSingle();
+  const { data: before, error: selectError } = await admin.from('invoices').select('*').eq('id', invoiceId).maybeSingle();
+  // Smaller-items fix: this used to discard selectError and treat !before as
+  // not-found — the same defect flagInvoiceForVerification's own SELECT had
+  // (see I1 there) one function over: an RLS or network failure on THIS row
+  // read as "invoice not found" for something visible on screen. select('*')
+  // never 42703s for a missing column (a missing column just isn't in the
+  // returned row), so unlike flagInvoiceForVerification there is no
+  // migration-pending case to special-case here — any error is a real one.
+  if (selectError) return { error: selectError.message };
   if (!before) return { error: INVOICE_ERRORS.notFound };
 
   const validation = validateInvoicePatch(before as Invoice, patch);
@@ -60,7 +94,7 @@ export async function updateInvoice(invoiceId: string, patch: InvoicePatch): Pro
     entity_type: 'invoice', entity_id: invoiceId, actor: user.email ?? user.id,
     action: 'edit', before, after: row,
   });
-  revalidatePath('/invoices');
+  revalidatePath('/invoices'); revalidatePath('/'); revalidatePath('/work');
   return { ok: true as const, undoId };
 }
 
@@ -82,7 +116,7 @@ export async function undoInvoiceEdit(logId: string): Promise<{ error: string } 
     entity_type: 'invoice', entity_id: entry.entity_id, actor: user.email ?? user.id,
     action: 'undo', after: restore,
   });
-  revalidatePath('/invoices');
+  revalidatePath('/invoices'); revalidatePath('/'); revalidatePath('/work');
   return { ok: true as const };
 }
 
@@ -279,7 +313,7 @@ export async function createInvoice(
     entity_type: 'invoice', entity_id: data.id, actor: user.email ?? user.id,
     action: 'create', after: loggedRow,
   });
-  revalidatePath('/invoices');
+  revalidatePath('/invoices'); revalidatePath('/'); revalidatePath('/work');
   return { ok: true as const, id: data.id, needsVerification: outcome.needsVerification };
 }
 
@@ -397,16 +431,22 @@ export async function parseReconciliationSource(
   // tracker imports into (applyInvoiceRows hard-codes tab: 'invoices') and
   // Add Invoice's own duplicate check scopes to; 'david' is a separately-
   // tracked sheet this flow never touches either way.
+  //
+  // I4: the FULL set, paged (fetchAllInvoices above) — a report that only
+  // ever sees the first 1000 system rows would compare the source against a
+  // truncated system set and report every real invoice past that cut as an
+  // Orphan (whose own call to action is "add this row"), the opposite of
+  // what a reconciliation report exists to prevent.
   const [invoicesRes, vendorsRes] = await Promise.all([
-    admin.from('invoices').select('*').eq('tab', 'invoices'),
+    fetchAllInvoices<Invoice>(admin, '*'),
     admin.from('vendors').select('id,name'),
   ]);
-  if (invoicesRes.error) return { error: invoicesRes.error.message };
+  if ('error' in invoicesRes) return { error: invoicesRes.error };
   if (vendorsRes.error) return { error: vendorsRes.error.message };
 
   const vendorName = vendorNameResolver((vendorsRes.data ?? []) as { id: string; name: string }[]);
-  const system = (invoicesRes.data ?? []) as Invoice[];
-  const report = reconcile(parsed.rows, system, vendorName);
+  const system = invoicesRes.data;
+  const report = reconcile(parsed.rows, system, vendorName, parsed.sheetName);
   return { ok: true as const, report };
 }
 
@@ -437,7 +477,19 @@ export async function flagInvoiceForVerification(invoiceId: string): Promise<{ e
     // "invoice not found" for a row visible on screen, and any other SELECT
     // failure (RLS, network) read the same way. Named the same way
     // createInvoice already does, not a second guess at the code.
-    if (selectError.code === 'PGRST204') return { error: INVOICE_ERRORS.migrationPending };
+    //
+    // I1: PGRST204 alone was still wrong, just differently — PostgREST only
+    // returns PGRST204 for an INSERT/UPDATE *payload* column PostgREST can't
+    // find in its schema cache (createInvoice's own insert below is exactly
+    // that case). A missing column in a SELECT list instead surfaces
+    // Postgres's own 42703 (undefined_column), forwarded through PostgREST
+    // as-is — which is exactly this call, a `.select('needs_verification')`.
+    // The branch written for the migration-pending case was therefore dead:
+    // pre-0017 this always fell through to the raw `column invoices.
+    // needs_verification does not exist` message instead. Both codes are
+    // checked now so either shape of "the column doesn't exist yet" maps to
+    // the same named, actionable error.
+    if (selectError.code === 'PGRST204' || selectError.code === '42703') return { error: INVOICE_ERRORS.migrationPending };
     return { error: selectError.message };
   }
   if (!before) return { error: INVOICE_ERRORS.notFound };
@@ -449,7 +501,7 @@ export async function flagInvoiceForVerification(invoiceId: string): Promise<{ e
     entity_type: 'invoice', entity_id: invoiceId, actor: user.email ?? user.id,
     action: 'flag_verify', before, after: { needs_verification: true },
   });
-  revalidatePath('/invoices');
+  revalidatePath('/invoices'); revalidatePath('/'); revalidatePath('/work');
   return { ok: true as const, undoId };
 }
 
@@ -472,7 +524,7 @@ export async function undoFlagInvoiceForVerification(logId: string): Promise<{ e
     entity_type: 'invoice', entity_id: entry.entity_id, actor: user.email ?? user.id,
     action: 'undo', after: { needs_verification: restored },
   });
-  revalidatePath('/invoices');
+  revalidatePath('/invoices'); revalidatePath('/'); revalidatePath('/work');
   return { ok: true as const };
 }
 
@@ -528,18 +580,21 @@ export async function flagReconciledRowForVerification(
   await requireUser();
   const admin = supabaseAdmin();
 
+  // I4: same bounding as parseReconciliationSource above — a match can be
+  // any row in the table, so this needs the FULL set too, not just the
+  // first 1000. Missing a real match here means "Flag Verify" reports a
+  // false reconcileNoMatch for a row that does exist.
+  type MatchCandidate = { id: string; vendor_id: string | null; number: string | null; amount_usd: number; received_date: string | null };
   const [invoicesRes, vendorsRes] = await Promise.all([
-    admin.from('invoices').select('id,vendor_id,number,amount_usd,received_date').eq('tab', 'invoices'),
+    fetchAllInvoices<MatchCandidate>(admin, 'id,vendor_id,number,amount_usd,received_date'),
     admin.from('vendors').select('id,name'),
   ]);
-  if (invoicesRes.error) return { error: invoicesRes.error.message };
+  if ('error' in invoicesRes) return { error: invoicesRes.error };
   if (vendorsRes.error) return { error: vendorsRes.error.message };
 
   const vendorName = vendorNameResolver((vendorsRes.data ?? []) as { id: string; name: string }[]);
   const targetKey = reconcileKey(ref.vendor, ref.invoice_no, ref.amount_usd, ref.received_date);
-  const rows = (invoicesRes.data ?? []) as {
-    id: string; vendor_id: string | null; number: string | null; amount_usd: number; received_date: string | null;
-  }[];
+  const rows = invoicesRes.data;
   const matches = rows.filter((r) => reconcileKey(vendorName(r.vendor_id), r.number, Number(r.amount_usd), r.received_date) === targetKey);
   if (matches.length === 0) return { error: INVOICE_ERRORS.reconcileNoMatch };
 
