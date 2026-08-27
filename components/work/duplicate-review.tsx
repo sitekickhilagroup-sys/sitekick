@@ -111,19 +111,32 @@ interface ResolvedOutcome {
  * the screen for a merged task — no list anywhere shows `status = 'merged'`
  * rows, so recovery would otherwise require a developer with database
  * access. Once a key enters `settled` it stays excluded from the live list
- * for the rest of this visit, however `pairs` changes afterward.
+ * for the rest of this visit, however `pairs` changes afterward — with one
+ * exception: a successful Undo deletes the key, so the restored pair
+ * re-offers itself as a live card instead of silently vanishing until the
+ * next full reload.
  */
 export function DuplicateReview({ pairs, labels }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [settled, setSettled] = useState<ReadonlyMap<string, ResolvedOutcome | null>>(new Map());
 
-  const keyOf = (p: DupPairView) => `${p.a.id}:${p.b.id}`;
+  // Order-independent key: the page's task query has no ORDER BY, and the
+  // merge/undo UPDATEs move rows in heap order — so the same pair can come
+  // back from a revalidate as (b, a). A direction-sensitive key would then
+  // render a fresh card beside the pair's own outcome chip.
+  const keyOf = (p: DupPairView) => (p.a.id < p.b.id ? `${p.a.id}:${p.b.id}` : `${p.b.id}:${p.a.id}`);
   // Leave it and a dismissed chip both settle to `null` (rendered as
   // nothing); a successful Merge or Not-a-duplicate settles to a real
-  // outcome (rendered as SavedChip). Either way the key is permanently out
-  // of `awaiting` for the rest of this visit.
+  // outcome (rendered as SavedChip). Either way the key is out of
+  // `awaiting` until an Undo unsettles it.
   const settle = (key: string, outcome: ResolvedOutcome | null) =>
     setSettled((prev) => new Map(prev).set(key, outcome));
+  const unsettle = (key: string) =>
+    setSettled((prev) => {
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
 
   const awaiting = pairs.filter((p) => !settled.has(keyOf(p)));
   const resolved = [...settled.entries()].filter(
@@ -156,7 +169,13 @@ export function DuplicateReview({ pairs, labels }: Props) {
         <div className="space-y-3 rounded-(--radius-card) border border-line bg-card p-3">
           {awaiting.length > 0 && <p className="text-[11px] leading-relaxed text-ink3">{labels.hint}</p>}
           {resolved.map(([key, outcome]) => (
-            <ResolvedPairCard key={key} outcome={outcome} labels={labels} onDismiss={() => settle(key, null)} />
+            <ResolvedPairCard
+              key={key}
+              outcome={outcome}
+              labels={labels}
+              onDismiss={() => settle(key, null)}
+              onUndone={() => unsettle(key)}
+            />
           ))}
           {awaiting.map((pair) => (
             <DupPairCard
@@ -203,8 +222,8 @@ const errorMessage = (labels: DuplicateReviewLabels, err: CardError): string => 
 /** The post-decision confirmation: SavedChip plus, for a merge, the one and
  *  only Undo control that exists anywhere for a merged task (see
  *  DuplicateReview's own doc comment for why this lives at this level). */
-function ResolvedPairCard({ outcome, labels, onDismiss }: {
-  outcome: ResolvedOutcome; labels: DuplicateReviewLabels; onDismiss: () => void;
+function ResolvedPairCard({ outcome, labels, onDismiss, onUndone }: {
+  outcome: ResolvedOutcome; labels: DuplicateReviewLabels; onDismiss: () => void; onUndone: () => void;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<CardError | null>(null);
@@ -214,7 +233,10 @@ function ResolvedPairCard({ outcome, labels, onDismiss }: {
     setError(null);
     const res = await undoMerge(outcome.loserTaskId);
     if ('error' in res) { setError({ code: res.error }); return; }
-    onDismiss();
+    // Unsettle rather than settle-to-null: the revalidate this triggered puts
+    // the restored pair back into `pairs`, and it must re-offer as a live
+    // card — a still-genuine duplicate that Undo just resurrected.
+    onUndone();
   });
 
   return (
