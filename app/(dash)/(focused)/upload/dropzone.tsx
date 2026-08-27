@@ -10,6 +10,11 @@ export interface DropzoneLabels {
   /** Typed result cards (Noa, 2026-08-28: her tracker upload succeeded but
    *  "המסך לא השתנה" — the numbers the route returns were never shown). */
   invoiceTracker: string; taskTracker: string; emailBatch: string; alreadyUploaded: string;
+  /** PDF outcomes: an invoice row was created (flagged for verification), the
+   *  agent classified the PDF as a contract/proposal/letter and stored it as
+   *  a document only, or an invoice that created no row (no project match /
+   *  duplicate). */
+  invoiceCreated: string; notAnInvoice: string; invoiceSkipped: string;
 }
 
 interface Props {
@@ -50,6 +55,11 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
     }
     if (json.type === 'email_dump' || json.type === 'email_archive') {
       return labels.emailBatch.replace('{stored}', n(json.stored)).replace('{processed}', n(json.processed));
+    }
+    if (json.type === 'invoice_pdf') {
+      const summary = (json.summary ?? {}) as { invoice_id?: string | null; document_kind?: string };
+      if (summary.document_kind && summary.document_kind !== 'invoice') return labels.notAnInvoice;
+      return summary.invoice_id ? labels.invoiceCreated : labels.invoiceSkipped;
     }
     return null;
   }

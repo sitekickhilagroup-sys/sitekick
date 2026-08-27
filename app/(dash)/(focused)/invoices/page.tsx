@@ -9,6 +9,7 @@ import { StatusChain } from '@/components/invoices/status-chain';
 import { LinkEditor, type LinkEditorOptions } from '@/components/invoices/link-editor';
 import { AddInvoice } from '@/components/invoices/add-invoice';
 import { ReconcileReport } from '@/components/invoices/reconcile-report';
+import { VerifyChip } from '@/components/invoices/verify-chip';
 import { canonVendorName, vendorKey } from '@/lib/invoice-rules';
 import { money, moneyExact } from '@/lib/format';
 import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/types';
@@ -569,13 +570,22 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                     />
                     {/* E4 Step 3: a suspected/unconfirmed duplicate (or an
                         invoice added with no number) — flagged, never
-                        auto-resolved; Noa adjudicates. Reads as undefined
+                        auto-resolved; Noa adjudicates. Since 2026-08-28 the
+                        chip IS the adjudication control: click, confirm,
+                        flag clears (audited, undoable). Reads as undefined
                         (falsy) until migration 0017 actually runs, so this
                         degrades to "no chip" rather than crashing. */}
                     {inv.needs_verification && (
-                      <span className="whitespace-nowrap rounded-full bg-apricot-soft px-2 py-0.5 text-[11px] font-semibold text-apricot">
-                        {t('invoices.verify')}
-                      </span>
+                      <VerifyChip
+                        invoiceId={inv.id}
+                        labels={{
+                          verify: t('invoices.verify'),
+                          confirm: t('invoices.verify_confirm'),
+                          recorded: t('invoices.verify_cleared'),
+                          undo: t('work.undo'),
+                          cancel: t('common.cancel'),
+                        }}
+                      />
                     )}
                   </span>
                 </td>

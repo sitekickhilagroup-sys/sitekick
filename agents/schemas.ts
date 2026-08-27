@@ -75,6 +75,11 @@ export type ExtractResult = z.infer<typeof ExtractResultSchema>;
 export type TaskOp = z.infer<typeof TaskOpSchema>;
 
 export const InvoiceParseSchema = z.object({
+  // 2026-08-28: five PDFs (contracts, a proposal, a hold letter, a cover
+  // letter) each became a phantom invoice because the agent was never asked
+  // WHAT the document is — only to fill invoice fields. Classification is
+  // now step one, and only 'invoice' may create an invoices row.
+  document_kind: z.enum(['invoice', 'contract', 'proposal', 'permit_or_letter', 'other']),
   vendor_name: z.string().min(1),
   project_name: z.string().nullable(),
   number: z.string().nullable(),

@@ -516,10 +516,40 @@ export async function flagInvoiceForVerification(invoiceId: string): Promise<{ e
   return { ok: true as const, undoId };
 }
 
+/**
+ * The other half of adjudication — flagInvoiceForVerification's exact twin.
+ * "Only a human clears it" was the policy since 0017, but until 2026-08-28
+ * no action could actually clear the flag: rows flagged at insert (Add
+ * Invoice without a number, agent-parsed PDFs, reconciliation flags) stayed
+ * flagged forever. Same audited write/undo shape as the flag action; the
+ * shared undoFlagInvoiceForVerification below restores either direction from
+ * before_json.
+ */
+export async function resolveInvoiceVerification(invoiceId: string): Promise<{ error: string } | { ok: true; undoId: string | null }> {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const { data: before, error: selectError } = await admin.from('invoices').select('needs_verification').eq('id', invoiceId).maybeSingle();
+  if (selectError) {
+    if (selectError.code === 'PGRST204' || selectError.code === '42703') return { error: INVOICE_ERRORS.migrationPending };
+    return { error: selectError.message };
+  }
+  if (!before) return { error: INVOICE_ERRORS.notFound };
+  if (!before.needs_verification) return { ok: true as const, undoId: null }; // already clear — nothing to write or undo
+
+  const { error } = await admin.from('invoices').update({ needs_verification: false }).eq('id', invoiceId);
+  if (error) return { error: error.message };
+  const undoId = await logActivity(admin, {
+    entity_type: 'invoice', entity_id: invoiceId, actor: user.email ?? user.id,
+    action: 'flag_verify', before, after: { needs_verification: false },
+  });
+  revalidatePath('/invoices'); revalidatePath('/'); revalidatePath('/work');
+  return { ok: true as const, undoId };
+}
+
 /** Restores needs_verification from the snapshot flagInvoiceForVerification
- *  took — scoped to just that one column, not the general INVOICE_ROW_COLUMNS
- *  restore undoInvoiceEdit performs above, since needs_verification isn't
- *  part of that whitelist either. */
+ *  or resolveInvoiceVerification took — scoped to just that one column, not
+ *  the general INVOICE_ROW_COLUMNS restore undoInvoiceEdit performs above,
+ *  since needs_verification isn't part of that whitelist either. */
 export async function undoFlagInvoiceForVerification(logId: string): Promise<{ error: string } | { ok: true }> {
   const user = await requireUser();
   const admin = supabaseAdmin();
