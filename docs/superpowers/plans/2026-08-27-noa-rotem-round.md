@@ -27,9 +27,9 @@ Full pre-change backup: session scratchpad `invoices-backup-2026-08-27.json` (10
 - **Rotem**: round-2 doc covers everything; SM "Appraisal (waiting)" instance awaiting her confirm-reset.
 - **paid delta**: sheet-sourced paid $109,166 vs her Dashboard $114,779 — likely her Dashboard formula counts beyond the Invoices tab; with Noa.
 - **OLM archive**: 605MB > 20MB upload cap — needs an offline ingest path.
-- **Security (low)**: proxy.ts skips auth for prefetch-headed requests; pages render shells (RLS keeps data empty). Recommend requireUser in pages or dropping the skip.
+- ~~**Security (low)**: proxy.ts prefetch auth skip~~ — closed 2026-08-28 (`b8205a5`): the exemption predated getClaims (local JWKS verify), removed entirely; prefetch-headed requests now 307 to /login on prod.
 - **audit trail**: activity_log inserts for this data pass were blocked by the session's permission classifier — this file + the JSON backup are the ledger. undoMerge falls back to 'open' correctly for the 11 script merges.
-- Dor's live UI merge `eabc1ae2 (interior designer) → 107eb421 (retain engineer)` looks like a mis-click — worth a second look (undo exists).
+- ~~UI merge `eabc1ae2 (interior designer) → 107eb421 (retain engineer)`~~ — un-merged 2026-08-28 per Dor (actor was actually Noa, 2026-08-27 20:25 UTC — the near-identical titles baited the dedup list). Loser restored from the audit entry's before_json; survivor needed no unwind; pair marked `unrelated` so it never re-offers.
 
 ## Artifacts
 
