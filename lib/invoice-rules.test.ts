@@ -199,10 +199,29 @@ describe('findExactInvoiceDuplicate / findSuspectedInvoiceDuplicate', () => {
     ...overrides,
   });
 
-  test('exact key matches vendor case/whitespace-insensitively plus the exact invoice number', () => {
+  test('exact key matches vendor case/whitespace-insensitively plus the exact invoice number and entity', () => {
     const hit = findExactInvoiceDuplicate(
-      baseQuery({ vendorId: 'v2', vendorName: '  acme   corp ', invoiceNo: 'inv-1', amountUsd: 999, receivedDate: null, entity: null, projectId: null }),
+      baseQuery({ vendorId: 'v2', vendorName: '  acme   corp ', invoiceNo: 'inv-1', amountUsd: 999, receivedDate: null, entity: ' llc a ', projectId: null }),
       [existingInvoice()],
+    );
+    expect(hit?.id).toBe('existing-1');
+  });
+
+  // Q7 (Noa, 2026-08-27): the same number for the same vendor under a
+  // DIFFERENT entity is a different invoice, never an exact duplicate —
+  // SNO Solutions files invoice No.1 once per LLC. Mirrors migration 0018's
+  // unique (vendor_id, number, entity).
+  test('exact key: same vendor + same number under a different entity is not a match', () => {
+    expect(findExactInvoiceDuplicate(
+      baseQuery({ entity: 'LLC B' }),
+      [existingInvoice({ entity: 'LLC A' })],
+    )).toBeNull();
+  });
+
+  test('exact key: null and blank entity are the same "unset" — two entity-less rows still collide', () => {
+    const hit = findExactInvoiceDuplicate(
+      baseQuery({ entity: '  ' }),
+      [existingInvoice({ entity: null })],
     );
     expect(hit?.id).toBe('existing-1');
   });
@@ -328,6 +347,17 @@ describe('decideCreateInvoiceOutcome', () => {
   test('exact match, SAME vendor_id, force: blockedSameVendor — never silently inserts, never reaches the DB constraint', () => {
     const dup = existingInvoice({ vendorId: 'v-shared' });
     expect(decideCreateInvoiceOutcome(baseQuery({ vendorId: 'v-shared' }), [dup], true)).toEqual({ kind: 'blockedSameVendor' });
+  });
+
+  // Q7: a different entity breaks the exact key entirely, so the same
+  // vendor + number under another LLC is an ordinary insert — the DB's
+  // unique (vendor_id, number, entity) (0018) allows it too. The suspicion
+  // key can't fire either here (entity is one of its fields), so this is a
+  // clean, unflagged insert.
+  test('same vendor_id + same number under a DIFFERENT entity: plain insert, no block, no flag', () => {
+    const dup = existingInvoice({ vendorId: 'v-shared', entity: 'LLC A' });
+    expect(decideCreateInvoiceOutcome(baseQuery({ vendorId: 'v-shared', entity: 'LLC B' }), [dup], false))
+      .toEqual({ kind: 'insert', needsVerification: false });
   });
 });
 

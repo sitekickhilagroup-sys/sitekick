@@ -287,14 +287,20 @@ export interface InvoiceDupCandidate {
 
 export type InvoiceDupQuery = Omit<InvoiceDupCandidate, 'id'>;
 
-/** Exact-duplicate key: normalized vendor + invoice number. Only defined
- *  when an invoice number is present — a numberless invoice can never match
- *  on this key (only ever the softer suspicion key below), which is exactly
- *  how "missing invoice_no" ends up requiring needs_verification instead of
- *  being refused outright. */
-function exactDupKey(vendorName: string, invoiceNo: string | null): string | null {
+/** Exact-duplicate key: normalized vendor + invoice number + entity. Only
+ *  defined when an invoice number is present — a numberless invoice can never
+ *  match on this key (only ever the softer suspicion key below), which is
+ *  exactly how "missing invoice_no" ends up requiring needs_verification
+ *  instead of being refused outright.
+ *
+ *  Entity is part of the key per Noa's Q7 ruling (2026-08-27): the same
+ *  invoice number legitimately recurs for the same vendor across entities
+ *  (SNO Solutions No.1 exists once per LLC), so identity is
+ *  (vendor, number, entity) — mirroring migration 0018's unique constraint.
+ *  A null/blank entity keys as '' — two entity-less rows still collide. */
+function exactDupKey(vendorName: string, invoiceNo: string | null, entity: string | null): string | null {
   const no = invoiceNo?.trim();
-  return no ? `${vendorKey(vendorName)}::${no.toLowerCase()}` : null;
+  return no ? `${vendorKey(vendorName)}::${no.toLowerCase()}::${entity?.trim().toLowerCase() ?? ''}` : null;
 }
 
 /** Suspicion key: vendor + amount + received date + entity + project — the
@@ -319,9 +325,9 @@ function suspicionDupKey(q: Pick<InvoiceDupCandidate, 'vendorName' | 'amountUsd'
  *  by default and point the caller at the row it found (spec: never a silent
  *  second row for something that's actually the same invoice). */
 export function findExactInvoiceDuplicate(query: InvoiceDupQuery, candidates: InvoiceDupCandidate[]): InvoiceDupCandidate | null {
-  const key = exactDupKey(query.vendorName, query.invoiceNo);
+  const key = exactDupKey(query.vendorName, query.invoiceNo, query.entity);
   if (!key) return null;
-  return candidates.find((c) => exactDupKey(c.vendorName, c.invoiceNo) === key) ?? null;
+  return candidates.find((c) => exactDupKey(c.vendorName, c.invoiceNo, c.entity) === key) ?? null;
 }
 
 /** The suspicion-key path: a hit here never blocks the insert — the caller
@@ -357,14 +363,15 @@ export function decideCreateInvoiceOutcome(
     // Forced past an exact-key match. If it shares the literal same
     // vendor_id (not just the same canonical vendor identity via vendorKey
     // — see above), inserting collides with the table's own
-    // `unique (vendor_id, number)` constraint (0001_init.sql). This is the
+    // `unique (vendor_id, number, entity)` constraint (0018). This is the
     // ORDINARY case for an exact match, not a rare one: vendors.name is
     // itself unique, so two vendor rows sharing a canonical identity via a
     // punctuation/case difference is the unusual variant — sharing a
-    // vendor_id outright is the common one. Refuse cleanly here rather than
-    // let the insert reach Postgres and bounce back a raw constraint error:
-    // the real fix is a different invoice number, not a second identical
-    // (vendor_id, number) row.
+    // vendor_id outright is the common one. (An exact match already implies
+    // the same normalized entity — entity is part of the key above.) Refuse
+    // cleanly here rather than let the insert reach Postgres and bounce back
+    // a raw constraint error: the real fix is a different invoice number,
+    // not a second identical (vendor_id, number, entity) row.
     if (exactDup.vendorId === query.vendorId) return { kind: 'blockedSameVendor' };
   }
   const missingInvoiceNo = !query.invoiceNo;

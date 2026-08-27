@@ -17,6 +17,9 @@ export interface InvoiceRow {
   /** The real payment date from the sheet. Never the received date. */
   paid_date: string | null;
   approved_by: string | null;
+  /** Q10: the tracker's Service Month column ("Sep 25"); a date-typed cell
+   *  arrives as an Excel serial and is normalised to "YYYY-MM". */
+  service_month: string | null;
 }
 
 export interface TaskRow {
@@ -100,6 +103,21 @@ const str = (v: unknown) => {
   return s === '' ? null : s;
 };
 
+// The tracker's link column holds plain text on some rows ("Open invoice");
+// only a real URL may become one, or the table renders a dead link.
+const url = (v: unknown) => {
+  const s = str(v);
+  return s && /^https?:\/\//i.test(s) ? s : null;
+};
+
+// Service Month is usually text ("Sep 25") but a date-typed cell arrives as
+// an Excel serial — normalise that case to "YYYY-MM" instead of storing the
+// raw serial digits.
+function serviceMonth(v: unknown): string | null {
+  if (typeof v === 'number') return excelDate(v)?.slice(0, 7) ?? null;
+  return str(v);
+}
+
 function mapInvoiceStatus(v: unknown): InvoiceRow['status'] {
   const s = norm(v);
   if (s.includes('paid')) return 'paid';
@@ -128,12 +146,13 @@ export function parseWorkbook(buffer: Buffer): XlsxImport {
         entity: str(pick(o, 'llc', 'entity')),
         vendor: str(pick(o, 'supplier')),
         number: str(pick(o, 'invoiceno')),
-        link: str(pick(o, 'invoicelink', 'link')),
+        link: url(pick(o, 'invoicelink', 'link')),
         description: str(pick(o, 'description')),
         amount: Number(pick(o, 'invoiceamount', 'amount')) || 0,
         status: mapInvoiceStatus(pick(o, 'status')),
         paid_date: excelDate(pick(o, 'paymentdate', 'paiddate', 'datepaid')),
         approved_by: str(pick(o, 'approvedby')),
+        service_month: serviceMonth(pick(o, 'servicemonth')),
       }));
     if (out.length > 0) return { kind: 'invoices', rows: out, sheetName: name };
   }

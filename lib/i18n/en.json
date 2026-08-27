@@ -93,6 +93,7 @@
   "invoices.received": "Received",
   "invoices.invoice_date": "Invoice date",
   "invoices.paid_date": "Paid",
+  "invoices.service_month": "Service month",
   "invoices.date": "Date",
   "invoices.notes": "Notes",
   "invoices.transfer": "Transfer confirmation",

@@ -250,6 +250,8 @@ export interface Invoice {
    *  auto-resolved, only a human clears it. Not yet live — see migration
    *  0017_invoice_verify.sql. */
   needs_verification: boolean;
+  /** 0018 (Q10) — the tracker's Service Month column ("Sep 25" / "2026-01"). */
+  service_month: string | null;
 }
 
 export interface Digest {

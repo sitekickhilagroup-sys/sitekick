@@ -10,7 +10,7 @@ function sourceRow(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
   return {
     received_date: '2026-05-01', project: null, entity: null, vendor: 'Acme Corp',
     number: '1', link: null, description: null, amount: 100, status: 'received',
-    paid_date: null, approved_by: null,
+    paid_date: null, approved_by: null, service_month: null,
     ...overrides,
   };
 }
@@ -22,7 +22,7 @@ function systemRow(overrides: Partial<Invoice> = {}): Invoice {
     number: '1', amount_usd: 100, invoice_date: null, received_date: '2026-05-01', due: null,
     status: 'received', tab: 'invoices', entity: null, paid_date: null,
     transfer_confirmation_url: null, approved_by: null, budget_line: null, created_at: '2026-05-01',
-    invoice_url: null, receipt_url: null, notes: null, needs_verification: false,
+    invoice_url: null, receipt_url: null, notes: null, needs_verification: false, service_month: null,
     ...overrides,
   };
 }

@@ -14,9 +14,9 @@ describe('parseWorkbook', () => {
   it('detects invoice tracker with title rows above header', () => {
     const buffer = wb([
       ['Hilla US Invoices', null, null],
-      ['#', 'Invoice Received Date', 'Property / Project', 'LLC / Entity', 'Supplier', 'Invoice No.', 'Invoice Amount ($)', 'Status'],
-      [1, '2026-08-01', 'Blair', 'Blair LLC', 'Crest', '100', 500, 'For Rowan Approval'],
-      [2, '2026-08-02', 'San Marco', 'SM LLC', 'KGS', '200', 900, 'Paid'],
+      ['#', 'Service Month', 'Invoice Received Date', 'Property / Project', 'LLC / Entity', 'Supplier', 'Invoice No.', 'Invoice Link  (paste link)', 'Invoice Amount ($)', 'Status'],
+      [1, 'Sep 25', '2026-08-01', 'Blair', 'Blair LLC', 'Crest', '100', 'https://example.com/inv.pdf', 500, 'For Rowan Approval'],
+      [2, 45992, '2026-08-02', 'San Marco', 'SM LLC', 'KGS', '200', 'Open invoice', 900, 'Paid'],
     ]);
     const result = parseWorkbook(buffer);
     expect(result.kind).toBe('invoices');
@@ -25,6 +25,14 @@ describe('parseWorkbook', () => {
       expect(result.rows[0].status).toBe('for_rowan_approval');
       expect(result.rows[1].status).toBe('paid');
       expect(result.rows[0].vendor).toBe('Crest');
+      // Q10: Service Month survives the import — text stays as typed, a
+      // date-typed cell (Excel serial) normalises to YYYY-MM.
+      expect(result.rows[0].service_month).toBe('Sep 25');
+      expect(result.rows[1].service_month).toBe('2025-12');
+      // The link column's placeholder text ("Open invoice") is not a URL and
+      // must not become one; a real https link passes through.
+      expect(result.rows[0].link).toBe('https://example.com/inv.pdf');
+      expect(result.rows[1].link).toBeNull();
       // I6: the sheet a reconciliation report compares against has to be
       // nameable, not just "whichever one matched first".
       expect(result.sheetName).toBe('Sheet1');

@@ -93,6 +93,7 @@
   "invoices.received": "התקבלה",
   "invoices.invoice_date": "תאריך חשבונית",
   "invoices.paid_date": "שולם",
+  "invoices.service_month": "חודש שירות",
   "invoices.date": "תאריך",
   "invoices.notes": "הערות",
   "invoices.transfer": "אישור העברה",
