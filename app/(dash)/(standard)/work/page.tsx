@@ -10,6 +10,7 @@ import { laToday } from '@/lib/date';
 import { resolveTaskPhaseKey, resolveTaskSubstageLabel } from '@/lib/task-details';
 import { WORK_COLS, WorkTableRow } from '@/components/work/work-table-row';
 import { AddAction } from '@/components/work/add-action';
+import { DuplicateReview, type DupPairSide, type DupPairView, type DuplicateReviewLabels } from '@/components/work/duplicate-review';
 import type { RelationRow } from '@/components/work/relation-editor';
 import type { TaskEditorOptions } from '@/components/work/task-editor';
 import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relationship, SubstageTemplate, Task, Vendor, Workstream } from '@/lib/types';
@@ -87,9 +88,13 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   ]);
 
   const tasks = (tasksQ.data ?? []) as Task[];
+  // Full relationship set — needed both here (excluding pairs Noa already
+  // told apart via 'unrelated' — see lib/dedup.ts's findDuplicatePairs) and
+  // later for unlocksFor's blocks-edge lookup.
+  const allRels = (relsQ.data ?? []) as Relationship[];
   // Header claim (below) is computed from this, not asserted — Dor #47 saw
   // "Nothing is duplicated" above a real General/project duplicate pair.
-  const dupPairs = findDuplicatePairs(tasks);
+  const dupPairs = findDuplicatePairs(tasks, allRels);
   const projects = (projectsQ.data ?? []) as Project[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const pendingCount = proposalsQ.count ?? 0;
@@ -110,6 +115,21 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const vendorGroups = paymentGroups.length;
   const projectNames = new Map(projects.map((p) => [p.id, p.name]));
   const projectById = new Map(projects.map((p) => [p.id, p]));
+
+  // Side-by-side view for the duplicate-review list (DuplicateReview) —
+  // resolves each task's project name (or General) once here, server-side,
+  // rather than shipping the whole `projects` array to the client.
+  const toDupSide = (task: Task): DupPairSide => ({
+    id: task.id,
+    title: task.title,
+    project_id: task.project_id,
+    projectName: task.project_id ? (projectNames.get(task.project_id) ?? t('common.general')) : t('common.general'),
+    owner: task.owner,
+    waiting_for: task.waiting_for,
+    due: task.due,
+    last_touched: task.last_touched,
+  });
+  const dupPairViews: DupPairView[] = dupPairs.map(([x, y]) => ({ a: toDupSide(x), b: toDupSide(y) }));
 
   // Today ranking context: 0015's business_rank per project, plus each
   // project's current stage — same derivation topActions() uses.
@@ -263,7 +283,6 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     ? new Map(orderedGroups.flatMap(([, list]) => list).map((task, i) => [task.id, i + 1]))
     : null;
   const openIds = new Set(tasks.map((task) => task.id));
-  const allRels = (relsQ.data ?? []) as Relationship[];
   const unlocksFor = (taskId: string): string[] =>
     allRels
       .filter((r) => r.from_task_id === taskId && r.type === 'blocks'
@@ -383,6 +402,34 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   const activeTab = viewTabs.find((v) => v.key === view);
 
+  const dupReviewLabels: DuplicateReviewLabels = {
+    warning: t('work.dup_warning'),
+    hint: t('work.dup_review_hint'),
+    allReviewed: t('work.dup_review_done'),
+    keep: t('work.dup_keep'),
+    project: t('common.project'),
+    owner: t('tasks.owner'),
+    waiting: t('tasks.waiting'),
+    due: t('work.col_due'),
+    lastTouched: t('work.dup_last_touched'),
+    consequence: t('work.dup_consequence'),
+    merge: t('work.dup_merge'),
+    notDuplicate: t('work.dup_not_duplicate'),
+    leave: t('work.dup_leave'),
+    reason: t('rel.reason'),
+    mergedMsg: t('work.dup_merged_msg'),
+    notDuplicateMsg: t('work.dup_not_duplicate_msg'),
+    recorded: t('work.recorded'),
+    undo: t('work.undo'),
+    cancel: t('common.cancel'),
+    errorSelf: t('work.dup_error_self'),
+    errorNotFound: t('work.dup_error_not_found'),
+    errorAlreadyMerged: t('work.dup_error_already_merged'),
+    errorMasterMerged: t('work.dup_error_master_merged'),
+    errorNotMerged: t('work.dup_error_not_merged'),
+    errorReason: t('work.dup_error_reason'),
+  };
+
   return (
     <div className="sk-page mx-auto w-full max-w-[1060px] space-y-4 px-2 pb-16 sm:px-4">
       {/* register-hero (centered) + the Add-action button. */}
@@ -420,14 +467,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
         </div>
       </div>
 
-      {dupPairs.length > 0 && (
-        <Link
-          href="/work?view=all"
-          className="flex min-h-11 items-center rounded-(--radius-card) border border-apricot/40 bg-apricot-soft px-4 py-2.5 text-sm text-apricot hover:underline"
-        >
-          {t('work.dup_warning').replace('{n}', String(dupPairs.length))}
-        </Link>
-      )}
+      {dupPairs.length > 0 && <DuplicateReview pairs={dupPairViews} labels={dupReviewLabels} />}
 
       {pendingCount > 0 && (
         <Link

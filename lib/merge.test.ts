@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planMerge } from './merge';
+import { pickDefaultMaster, planMerge } from './merge';
 import type { Task } from './types';
 
 const AT = { actor: 'reviewer@example.com', now: '2026-08-24T10:00:00Z' };
@@ -133,5 +133,34 @@ describe('planMerge — transferring to the master', () => {
       AT,
     ).master;
     expect(patch).toEqual({});
+  });
+});
+
+describe('pickDefaultMaster — the review list\'s starting selection', () => {
+  it('defaults to the side that carries a real project', () => {
+    const general = task({ id: 'general', project_id: null, last_touched: '2026-08-01' });
+    const scoped = task({ id: 'scoped', project_id: 'san-marco', last_touched: '2026-08-01' });
+    expect(pickDefaultMaster(general, scoped)).toBe('scoped');
+    // Order-independent — the same pair either way round.
+    expect(pickDefaultMaster(scoped, general)).toBe('scoped');
+  });
+
+  it('falls back to the more recently touched row when both carry a project', () => {
+    const older = task({ id: 'older', project_id: 'san-marco', last_touched: '2026-08-01' });
+    const newer = task({ id: 'newer', project_id: 'san-marco', last_touched: '2026-08-20' });
+    expect(pickDefaultMaster(older, newer)).toBe('newer');
+    expect(pickDefaultMaster(newer, older)).toBe('newer');
+  });
+
+  it('falls back to the more recently touched row when neither carries a project', () => {
+    const older = task({ id: 'older', project_id: null, last_touched: '2026-08-01' });
+    const newer = task({ id: 'newer', project_id: null, last_touched: '2026-08-20' });
+    expect(pickDefaultMaster(older, newer)).toBe('newer');
+  });
+
+  it('breaks an exact tie by keeping the first argument', () => {
+    const a = task({ id: 'a', project_id: null, last_touched: '2026-08-01' });
+    const b = task({ id: 'b', project_id: null, last_touched: '2026-08-01' });
+    expect(pickDefaultMaster(a, b)).toBe('a');
   });
 });

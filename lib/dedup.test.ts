@@ -6,6 +6,10 @@ function t(id: string, title: string, project_id: string | null = 'p1', stage_ke
   return { id, title, project_id, stage_key, status: 'open' } as Task;
 }
 
+function merged(id: string, title: string, project_id: string | null = 'p1'): Task {
+  return { id, title, project_id, stage_key: null, status: 'merged', merged_into: 'somewhere-else' } as Task;
+}
+
 describe('matchExistingTask', () => {
   it('matches rephrased same work', () => {
     const open = [t('x', 'Retain Surveyor (Updated Survey / Topo)')];
@@ -110,5 +114,63 @@ describe('findDuplicatePairs', () => {
     ];
     const pairs = findDuplicatePairs(open);
     expect(pairs.length).toBe(0);
+  });
+
+  // A merge marks the loser `status: 'merged'` + `merged_into` in the same
+  // write (0010) — a row in that state is history, not a live duplicate
+  // candidate, on either side of a pair.
+  it('never pairs a task that has already been merged away', () => {
+    const open = [
+      t('scoped', 'Hold Letter Corrections', 'san-marco'),
+      merged('gone', 'Hold Letter Corrections', null),
+    ];
+    expect(findDuplicatePairs(open).length).toBe(0);
+  });
+
+  it('never pairs a merged task even when it is the earlier candidate', () => {
+    const open = [
+      merged('gone', 'Hold Letter Corrections', null),
+      t('scoped', 'Hold Letter Corrections', 'san-marco'),
+    ];
+    expect(findDuplicatePairs(open).length).toBe(0);
+  });
+
+  // Noa's "Not a duplicate" persists an 'unrelated' relationship — see
+  // saveRelationship (app/actions/relationships.ts). A pair she has already
+  // told apart must never resurface as a suggestion again.
+  it('excludes a pair already marked unrelated', () => {
+    const open = [
+      t('scoped', 'Hold Letter Corrections', 'san-marco'),
+      t('general', 'Hold Letter Corrections', null),
+    ];
+    const relationships = [{ from_task_id: 'scoped', to_task_id: 'general', type: 'unrelated' as const }];
+    expect(findDuplicatePairs(open, relationships).length).toBe(0);
+  });
+
+  it('excludes a pair marked unrelated in the reverse direction too', () => {
+    const open = [
+      t('scoped', 'Hold Letter Corrections', 'san-marco'),
+      t('general', 'Hold Letter Corrections', null),
+    ];
+    const relationships = [{ from_task_id: 'general', to_task_id: 'scoped', type: 'unrelated' as const }];
+    expect(findDuplicatePairs(open, relationships).length).toBe(0);
+  });
+
+  it('does not let an unrelated mark for a different pair suppress this one', () => {
+    const open = [
+      t('scoped', 'Hold Letter Corrections', 'san-marco'),
+      t('general', 'Hold Letter Corrections', null),
+    ];
+    const relationships = [{ from_task_id: 'scoped', to_task_id: 'someone-else', type: 'unrelated' as const }];
+    expect(findDuplicatePairs(open, relationships).length).toBe(1);
+  });
+
+  it('ignores a non-unrelated relationship between the same two tasks', () => {
+    const open = [
+      t('scoped', 'Hold Letter Corrections', 'san-marco'),
+      t('general', 'Hold Letter Corrections', null),
+    ];
+    const relationships = [{ from_task_id: 'scoped', to_task_id: 'general', type: 'blocks' as const }];
+    expect(findDuplicatePairs(open, relationships).length).toBe(1);
   });
 });

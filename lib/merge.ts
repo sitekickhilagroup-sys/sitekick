@@ -100,3 +100,24 @@ export function planMerge(
     },
   };
 }
+
+/**
+ * Which side of a duplicate pair should default to "survives" in the review
+ * list. A project-filed row is the correctly-attributed one — the reason a
+ * General twin exists at all is that the same work was logged twice, once
+ * against the real project and once without — so that side wins whenever
+ * exactly one of the two carries a project. When both or neither do, there
+ * is no such signal, so the more recently touched row (the freshest
+ * information) defaults to survive. Always just a starting point: the caller
+ * lets a human flip it before anything is written.
+ */
+export function pickDefaultMaster(
+  a: Pick<Task, 'id' | 'project_id' | 'last_touched'>,
+  b: Pick<Task, 'id' | 'project_id' | 'last_touched'>,
+): string {
+  const aHasProject = !!a.project_id;
+  const bHasProject = !!b.project_id;
+  if (aHasProject && !bHasProject) return a.id;
+  if (bHasProject && !aHasProject) return b.id;
+  return a.last_touched >= b.last_touched ? a.id : b.id;
+}
