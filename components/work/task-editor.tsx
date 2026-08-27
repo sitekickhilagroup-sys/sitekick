@@ -144,7 +144,12 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
 
     const res = await updateTaskDetails(task.id, patch);
     if ('error' in res) { setFailed(true); return; }
-    setResult({ message: labels['msg.details'] ?? labels.recorded, undoId: res.undoId });
+    // C3: same reasoning as VerbMenu's run() — the edit itself always
+    // succeeded here, so a weekly-sync hiccup (res.syncWarning) rides along
+    // on the same chip rather than reading as a failed save.
+    const base = labels['msg.details'] ?? labels.recorded;
+    const message = res.syncWarning && labels.syncWarning ? `${base} ${labels.syncWarning}` : base;
+    setResult({ message, undoId: res.undoId });
   });
 
   const undo = () => start(async () => {
@@ -171,7 +176,12 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
         className="fixed inset-x-0 bottom-0 z-30 flex max-h-[80dvh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-line bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-card sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:max-h-[70dvh] sm:w-80 sm:rounded-lg sm:border sm:p-3"
       >
         <span aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 shrink-0 rounded-full bg-line sm:hidden" />
-        <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.editDetails}</p>
+        {/* Smaller-items fix: was <p> — invalid nested inside this dialog's
+            own <span role="dialog"> (a <span> is phrasing content only). A
+            <span> here renders identically: this dialog is a flex column, and
+            a flex container's direct children are always blockified for
+            layout regardless of their own default display. */}
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.editDetails}</span>
 
         <label className="block text-xs text-ink2">
           <span className="mb-0.5 block text-[10px] font-medium text-ink3">{labels.owner}</span>
@@ -246,7 +256,10 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
           </select>
         </label>
 
-        <div className="mt-1 flex shrink-0 items-center gap-2">
+        {/* Smaller-items fix: was <div> — same invalid-nesting reason as the
+            <span> swap above; same blockification reasoning keeps this a
+            pixel-identical row. */}
+        <span className="mt-1 flex shrink-0 items-center gap-2">
           <button type="button" disabled={pending} onClick={save}
             className="min-h-11 rounded-full bg-sage px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 sm:min-h-7">
             {labels.save}
@@ -256,7 +269,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
             {labels.cancel}
           </button>
           {failed && <span role="alert" className="text-[10px] font-semibold text-coral">{labels.errorSave}</span>}
-        </div>
+        </span>
       </span>
     </>
   );

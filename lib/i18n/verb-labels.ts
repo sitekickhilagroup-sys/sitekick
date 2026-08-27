@@ -14,5 +14,10 @@ export function verbResultLabels(t: (key: string) => string): Record<string, str
     'msg.scheduled': t('work.msg.scheduled'),
     'msg.not_applicable': t('work.msg.not_applicable'),
     'msg.note': t('work.msg.note'),
+    // C3: appended to the "recorded" message when the write succeeded but
+    // syncTaskIntoOpenReview couldn't (see app/actions/work.ts's
+    // applyWorkVerb and app/actions/tasks.ts's updateTaskDetails) — never
+    // shown alone, always riding on the same chip as the real outcome.
+    syncWarning: t('work.msg.sync_warning'),
   };
 }

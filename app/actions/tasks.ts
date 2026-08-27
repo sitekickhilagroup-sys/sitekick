@@ -244,13 +244,23 @@ export async function createTaskChecked(input: {
   revalidatePath('/');
   // A7: the task already exists — a weekly-sync hiccup must never turn a
   // successful create into an error toast, so it's caught and logged, never
-  // returned.
+  // returned as `error`.
+  // C3: pre-0016 this throws on every call (next_step doesn't exist yet) —
+  // console-only made the sync 100% dead with no trace anywhere a user could
+  // see. `syncWarning` carries the same signal a caller could act on; today
+  // AddAction's own dialog closes immediately on success with no persistent
+  // surface to show it on (see components/work/add-action.tsx), so this is
+  // the one call site of the three where the warning still lands console-only
+  // — VerbMenu and TaskEditor's shared SavedChip both surface it (see C3 in
+  // the final fix report for the full reasoning).
+  let syncWarning = false;
   try {
     await syncTaskIntoOpenReview(admin, data.id);
   } catch (e) {
     console.error('[weekly-sync] createTaskChecked: failed to sync task into open review', { taskId: data.id, error: e });
+    syncWarning = true;
   }
-  return { ok: true, id: data.id };
+  return { ok: true, id: data.id, ...(syncWarning ? { syncWarning: true as const } : {}) };
 }
 
 // "Same task" resolution for the duplicate dialog: no new record — the
@@ -357,11 +367,19 @@ export async function updateTaskDetails(taskId: string, patch: TaskDetailsPatch)
   });
   revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
   // A7: the details edit already landed — a weekly-sync hiccup must never
-  // turn it into an error toast, so it's caught and logged, never returned.
+  // turn it into an error toast, so it's caught and logged, never returned
+  // as `error`.
+  // C3: pre-0016 this throws on every call (next_step doesn't exist yet) —
+  // console-only made the sync 100% dead silently. `syncWarning` lets
+  // TaskEditor say so on the same SavedChip it already shows for the
+  // (successful) primary write, without turning the edit itself into a
+  // failure.
+  let syncWarning = false;
   try {
     await syncTaskIntoOpenReview(admin, taskId);
   } catch (e) {
     console.error('[weekly-sync] updateTaskDetails: failed to sync task into open review', { taskId, error: e });
+    syncWarning = true;
   }
-  return { ok: true as const, undoId };
+  return { ok: true as const, undoId, ...(syncWarning ? { syncWarning: true as const } : {}) };
 }

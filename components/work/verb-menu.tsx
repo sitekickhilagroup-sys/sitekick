@@ -37,7 +37,13 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
     const res = await applyWorkVerb(taskId, verb, input);
     if ('error' in res) { setFailed(true); return; }
     setOpen(false); setAskInput(null); setDraft('');
-    setResult({ message: labels[`msg.${verb}`] ?? labels.recorded, undoId: res.undoId });
+    // C3: the primary write always succeeded here — a weekly-sync hiccup
+    // (res.syncWarning) rides along on the same "recorded" chip instead of
+    // becoming a separate failure state, so it's visible without implying
+    // this update itself failed.
+    const base = labels[`msg.${verb}`] ?? labels.recorded;
+    const message = res.syncWarning && labels.syncWarning ? `${base} ${labels.syncWarning}` : base;
+    setResult({ message, undoId: res.undoId });
   });
 
   const undo = () => start(async () => {
