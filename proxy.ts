@@ -6,15 +6,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  // Router prefetches: don't burn a Supabase auth roundtrip; the real
-  // navigation (and every server page) still verifies the session.
-  if (
-    request.headers.get('next-router-prefetch') === '1' ||
-    request.headers.get('purpose') === 'prefetch' ||
-    request.headers.get('sec-purpose')?.includes('prefetch')
-  ) {
-    return response;
-  }
+  // No prefetch exemption. There used to be one ("don't burn a Supabase auth
+  // roundtrip"), from the getUser() era — but getClaims() below verifies the
+  // JWT locally against a cached JWKS, so the exemption saved nothing and
+  // opened a hole: any request claiming to be a prefetch (a header the caller
+  // controls) rendered protected pages server-side without a session. RLS
+  // kept the data empty, but page shells leaked and pages with their own
+  // requireUser 500'd instead of redirecting.
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
