@@ -111,7 +111,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * Both sides are written to the activity log with before and after, which is
  * what makes the change auditable and reversible.
  */
-export async function mergeTasks(masterId: string, duplicateId: string) {
+export async function mergeTasks(masterId: string, duplicateId: string): Promise<{ error: string } | { ok: true }> {
   const user = await requireUser();
   if (masterId === duplicateId) return { error: 'cannot merge a task into itself' };
   const admin = supabaseAdmin();
@@ -157,11 +157,16 @@ export async function mergeTasks(masterId: string, duplicateId: string) {
  * Reverse a merge. The duplicate kept every field it had, so restoring it is a
  * matter of clearing the merge columns and putting its status back.
  *
+ * "Putting its status back" means what it actually was, not a guess: mergeTasks
+ * writes the loser's full pre-merge row as before_json on its own 'merge' audit
+ * entry, so a `done` (or `dropped`) task that got merged away comes back the
+ * same way it went in, instead of undo silently resurrecting it as `open`.
+ *
  * What this does not do is unpick the values the master absorbed: those were
  * gap-fills, and removing them could delete a value a human has since edited.
  * The activity log holds the master's before-state for anyone who needs it.
  */
-export async function undoMerge(duplicateId: string) {
+export async function undoMerge(duplicateId: string): Promise<{ error: string } | { ok: true }> {
   const user = await requireUser();
   const admin = supabaseAdmin();
   const actor = user.email ?? user.id;
@@ -172,7 +177,29 @@ export async function undoMerge(duplicateId: string) {
   const duplicate = row as Task;
   if (!duplicate.merged_into) return { error: 'not merged' };
 
-  const restored = { status: 'open' as const, merged_into: null, merged_at: null, merged_by: null };
+  // The most recent 'merge' entry for this task is the one that produced the
+  // current merged state — its before_json is that merge's own pre-merge
+  // snapshot (mergeTasks above), which is the only record of what status this
+  // row actually had. A re-merge after an earlier undo would write a second
+  // 'merge' entry, so this is ordered to the latest rather than assuming there
+  // is only ever one.
+  const { data: logRow, error: logError } = await admin
+    .from('activity_log')
+    .select('before_json')
+    .eq('entity_type', 'task')
+    .eq('entity_id', duplicateId)
+    .eq('action', 'merge')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (logError) return { error: logError.message };
+  const loggedStatus = (logRow?.before_json as { status?: Task['status'] } | null)?.status;
+  // mergeTasks always writes this entry before flipping merged_into, so it
+  // should always be found — but if it's somehow missing, 'open' is still the
+  // safest fallback: never guess 'done' or 'dropped' with no evidence for it.
+  const restoredStatus: Task['status'] = loggedStatus ?? 'open';
+
+  const restored = { status: restoredStatus, merged_into: null, merged_at: null, merged_by: null };
   const { error } = await admin.from('tasks').update(restored).eq('id', duplicateId);
   if (error) return { error: error.message };
 
