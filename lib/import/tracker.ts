@@ -79,10 +79,22 @@ export async function applyInvoiceRows(
   // by the full identity key when the row has a number, and by
   // (vendor, entity, amount) when it does not.
   const entityNorm = (e: string | null) => (e ?? '').trim().toLowerCase();
+  // Vendor identity in these keys is the CANONICAL vendorKey, never the raw
+  // vendor_id: the vendors table holds punctuation twins ("A.G.I Geotechnical"
+  // with and without a trailing space are two rows), and an existing invoice
+  // filed under the twin id would never match a sheet row resolved to the
+  // canonical id — the 2026-08-27 import left 20 such duplicates behind
+  // before this was keyed by name.
+  const vendorKeyById = new Map<string, string>();
+  for (const v of (existingVendors ?? []) as { id: string; name: string }[]) {
+    vendorKeyById.set(v.id, vendorKey(v.name) || v.id);
+  }
+  const vendorIdent = (vendorId: string | null) =>
+    vendorId ? (vendorKeyById.get(vendorId) ?? vendorId) : '';
   const idKey = (vendorId: string | null, number: string | null, entity: string | null) =>
-    `${vendorId ?? ''}::${(number ?? '').trim().toLowerCase()}::${entityNorm(entity)}`;
+    `${vendorIdent(vendorId)}::${(number ?? '').trim().toLowerCase()}::${entityNorm(entity)}`;
   const numberlessKey = (vendorId: string | null, entity: string | null, amount: number) =>
-    `${vendorId ?? ''}::${entityNorm(entity)}::${amount.toFixed(2)}`;
+    `${vendorIdent(vendorId)}::${entityNorm(entity)}::${amount.toFixed(2)}`;
 
   const { data: existingInvoices } = await admin.from('invoices')
     .select('id,vendor_id,number,entity,amount_usd');
@@ -109,7 +121,10 @@ export async function applyInvoiceRows(
         const { data } = await admin.from('vendors')
           .upsert({ name: row.vendor }, { onConflict: 'name' }).select('id').single();
         vendorId = data?.id ?? null;
-        if (vendorId && key) vendorIds.set(key, vendorId);
+        if (vendorId && key) {
+          vendorIds.set(key, vendorId);
+          vendorKeyById.set(vendorId, key);
+        }
       }
     }
     const values = {
