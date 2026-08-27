@@ -402,10 +402,26 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   const activeTab = viewTabs.find((v) => v.key === view);
 
+  // Reused only to fill errorConflict's {type} — markPairNotDuplicate names
+  // the conflicting relationship's real type (e.g. 'blocks'), and this is
+  // how that becomes the same translated label RelationEditor's own chips
+  // already show for it, rather than a second, drifting copy.
+  const relTypeLabels: Record<string, string> = {
+    blocks: t('rel.type.blocks'),
+    supports: t('rel.type.supports'),
+    parallel: t('rel.type.parallel'),
+    unrelated: t('rel.type.unrelated'),
+    needs_verification: t('rel.type.needs_verification'),
+    required_for: t('rel.type.required_for'),
+    affects: t('rel.type.affects'),
+    related: t('rel.type.related'),
+    independent: t('rel.type.independent'),
+    conditional: t('rel.type.conditional'),
+  };
+
   const dupReviewLabels: DuplicateReviewLabels = {
     warning: t('work.dup_warning'),
     hint: t('work.dup_review_hint'),
-    allReviewed: t('work.dup_review_done'),
     keep: t('work.dup_keep'),
     project: t('common.project'),
     owner: t('tasks.owner'),
@@ -413,6 +429,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     due: t('work.col_due'),
     lastTouched: t('work.dup_last_touched'),
     consequence: t('work.dup_consequence'),
+    notDuplicateConsequence: t('work.dup_not_duplicate_consequence'),
     merge: t('work.dup_merge'),
     notDuplicate: t('work.dup_not_duplicate'),
     leave: t('work.dup_leave'),
@@ -420,13 +437,15 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     mergedMsg: t('work.dup_merged_msg'),
     notDuplicateMsg: t('work.dup_not_duplicate_msg'),
     recorded: t('work.recorded'),
-    undo: t('work.undo'),
+    undoMerge: t('work.dup_undo_merge'),
     cancel: t('common.cancel'),
     errorSelf: t('work.dup_error_self'),
     errorNotFound: t('work.dup_error_not_found'),
     errorAlreadyMerged: t('work.dup_error_already_merged'),
     errorMasterMerged: t('work.dup_error_master_merged'),
     errorNotMerged: t('work.dup_error_not_merged'),
+    errorConflict: t('work.dup_error_conflict'),
+    relTypeLabels,
     errorReason: t('work.dup_error_reason'),
   };
 
@@ -467,7 +486,11 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
         </div>
       </div>
 
-      {dupPairs.length > 0 && <DuplicateReview pairs={dupPairViews} labels={dupReviewLabels} />}
+      {/* Unconditional — DuplicateReview must stay mounted even once the
+          server reports zero pairs, so a resolved outcome (and a merge's
+          only Undo control) can't be torn down by the very revalidation its
+          own write triggers. See the component's own doc comment. */}
+      <DuplicateReview pairs={dupPairViews} labels={dupReviewLabels} />
 
       {pendingCount > 0 && (
         <Link

@@ -32,7 +32,7 @@ export function RelationEditor({ taskId, relations, taskOptions, labels }: Props
   const remove = (id: string) => start(async () => {
     setFailed(false);
     const res = await deleteRelationship(id);
-    if (res?.error) setFailed(true);
+    if ('error' in res) setFailed(true);
   });
 
   const add = () => {
@@ -40,7 +40,7 @@ export function RelationEditor({ taskId, relations, taskOptions, labels }: Props
     start(async () => {
       setFailed(false);
       const res = await saveRelationship(taskId, to, type, reason);
-      if (res?.error) { setFailed(true); return; }
+      if ('error' in res) { setFailed(true); return; }
       setTo('');
       setType('blocks');
       setReason('');

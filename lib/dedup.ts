@@ -1,4 +1,4 @@
-import type { Relationship, Task } from './types.ts';
+import type { Relationship, RelationshipType, Task } from './types.ts';
 
 // Deterministic task matcher: does a candidate describe the same work as an
 // existing open task? Used to update instead of duplicate (client item 1).
@@ -110,4 +110,40 @@ export function findDuplicatePairs(
     }
   }
   return pairs;
+}
+
+export type NotDuplicateOutcome =
+  // A meaningful edge already exists between these two — refuse rather than
+  // let it happen.
+  | { kind: 'blocked'; conflictType: RelationshipType }
+  // Already marked 'unrelated' (either direction) — nothing to write.
+  | { kind: 'noop' }
+  | { kind: 'write' };
+
+/**
+ * Decides what "Not a duplicate" is allowed to do, given every existing
+ * relationship row between the two tasks (both directions — the caller
+ * fetches with `.in(from,[a,b]).in(to,[a,b])`, so `existing` already covers
+ * a->b and b->a alike).
+ *
+ * saveRelationship upserts on `(from_task_id, to_task_id)` alone, not on
+ * type — calling it blind here would silently overwrite a real, verified
+ * edge (e.g. a 'blocks' relationship) with 'unrelated' the moment two tasks
+ * that are ALSO linked happen to look like title duplicates. And because
+ * that key is direction-sensitive, an edge recorded in the reverse
+ * direction wouldn't even conflict at the database level — writing a->b
+ * would leave a second, contradictory row sitting next to an untouched b->a.
+ *
+ * Pure and separated from app/actions/relationships.ts's markPairNotDuplicate
+ * (the fetch-then-decide-then-write action) so the decision itself — the
+ * part that actually matters for safety — is unit-testable without mocking
+ * Supabase.
+ */
+export function decideNotDuplicateOutcome(
+  existing: Pick<Relationship, 'type'>[],
+): NotDuplicateOutcome {
+  const conflicting = existing.find((r) => r.type !== 'unrelated');
+  if (conflicting) return { kind: 'blocked', conflictType: conflicting.type };
+  if (existing.some((r) => r.type === 'unrelated')) return { kind: 'noop' };
+  return { kind: 'write' };
 }

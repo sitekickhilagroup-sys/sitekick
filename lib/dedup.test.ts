@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findDuplicatePairs, matchExistingTask } from './dedup';
+import { decideNotDuplicateOutcome, findDuplicatePairs, matchExistingTask } from './dedup';
 import type { Task } from './types';
 
 function t(id: string, title: string, project_id: string | null = 'p1', stage_key: string | null = null): Task {
@@ -172,5 +172,38 @@ describe('findDuplicatePairs', () => {
     ];
     const relationships = [{ from_task_id: 'scoped', to_task_id: 'general', type: 'blocks' as const }];
     expect(findDuplicatePairs(open, relationships).length).toBe(1);
+  });
+});
+
+describe('decideNotDuplicateOutcome — guarding "Not a duplicate" against clobbering a real edge', () => {
+  it('writes when nothing exists between the two tasks', () => {
+    expect(decideNotDuplicateOutcome([])).toEqual({ kind: 'write' });
+  });
+
+  it('is a no-op when already marked unrelated', () => {
+    expect(decideNotDuplicateOutcome([{ type: 'unrelated' }])).toEqual({ kind: 'noop' });
+  });
+
+  // The exact scenario the reviewer traced: "Retain Surveyor" verifiably
+  // blocks "Submit Site Plan" and also looks like its General twin. Clicking
+  // "Not a duplicate" must never silently turn that 'blocks' edge into
+  // 'unrelated' — saveRelationship's upsert has no idea a type it's about to
+  // overwrite meant something.
+  it('blocks when a meaningful relationship already exists, and names it', () => {
+    expect(decideNotDuplicateOutcome([{ type: 'blocks' }]))
+      .toEqual({ kind: 'blocked', conflictType: 'blocks' });
+  });
+
+  it('blocks on any non-unrelated type, not just blocks', () => {
+    expect(decideNotDuplicateOutcome([{ type: 'required_for' }]))
+      .toEqual({ kind: 'blocked', conflictType: 'required_for' });
+  });
+
+  // A conflicting edge always wins over a redundant unrelated one sitting
+  // alongside it (e.g. a->b already 'unrelated', b->a genuinely 'blocks') —
+  // safety takes priority over the noop shortcut.
+  it('a conflicting edge wins even alongside an existing unrelated one', () => {
+    expect(decideNotDuplicateOutcome([{ type: 'unrelated' }, { type: 'blocks' }]))
+      .toEqual({ kind: 'blocked', conflictType: 'blocks' });
   });
 });
