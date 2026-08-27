@@ -10,11 +10,17 @@ function fakeSource<T>(rows: T[]) {
   return { fetchPage, calls };
 }
 
-test('a single short page returns everything in one call', async () => {
+test('a single page shorter than pageSize still confirms completeness with one more (empty) call', async () => {
   const { fetchPage, calls } = fakeSource([1, 2, 3]);
   const res = await fetchAllPages(1000, fetchPage);
   expect(res).toEqual({ data: [1, 2, 3] });
-  expect(calls).toEqual([{ offset: 0, limit: 1000 }]);
+  // Advances by the page's ACTUAL length (3), not the requested pageSize
+  // (1000) — the second call starts at offset 3, and only its EMPTY result
+  // is what actually confirms there was nothing left.
+  expect(calls).toEqual([
+    { offset: 0, limit: 1000 },
+    { offset: 3, limit: 1000 },
+  ]);
 });
 
 test('an empty source returns an empty array in one call', async () => {
@@ -35,6 +41,7 @@ test('a source larger than one page is collected across multiple calls', async (
     { offset: 0, limit: 1000 },
     { offset: 1000, limit: 1000 },
     { offset: 2000, limit: 1000 },
+    { offset: 2500, limit: 1000 }, // the empty confirming call
   ]);
 });
 
@@ -48,6 +55,36 @@ test('an exact multiple of the page size still confirms completeness with one mo
   expect(res).toEqual({ data: rows });
   expect(calls).toHaveLength(3);
   expect(calls[2]).toEqual({ offset: 2000, limit: 1000 });
+});
+
+// Re-review finding: INVOICES_PAGE_SIZE (1000) assumes PostgREST's own
+// max-rows cap is exactly 1000. This proves the fix for when it isn't — a
+// fake source that ignores the requested `limit` and never returns more
+// than 400 rows per call, the way a server configured with a lower max-rows
+// would behave regardless of what pageSize the caller asks for. The old
+// "stop when page.length < pageSize" logic would have treated the very
+// first (400-row) page as the whole answer and silently dropped the rest.
+test('a source whose real per-request cap is lower than the requested pageSize is still collected completely, with no gaps or duplicates', async () => {
+  const SERVER_CAP = 400;
+  const rows = Array.from({ length: 950 }, (_, i) => i);
+  const calls: Array<{ offset: number; limit: number }> = [];
+  const fetchPage = vi.fn(async (offset: number, limit: number): Promise<Page<number>> => {
+    calls.push({ offset, limit });
+    const actualLimit = Math.min(limit, SERVER_CAP);
+    return { data: rows.slice(offset, offset + actualLimit), error: null };
+  });
+  const res = await fetchAllPages(1000, fetchPage); // requests 1000, server only ever gives <=400
+  expect(res).toEqual({ data: rows }); // every row present exactly once, in order
+  // Every call still asked for 1000 (the caller's own pageSize choice never
+  // changes) — what changes is that the NEXT offset tracks how many rows
+  // actually came back (400, 400, 150) rather than assuming 1000 each time,
+  // so no row is skipped and none is re-fetched.
+  expect(calls).toEqual([
+    { offset: 0, limit: 1000 },
+    { offset: 400, limit: 1000 },
+    { offset: 800, limit: 1000 }, // 150 real rows left (800..949)
+    { offset: 950, limit: 1000 }, // empty confirming call
+  ]);
 });
 
 describe('a page error stops paging immediately', () => {

@@ -17,26 +17,41 @@ export interface Page<T> {
 }
 
 /**
- * Calls fetchPage(offset, pageSize) repeatedly, starting at offset 0 and
- * advancing by pageSize each call, collecting every row into one array.
- * Stops as soon as a page comes back with FEWER than pageSize rows — the
- * only stopping condition that doesn't require knowing the total row count
- * ahead of time (an exact multiple of pageSize costs one extra, empty final
- * call; negligible next to the alternative of silently dropping rows).
- * Returns the first error verbatim and stops paging immediately — a partial
- * page never gets folded in as if it were the complete answer.
+ * Calls fetchPage(offset, pageSize) repeatedly, collecting every row into
+ * one array, and stops only once a page comes back EMPTY.
+ *
+ * Re-review fix: this used to stop as soon as a page came back shorter than
+ * `pageSize` and advance the next offset by the requested `pageSize` itself
+ * — both assume the caller's chosen `pageSize` matches what the server is
+ * actually willing to return per request. Neither is safe: PostgREST's own
+ * row cap (Supabase's default max-rows) can be configured lower than
+ * whatever `pageSize` this is called with, in which case EVERY page comes
+ * back short of `pageSize` even with plenty of rows still waiting — the old
+ * logic would treat the very first page as the whole answer, silently
+ * dropping everything past it (page 2 could then also re-return rows page 1
+ * already had, or skip rows entirely, once concurrent writes are in the
+ * mix). An empty page is the only signal that doesn't depend on knowing the
+ * server's real per-request cap ahead of time, and advancing the offset by
+ * the page's ACTUAL length (not the requested `pageSize`) means the next
+ * request always picks up exactly where the last one left off, regardless
+ * of how many rows the server chose to return. The cost: a source whose
+ * total is an exact multiple of the server's real cap costs one extra,
+ * empty confirming call — negligible next to the alternative of silently
+ * missing rows.
  */
 export async function fetchAllPages<T>(
   pageSize: number,
   fetchPage: (offset: number, limit: number) => Promise<Page<T>>,
 ): Promise<{ data: T[] } | { error: string }> {
   const rows: T[] = [];
-  for (let offset = 0; ; offset += pageSize) {
+  let offset = 0;
+  while (true) {
     const { data, error } = await fetchPage(offset, pageSize);
     if (error) return { error: error.message };
     const page = data ?? [];
+    if (page.length === 0) break;
     rows.push(...page);
-    if (page.length < pageSize) break;
+    offset += page.length;
   }
   return { data: rows };
 }

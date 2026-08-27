@@ -32,10 +32,21 @@ const CHAIN: InvoiceStatus[] = ['received', 'for_rowan_approval', 'approved', 'p
 const INVOICES_PAGE_SIZE = 1000;
 async function fetchAllInvoices<T>(admin: SupabaseClient, columns: string): Promise<{ data: T[] } | { error: string }> {
   return fetchAllPages<T>(INVOICES_PAGE_SIZE, async (offset, limit) => {
+    // Re-review fix: Postgres gives no ordering guarantee across separate
+    // LIMIT/OFFSET requests — and these ARE separate HTTP requests, in
+    // separate transactions, while advanceInvoice/updateInvoice can be
+    // writing concurrently. With no explicit order, page 2 could re-return
+    // a row page 1 already had and miss another entirely: exactly the
+    // failure I4 exists to kill (a real invoice missing from `system`,
+    // reported as an Orphan whose call to action is "add this row"), just
+    // non-deterministic instead of a fixed 1000-row cut. `id` is stable and
+    // never changes after insert, so ordering by it is what makes each
+    // page's boundary consistent across requests.
     const { data, error } = await admin
       .from('invoices')
       .select(columns)
       .eq('tab', 'invoices')
+      .order('id', { ascending: true })
       .range(offset, offset + limit - 1);
     return { data: data as T[] | null, error };
   });
