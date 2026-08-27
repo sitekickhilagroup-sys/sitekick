@@ -15,6 +15,9 @@ export interface IngestInput {
 export interface IngestOutcome {
   documentId: string | null;
   deduped: boolean;
+  /** Only meaningful when deduped: was the EXISTING row already processed,
+      or did a prior attempt stop after storing but before processing ran? */
+  processed: boolean;
 }
 
 // Every raw input lands in documents first; dedup on external_id.
@@ -25,10 +28,10 @@ export async function ingestDocument(
   if (input.external_id) {
     const { data: existing } = await admin
       .from('documents')
-      .select('id')
+      .select('id, processed_at')
       .eq('external_id', input.external_id)
       .maybeSingle();
-    if (existing) return { documentId: existing.id, deduped: true };
+    if (existing) return { documentId: existing.id, deduped: true, processed: existing.processed_at != null };
   }
   const { data, error } = await admin
     .from('documents')
@@ -42,7 +45,7 @@ export async function ingestDocument(
     .select('id')
     .single();
   if (error || !data) throw new Error(`document insert failed: ${error?.message}`);
-  return { documentId: data.id, deduped: false };
+  return { documentId: data.id, deduped: false, processed: false };
 }
 
 // Route a stored document through the right agent.

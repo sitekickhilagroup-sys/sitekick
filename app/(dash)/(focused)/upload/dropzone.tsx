@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 export interface DropzoneLabels {
   drop: string; processing: string; done: string; failed: string;
   project: string; all: string; chooseFile: string; nextStep: string; retry: string;
-  stored: string; noTranscript: string;
+  stored: string; noTranscript: string; notProcessed: string;
 }
 
 interface Props {
@@ -25,7 +25,7 @@ interface Props {
 export function Dropzone({ projects, labels, accept, title, formats, project, onProjectChange }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'stored' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'stored' | 'unprocessed' | 'error'>('idle');
   const [detail, setDetail] = useState('');
   const [dragging, setDragging] = useState(false);
   const last = useRef<File | null>(null);
@@ -41,16 +41,26 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const json = await res.json();
       if (res.ok && json.ok !== false) {
-        // .mp4 is stored and linked only — no transcription runs — so it
-        // must not claim "Processed" or promise a review that never comes.
-        setState(json.type === 'recording' ? 'stored' : 'done');
-        // The queue below is server-rendered, so without this a fresh upload
-        // only appears after a manual reload.
-        router.refresh();
+        // .mp4 is stored and linked only — no transcription runs — so it must
+        // not claim "Processed" or promise a review that never comes. A
+        // dedup hit on a document a *previous* attempt stored but never
+        // finished processing is the same shape of problem: the row is real,
+        // but nothing ran, so this must not claim "Processed" either — see
+        // route.ts's `stored_unprocessed` branches.
+        setState(
+          json.type === 'recording' ? 'stored'
+          : json.type === 'stored_unprocessed' ? 'unprocessed'
+          : 'done',
+        );
       } else {
         setState('error');
         setDetail(json.error ?? file.name);
       }
+      // Either way, a `documents` row can now exist that didn't before —
+      // ingestDocument's insert runs before processing does, so a failure
+      // here doesn't mean nothing was stored. Refresh so the queue (item 19)
+      // never looks unchanged while a real row sits behind it.
+      router.refresh();
     } catch (e) {
       setState('error');
       setDetail(String(e));
@@ -117,6 +127,9 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
           )}
           {state === 'stored' && (
             <span className="text-sk-green">✓ {labels.stored} · {detail} — {labels.noTranscript}</span>
+          )}
+          {state === 'unprocessed' && (
+            <span className="text-sk-green">✓ {labels.stored} · {detail} — {labels.notProcessed}</span>
           )}
           {state === 'error' && <span className="text-coral">✗ {labels.failed} · {detail}</span>}
         </span>

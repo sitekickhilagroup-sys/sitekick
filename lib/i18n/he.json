@@ -245,6 +245,7 @@
   "upload.failed": "נכשל",
   "upload.stored": "נשמר",
   "upload.no_transcript": "התמלול עדיין לא זמין",
+  "upload.not_processed": "עדיין לא עובד",
   "settings.title": "הגדרות",
   "settings.import_requirements": "ייבוא רשימות דרישות",
   "settings.import_help": "מדביקים את ה-JSON של הפרויקט מה-PM (אותו פורמט כמו קובץ הדשבורד). סטטוסי שלבים נשמרים; רשימות הדרישות מוחלפות.",

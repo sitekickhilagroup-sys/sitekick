@@ -66,10 +66,23 @@ export async function POST(req: NextRequest) {
       await admin.storage.from('documents').upload(path, buffer, {
         contentType: 'application/pdf', upsert: false,
       });
-      const { documentId, deduped } = await ingestDocument(admin, {
+      const { documentId, deduped, processed } = await ingestDocument(admin, {
         kind: 'invoice_pdf', source: 'upload', storage_path: path, external_id: dedupKey,
       });
-      if (deduped || !documentId) return NextResponse.json({ ok: true, deduped: true });
+      if (!documentId) return NextResponse.json({ ok: true, deduped: true });
+      if (deduped) {
+        // A prior attempt can have stored this file and then died before
+        // processDocument finished — don't claim Processed for that case, and
+        // don't silently re-run it either: applyExtractResult's writes (new
+        // tasks, proposals, drafts, vendor hours) are plain inserts with no
+        // dedup guard of their own, so re-processing here risks creating the
+        // exact duplicates this dedup path exists to prevent. Same pattern in
+        // every branch below.
+        return NextResponse.json({
+          ok: true, documentId, deduped: true,
+          type: processed ? 'invoice_pdf' : 'stored_unprocessed',
+        });
+      }
       const summary = await processDocument(admin, {
         id: documentId, kind: 'invoice_pdf', pdf_base64: buffer.toString('base64'), project_hint: projectHint,
       });
@@ -92,11 +105,17 @@ export async function POST(req: NextRequest) {
 
     if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
       const parsed = parseWorkbook(buffer);
-      const { documentId, deduped } = await ingestDocument(admin, {
+      const { documentId, deduped, processed } = await ingestDocument(admin, {
         kind: 'sheet', source: 'upload', external_id: dedupKey,
         raw_text: parsed.kind === 'text' ? parsed.text : `tracker:${parsed.kind} rows:${parsed.rows.length}`,
       });
-      if (deduped || !documentId) return NextResponse.json({ ok: true, deduped: true });
+      if (!documentId) return NextResponse.json({ ok: true, deduped: true });
+      if (deduped) {
+        return NextResponse.json({
+          ok: true, documentId, deduped: true,
+          type: processed ? 'sheet' : 'stored_unprocessed',
+        });
+      }
       const { data: projects } = await admin.from('projects').select('id,name');
       const projectList = (projects ?? []) as Pick<Project, 'id' | 'name'>[];
 
@@ -148,10 +167,16 @@ export async function POST(req: NextRequest) {
     if (name.endsWith('.eml')) {
       const parsed = parseEml(buffer.toString('utf8'));
       const raw = `From: ${parsed.from}\nTo: ${parsed.to}\nDate: ${parsed.date}\nSubject: ${parsed.subject}\n\n${parsed.body}`;
-      const { documentId, deduped } = await ingestDocument(admin, {
+      const { documentId, deduped, processed } = await ingestDocument(admin, {
         kind: 'email', source: 'upload', external_id: parsed.messageId ?? dedupKey, raw_text: raw,
       });
-      if (deduped || !documentId) return NextResponse.json({ ok: true, deduped: true });
+      if (!documentId) return NextResponse.json({ ok: true, deduped: true });
+      if (deduped) {
+        return NextResponse.json({
+          ok: true, documentId, deduped: true,
+          type: processed ? 'email' : 'stored_unprocessed',
+        });
+      }
       const summary = await processDocument(admin, { id: documentId, kind: 'email', raw_text: raw, project_hint: projectHint });
       return NextResponse.json({ ok: true, type: 'email', documentId, summary });
     }
@@ -184,11 +209,16 @@ export async function POST(req: NextRequest) {
     let text: string;
     if (name.endsWith('.docx')) text = await docxToText(buffer);
     else text = buffer.toString('utf8');
-    const { documentId, deduped } = await ingestDocument(admin, {
+    const { documentId, deduped, processed } = await ingestDocument(admin, {
       kind: 'transcript', source: 'upload', raw_text: text, external_id: dedupKey,
     });
     if (!documentId) return NextResponse.json({ ok: true, deduped: true });
-    if (deduped) return NextResponse.json({ ok: true, type: 'transcript', documentId, deduped: true });
+    if (deduped) {
+      return NextResponse.json({
+        ok: true, documentId, deduped: true,
+        type: processed ? 'transcript' : 'stored_unprocessed',
+      });
+    }
     const summary = await processDocument(admin, {
       id: documentId, kind: 'transcript', raw_text: text, project_hint: projectHint,
     });

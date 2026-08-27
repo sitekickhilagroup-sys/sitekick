@@ -97,6 +97,7 @@ export default async function UploadPage() {
               retry: t('common.retry'),
               stored: t('upload.stored'),
               noTranscript: t('upload.no_transcript'),
+              notProcessed: t('upload.not_processed'),
             }}
             pasteLabels={{
               kicker: t('paste.kicker'), title: t('paste.title'), sub: t('paste.sub'),
