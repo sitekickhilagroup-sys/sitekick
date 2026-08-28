@@ -78,7 +78,9 @@ export interface InvoicePatch {
   transfer_confirmation_url?: string | null; notes?: string | null;
 }
 
-const STATUSES: Invoice['status'][] = ['received', 'for_rowan_approval', 'approved', 'paid', 'on_hold'];
+// 'cancelled' (0019, Rotem QA round 2): voids a mistaken record — off-chain
+// like on_hold, excluded from open totals, kept for the audit trail.
+const STATUSES: Invoice['status'][] = ['received', 'for_rowan_approval', 'approved', 'paid', 'on_hold', 'cancelled'];
 
 // Every error validateInvoicePatch/updateInvoice/undoInvoiceEdit can return,
 // named once so the UI's error-message mapping (link-editor.tsx) can switch

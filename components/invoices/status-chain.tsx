@@ -26,6 +26,8 @@ const BADGE: Record<InvoiceStatus, string> = {
   approved: 'bg-sk-green-soft-strong text-sk-green',
   paid: 'bg-sk-green-soft-strong font-[650] text-sk-green',
   on_hold: 'bg-sk-salmon text-sk-salmon-text',
+  // Rotem QA round 2 (0019): voided record — muted and struck, clearly dead.
+  cancelled: 'bg-card2 text-ink3 line-through',
 };
 
 export function StatusChain({ invoiceId, status, labels, advanceLabel }: Props) {
@@ -37,9 +39,10 @@ export function StatusChain({ invoiceId, status, labels, advanceLabel }: Props) 
       <span className={`whitespace-nowrap rounded-[6px] px-2 py-1 text-[9px] font-[650] uppercase leading-none tracking-[0.06em] ${BADGE[status]}`}>
         {labels[status]}
       </span>
-      {/* On hold stays a separate track with no advance control: it is
-          terminal in this UI, and returning from it goes through the editor. */}
-      {status !== 'on_hold' && idx < CHAIN.length - 1 && (
+      {/* On hold / cancelled are separate tracks with no advance control:
+          terminal in this UI (idx === -1 for both), and returning from them
+          goes through the editor. */}
+      {idx >= 0 && idx < CHAIN.length - 1 && (
         <button
           type="button"
           disabled={pending}

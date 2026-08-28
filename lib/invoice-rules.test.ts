@@ -42,9 +42,11 @@ describe('validateInvoicePatch — beyond the two given rules', () => {
       .toEqual({ ok: true });
   });
 
-  test('rejects a status outside the five known values', () => {
-    expect(validateInvoicePatch({ status: 'received', paid_date: null }, { status: 'cancelled' as never }))
+  test('rejects a status outside the known values, and accepts cancelled (0019)', () => {
+    expect(validateInvoicePatch({ status: 'received', paid_date: null }, { status: 'voided' as never }))
       .toEqual({ error: 'invalid status' });
+    expect(validateInvoicePatch({ status: 'received', paid_date: null }, { status: 'cancelled' }))
+      .toEqual({ ok: true });
   });
 
   test('rejects a link that is not https, accepts https and clearing to null/empty', () => {

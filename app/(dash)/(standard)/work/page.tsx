@@ -10,6 +10,7 @@ import { laToday } from '@/lib/date';
 import { resolveTaskPhaseKey, resolveTaskSubstageLabel } from '@/lib/task-details';
 import { WORK_COLS, WorkTableRow } from '@/components/work/work-table-row';
 import { AddAction } from '@/components/work/add-action';
+import { ReopenButton } from '@/components/work/reopen-button';
 import { DuplicateReview, type DupPairSide, type DupPairView, type DuplicateReviewLabels } from '@/components/work/duplicate-review';
 import type { RelationRow } from '@/components/work/relation-editor';
 import type { TaskEditorOptions } from '@/components/work/task-editor';
@@ -17,14 +18,16 @@ import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relation
 
 export const dynamic = 'force-dynamic';
 
-type WorkView = 'today' | 'blocking' | 'followups' | 'waiting' | 'all';
-const VIEWS: WorkView[] = ['today', 'blocking', 'followups', 'waiting', 'all'];
+// 'completed' (Noa round 3, request #3): recently-closed records with a
+// Reopen control — the missing way back after the undo toast expires.
+type WorkView = 'today' | 'blocking' | 'followups' | 'waiting' | 'all' | 'completed';
+const VIEWS: WorkView[] = ['today', 'blocking', 'followups', 'waiting', 'all', 'completed'];
 
 // View queries (spec §Interfaces) — all operate on already-open tasks. Today
 // used to be a case here too (a flat score+slice) — it moved out because
 // rankToday() needs business-rank + current-stage context this function
 // doesn't receive. See computeView, its replacement for the 'today' view.
-function filterView(tasks: Task[], view: Exclude<WorkView, 'today'>, today: string): Task[] {
+function filterView(tasks: Task[], view: Exclude<WorkView, 'today' | 'completed'>, today: string): Task[] {
   switch (view) {
     case 'blocking':
       return tasks.filter((t) => t.priority === 'critical');
@@ -43,7 +46,7 @@ function filterView(tasks: Task[], view: Exclude<WorkView, 'today'>, today: stri
 // including today — used for both the tab's count and the rendered list, so
 // the two can't drift. (The Blocking tab had exactly that class of mismatch
 // before this QA round: the count and the render read different functions.)
-function computeView(tasks: Task[], view: WorkView, today: string, todayCtx: TodayRankContext): Task[] {
+function computeView(tasks: Task[], view: Exclude<WorkView, 'completed'>, today: string, todayCtx: TodayRankContext): Task[] {
   return view === 'today' ? rankToday(tasks, todayCtx) : filterView(tasks, view, today);
 }
 
@@ -67,7 +70,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const supabase = await supabaseServer();
   // Relationships ride the same batch (table is small — filter in memory
   // below) so the page costs one database round trip, not two.
-  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ, substageTemplatesQ, workstreamsQ] = await Promise.all([
+  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ, substageTemplatesQ, workstreamsQ, closedQ] = await Promise.all([
     supabase.from('tasks').select('*').eq('status', 'open'),
     supabase.from('projects').select('*'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
@@ -85,9 +88,15 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     // TaskEditor's Sub-stage / Workstream selects (A6) — same batch, no extra round trip.
     supabase.from('substage_templates').select('id,phase_key,name,kind,position'),
     supabase.from('workstreams').select('id,project_id,name'),
+    // Completed view (Noa request #3): the 100 most recently touched closed
+    // records — done AND dropped, since both closings can be accidental
+    // ('merged' stays out; un-merging is the duplicate review's job).
+    supabase.from('tasks').select('*').in('status', ['done', 'dropped'])
+      .order('last_touched', { ascending: false }).limit(100),
   ]);
 
   const tasks = (tasksQ.data ?? []) as Task[];
+  const closedTasks = (closedQ.data ?? []) as Task[];
   // Full relationship set — needed both here (excluding pairs Noa already
   // told apart via 'unrelated' — see lib/dedup.ts's findDuplicatePairs) and
   // later for unlocksFor's blocks-edge lookup.
@@ -212,7 +221,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     projects: editorProjectOptions, phases: phaseOptions, substages: substageOptions, workstreams: workstreamOptions,
   };
 
-  const viewTasks = computeView(tasks, view, today, todayCtx);
+  const viewTasks = view === 'completed' ? [] : computeView(tasks, view, today, todayCtx);
   // ?substage= (the process page's "View all (n)" deep link) narrows
   // whichever view is active down to that one sub-stage's tasks. Validated
   // above, so this only ever narrows to a real (possibly empty) result —
@@ -241,7 +250,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     for (const [, list] of orderedGroups) list.sort((a, b) => scoreOf(b) - scoreOf(a));
   }
 
-  const isEmpty = view === 'blocking' ? blockers.length === 0 && filtered.length === 0 : filtered.length === 0;
+  const isEmpty = view === 'completed'
+    ? closedTasks.length === 0
+    : view === 'blocking' ? blockers.length === 0 && filtered.length === 0 : filtered.length === 0;
 
   // Relationships for the tasks actually listed on this view — already
   // fetched in the batch above; a task can be the "from" or "to" side.
@@ -330,6 +341,10 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     scheduled: t('work.verb.scheduled'),
     not_applicable: t('work.verb.not_applicable'),
     note: t('work.verb.note'),
+    // Noa critical #2: the armed second-press labels for the two verbs that
+    // close a record.
+    'confirm.completed': t('work.verb.confirm_completed'),
+    'confirm.not_applicable': t('work.verb.confirm_not_applicable'),
     ...verbResultLabels(t),
     'msg.details': t('work.msg.details'),
     update: t('work.update'),
@@ -386,7 +401,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   };
 
   // Per-view counts + one-line meaning — her demo's tab anatomy.
-  const countOf = (v: WorkView) => computeView(tasks, v, today, todayCtx).length;
+  const countOf = (v: Exclude<WorkView, 'completed'>) => computeView(tasks, v, today, todayCtx).length;
   const blockingBreakdown = view === 'blocking'
     ? t('work.blocking_breakdown')
         .replace('{tasks}', String(countOf('blocking')))
@@ -398,6 +413,8 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     { key: 'followups', label: t('work.view.followups'), sub: t('work.tab_sub.followups'), count: countOf('followups') },
     { key: 'waiting', label: t('work.view.waiting'), sub: t('work.tab_sub.waiting'), count: countOf('waiting') },
     { key: 'all', label: t('work.view.all'), sub: t('work.tab_sub.all'), count: countOf('all') },
+    // Capped at the query's 100 most recent — a recovery view, not an archive.
+    { key: 'completed', label: t('work.view.completed'), sub: t('work.tab_sub.completed'), count: closedTasks.length },
   ];
 
   const activeTab = viewTabs.find((v) => v.key === view);
@@ -502,7 +519,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       )}
 
       {/* Her .management-cards: big count, view name, one-line meaning. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {viewTabs.map(({ key, label, sub, count }) => (
           <Link
             key={key}
@@ -614,6 +631,39 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
       {isEmpty ? (
         <p className="rounded-(--radius-card) border border-line bg-card p-6 text-ink2">{t('work.empty')}</p>
+      ) : view === 'completed' ? (
+        // Noa request #3: the recovery list — recently closed records, newest
+        // first, each with the way back. Flat (no project grouping): the
+        // question here is "what closed lately", not "what does each project owe".
+        <ul className="rounded-[10px] border border-line bg-sk-surface">
+          {closedTasks.map((task) => (
+            <li key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line2 px-3 py-3 last:border-b-0">
+              <span className={`whitespace-nowrap rounded-[6px] px-2 py-1 text-[9px] font-[650] uppercase tracking-[0.06em] leading-none ${
+                task.status === 'done' ? 'bg-sage text-white' : 'bg-card2 text-ink3'
+              }`}>
+                {task.status === 'done' ? t('work.closed_done') : t('work.closed_dropped')}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-[650] leading-[1.4] text-sk-ink">{task.title}</span>
+                <span className="block text-[10px] text-sk-muted">
+                  {task.project_id ? (projectNames.get(task.project_id) ?? t('common.general')) : t('common.general')}
+                  {task.last_touched ? ` · ${task.last_touched}` : ''}
+                  {task.owner ? ` · ${task.owner}` : ''}
+                </span>
+              </span>
+              <ReopenButton
+                taskId={task.id}
+                labels={{
+                  reopen: t('work.reopen'),
+                  reopened: t('work.reopened_msg'),
+                  undo: t('work.undo'),
+                  cancel: t('common.cancel'),
+                  error: t('common.error_save'),
+                }}
+              />
+            </li>
+          ))}
+        </ul>
       ) : (
         orderedGroups.map(([projectId, groupTasks]) => {
           const project = projectId ? projectById.get(projectId) : null;

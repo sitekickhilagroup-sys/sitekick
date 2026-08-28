@@ -6,8 +6,9 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { type PhaseKey, type ProjectSubstageStatus } from '@/lib/types';
 import { logActivity } from '@/lib/state-writer';
-import { substageUndoRestore } from '@/lib/process';
+import { computeSubstageMove, substageUndoRestore } from '@/lib/process';
 import { inferProjectPhase } from '@/agents/infer-phase';
+import type { ProjectSubstage, SubstageTemplate } from '@/lib/types';
 
 const VALID_PHASES: PhaseKey[] = ['planning', 'plan_check', 'bidding', 'financing', 'construction'];
 // Noa's full sub-stage lifecycle (spec §ג, enum widened in 0007).
@@ -115,6 +116,88 @@ export async function setSubstageDecision(
   });
   revalidatePath('/projects/' + projectId);
   return { ok: true };
+}
+
+/** Noa request #2: one arrow press in the sub-stage list. The move itself is
+ *  computed by computeSubstageMove (lib/process, tested) over the same
+ *  visible list the explorer renders, so "up" is always one row up on
+ *  screen; this action just loads the phase's entries and writes the one
+ *  position it returns. */
+export async function moveSubstage(projectId: string, projectSubstageId: string, dir: 'up' | 'down') {
+  const user = await requireUser();
+  if (dir !== 'up' && dir !== 'down') return { error: 'invalid direction' };
+  const admin = supabaseAdmin();
+  const { data: inst } = await admin
+    .from('project_substages').select('*').eq('id', projectSubstageId).maybeSingle();
+  const instance = inst as ProjectSubstage | null;
+  if (!instance || instance.project_id !== projectId) return { error: 'not found' };
+  const { data: tpl } = await admin
+    .from('substage_templates').select('*').eq('id', instance.substage_template_id).maybeSingle();
+  const template = tpl as SubstageTemplate | null;
+  if (!template) return { error: 'not found' };
+  const [templatesQ, instancesQ] = await Promise.all([
+    admin.from('substage_templates').select('*').eq('phase_key', template.phase_key),
+    admin.from('project_substages').select('*').eq('project_id', projectId),
+  ]);
+  const templates = (templatesQ.data ?? []) as SubstageTemplate[];
+  const byTemplate = new Map(((instancesQ.data ?? []) as ProjectSubstage[]).map((i) => [i.substage_template_id, i]));
+  const entries = templates.map((t) => ({ template: t, instance: byTemplate.get(t.id) ?? null }));
+  const move = computeSubstageMove(entries, projectSubstageId, dir);
+  if (!move) return { ok: true as const }; // already at the edge — nothing to write
+  const { error } = await admin
+    .from('project_substages').update({ position: move.newPosition }).eq('id', projectSubstageId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'project_substage', entity_id: projectSubstageId, actor: user.email ?? user.id,
+    action: 'reorder', before: { position: instance.position }, after: { position: move.newPosition },
+  });
+  revalidatePath('/projects/' + projectId);
+  return { ok: true as const };
+}
+
+// Noa bug #5: the dependency line ("after X · parallel to Y") gets its own
+// field instead of being buried inside the note.
+export async function setSubstageDepends(projectId: string, projectSubstageId: string, dependsOn: string) {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const trimmed = dependsOn.trim() || null;
+  const { error } = await admin.from('project_substages').update({ depends_on: trimmed }).eq('id', projectSubstageId);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'project_substage', entity_id: projectSubstageId, actor: user.email ?? user.id,
+    action: 'set_depends', after: { depends_on: trimmed },
+  });
+  revalidatePath('/projects/' + projectId);
+  return { ok: true };
+}
+
+/** Noa bug #7: Bidding (or any phase) had no sub-stage bank to draw from.
+ *  Adds a named sub-stage to the shared library as 'conditional' — it shows
+ *  in every project's bank for that phase, not as an unactivated row — and
+ *  activates it for the requesting project in the same breath, since adding
+ *  it here means she needs it now. */
+export async function addSubstageTemplate(projectId: string, phaseKey: PhaseKey, name: string) {
+  const user = await requireUser();
+  if (!VALID_PHASES.includes(phaseKey)) return { error: 'invalid phase' };
+  const trimmed = name.trim();
+  if (!trimmed) return { error: 'missing name' };
+  const admin = supabaseAdmin();
+  const { data: maxRow } = await admin
+    .from('substage_templates').select('position').eq('phase_key', phaseKey)
+    .order('position', { ascending: false }).limit(1).maybeSingle();
+  const position = ((maxRow as { position: number } | null)?.position ?? 0) + 1;
+  // unique (phase_key, name) — a duplicate name surfaces as a save error
+  // instead of a second identical library row.
+  const { data, error } = await admin
+    .from('substage_templates')
+    .insert({ phase_key: phaseKey, name: trimmed, kind: 'conditional', position })
+    .select('id').single();
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'substage_template', entity_id: data.id, actor: user.email ?? user.id,
+    action: 'create', after: { phase_key: phaseKey, name: trimmed, position },
+  });
+  return activateSubstage(projectId, data.id, null);
 }
 
 export async function activateSubstage(projectId: string, substageTemplateId: string, workstreamId: string | null) {

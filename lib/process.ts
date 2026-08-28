@@ -11,6 +11,15 @@ export interface PhaseView {
   workstreams: Workstream[];
 }
 
+/** Display order for one sub-stage entry: the per-project manual override
+ *  (project_substages.position, 0019 — written by moveSubstage on the
+ *  template-position×10 scale, ±5 to land between neighbors) wins; entries
+ *  without one sort by library order on the same ×10 scale, so overridden
+ *  and library-ordered entries interleave predictably. */
+export function substageSortKey(s: { template: SubstageTemplate; instance: ProjectSubstage | null }): number {
+  return s.instance?.position ?? s.template.position * 10;
+}
+
 export function groupProcess(input: {
   phases: Phase[]; templates: SubstageTemplate[]; instances: ProjectSubstage[]; workstreams: Workstream[];
 }): PhaseView[] {
@@ -21,7 +30,6 @@ export function groupProcess(input: {
       phase,
       substages: input.templates
         .filter((tp) => tp.phase_key === phase.key)
-        .sort((a, b) => a.position - b.position)
         .map((template) => {
           const instance = byTemplate.get(template.id) ?? null;
           // A template with no instance is not "Upcoming" — nothing has been
@@ -30,34 +38,60 @@ export function groupProcess(input: {
           // so the view renders these as not activated instead.
           return { template, instance, activated: !!instance };
         })
-        .filter((s) => s.template.kind === 'standard' || (s.instance && s.instance.status !== 'upcoming')),
+        // Noa round 3, bug #3: a conditional WITH an instance stays visible
+        // in every status — including 'upcoming'. Setting an activated bank
+        // sub-stage to Upcoming used to bounce it back to the bank and hide
+        // its note; now 'upcoming' on an instance means "planned, not
+        // started" — exactly the state she had no way to express. Only
+        // instance-less conditionals stay hidden (nothing decided yet).
+        .filter((s) => s.template.kind === 'standard' || !!s.instance)
+        .sort((a, b) => substageSortKey(a) - substageSortKey(b) || a.template.position - b.template.position),
       workstreams: input.workstreams.filter((w) => w.phase_key === phase.key),
     }));
 }
 
 // True complement of groupProcess's substages visibility test: a conditional
-// template is "unactivated" when !instance || instance.status === 'upcoming'
-// — exactly what groupProcess's filter (kind === 'standard' || (instance &&
-// instance.status !== 'upcoming')) excludes. Without this, a conditional
-// template whose instance got set back to 'upcoming' (Task 3's
-// setSubstageStatus allows that status in its union) would vanish from both
-// substages AND this list — invisible, unrecoverable from the UI. Grouped by
-// phase — feeds Task 4's "Activate sub-stage" disclosure per phase column.
-// Pure + exported so it's unit-testable on its own; getProjectProcess below
-// computes it from the same fetched templates/instances and assigns the
-// result straight to unactivatedByPhase.
+// template is "unactivated" only while it has NO instance row (Noa round 3,
+// bug #3 — an instance set back to 'upcoming' used to land here too, which
+// bounced the sub-stage into the bank and hid its note; now any instance
+// keeps it in the visible list as planned/upcoming). Grouped by phase —
+// feeds the "Activate sub-stage" disclosure per phase column. Pure + exported
+// so it's unit-testable on its own; getProjectProcess below computes it from
+// the same fetched templates/instances and assigns the result straight to
+// unactivatedByPhase.
 export function unactivatedConditionals(
   templates: SubstageTemplate[],
   instances: ProjectSubstage[],
 ): Map<PhaseKey, SubstageTemplate[]> {
-  const byTemplate = new Map(instances.map((i) => [i.substage_template_id, i]));
+  const withInstance = new Set(instances.map((i) => i.substage_template_id));
   const byPhase = new Map<PhaseKey, SubstageTemplate[]>();
   for (const tp of [...templates].sort((a, b) => a.position - b.position)) {
-    const instance = byTemplate.get(tp.id);
-    if (tp.kind !== 'conditional' || (instance && instance.status !== 'upcoming')) continue;
+    if (tp.kind !== 'conditional' || withInstance.has(tp.id)) continue;
     byPhase.set(tp.phase_key, [...(byPhase.get(tp.phase_key) ?? []), tp]);
   }
   return byPhase;
+}
+
+/** One arrow press in the sub-stage list (Noa request #2: manual order).
+ *  Works on the phase's VISIBLE list exactly as groupProcess renders it
+ *  (same filter, same sort), so "up" always means "one row up on screen".
+ *  Only activated entries can move (position lives on the instance row);
+ *  the new position lands ±5 from the displayed neighbor's key — between
+ *  ×10 library slots — so a single write reorders without renumbering
+ *  everything. Returns null at a list edge or for an unknown/unactivated id. */
+export function computeSubstageMove(
+  entries: { template: SubstageTemplate; instance: ProjectSubstage | null }[],
+  instanceId: string,
+  dir: 'up' | 'down',
+): { newPosition: number } | null {
+  const visible = entries
+    .filter((s) => s.template.kind === 'standard' || !!s.instance)
+    .sort((a, b) => substageSortKey(a) - substageSortKey(b) || a.template.position - b.template.position);
+  const idx = visible.findIndex((s) => s.instance?.id === instanceId);
+  if (idx < 0) return null;
+  const neighbor = visible[dir === 'up' ? idx - 1 : idx + 1];
+  if (!neighbor) return null;
+  return { newPosition: substageSortKey(neighbor) + (dir === 'up' ? -5 : 5) };
 }
 
 // C3: which columns undoSubstageChange writes back, given the full

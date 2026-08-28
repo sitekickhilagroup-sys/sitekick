@@ -13,7 +13,9 @@ const canned = {
     { op: 'create', title: 'Order soils report addendum', owner: 'Noa', due: '2026-08-28', priority: 'normal' },
   ],
   blockers: [
-    { what: 'Grading plan has no engineer', blocked_by: 'Mid-Cities MSA refusal', downstream: ['plan_check'] },
+    // evidence is required as of Noa round 3 (agent bug #3) — a blocker claim
+    // must quote the communication it came from.
+    { what: 'Grading plan has no engineer', blocked_by: 'Mid-Cities MSA refusal', downstream: ['plan_check'], evidence: 'Mid-Cities declined the MSA, so the grading plan has no engineer' },
   ],
   decisions: [{ title: 'Proceed with Crest for entitlements' }],
   drafts: [{ subject: 'MSA decision needed', body: 'Refael — decision needed this week.', re_blocker_index: 0 }],
@@ -106,6 +108,12 @@ describe('applyExtractResult', () => {
       .toEqual(['blocker_create', 'decision_create', 'task_update'].sort());
     const taskUpdateProposal = proposalInserts.find((c) => (c.payload as { type: string }).type === 'task_update');
     expect(taskUpdateProposal?.payload).toMatchObject({ target_task_id: 'task-1', confidence: 0.8, state: 'pending' });
+    // Agent bug #3: the blocker's quote reaches evidence_excerpt — it was
+    // hardcoded null before, which is exactly what produced the empty
+    // review-inbox proposals Noa reported.
+    const blockerProposal = proposalInserts.find((c) => (c.payload as { type: string }).type === 'blocker_create');
+    expect((blockerProposal?.payload as { evidence_excerpt: string }).evidence_excerpt)
+      .toBe('Mid-Cities declined the MSA, so the grading plan has no engineer');
 
     // Blockers no longer insert directly (they're proposals now), so a draft's
     // re_blocker_index can't resolve to a real row yet — it lands unlinked.

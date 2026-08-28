@@ -4,7 +4,10 @@ export type ReqState = 'done' | 'open' | 'unknown';
 export type ReqWho = 'us' | 'city';
 export type ReqBasis = 'standard' | 'ours';
 export type StageStatus = 'done' | 'current' | 'upcoming' | 'skipped';
-export type InvoiceStatus = 'received' | 'for_rowan_approval' | 'approved' | 'paid' | 'on_hold';
+/** 'cancelled' (0019, Rotem QA round 2): voids an invoice recorded by
+ *  mistake — off-chain terminal like on_hold, excluded from open totals,
+ *  never deleted so the audit trail survives. */
+export type InvoiceStatus = 'received' | 'for_rowan_approval' | 'approved' | 'paid' | 'on_hold' | 'cancelled';
 export type InvoiceTab = 'invoices' | 'payment_summary' | 'david';
 export type TaskPriority = 'critical' | 'high' | 'normal';
 /** 'merged' (0010) marks a duplicate folded into a Master Action. Rows in that
@@ -387,6 +390,13 @@ export interface ProjectSubstage {
   decision: SubstageDecision | null;
   activated_at: string | null;
   completed_at: string | null;
+  /** 0019 (Noa request #2): per-project manual order override on the shared
+   *  template-position×10 scale — null means library order. See
+   *  substageSortKey in lib/process.ts. */
+  position: number | null;
+  /** 0019 (Noa bug #5): free-text dependency line — "after X · parallel to
+   *  Y" — shown under the sub-stage name instead of being buried in note. */
+  depends_on: string | null;
 }
 
 // Relationships: typed task dependencies with evidence (lib/types.ts mirrors supabase/migrations/0004_relationships.sql)

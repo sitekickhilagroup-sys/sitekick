@@ -24,6 +24,9 @@ export const BlockerOutSchema = z.object({
   days_at_risk: z.number().optional(),
   downstream: z.array(z.string()).optional(),
   suggested_action: z.string().optional(),
+  // Noa round 3, agent bug #3: proposals reached the review inbox with no
+  // quote — nothing to judge. A blocker claim now must cite the text.
+  evidence: z.string().min(1),
 });
 
 export const DecisionOutSchema = z.object({
@@ -50,7 +53,9 @@ export const VendorHoursOutSchema = z.object({
 export const DeadlineUpdateSchema = z.object({
   task_match: z.string().min(1),
   new_due: z.string(),
-  evidence: z.string(),
+  // min(1) — agent bug #3: '' satisfied the old contract and produced a
+  // "Deadline change" proposal with nothing to judge.
+  evidence: z.string().min(1),
 });
 
 export const RelationshipOutSchema = z.object({
@@ -58,6 +63,8 @@ export const RelationshipOutSchema = z.object({
   to_match: z.string().min(1),
   type: z.enum(['blocks', 'supports', 'parallel', 'unrelated', 'needs_verification']),
   reason: z.string().min(1),
+  // Verbatim quote backing the claim — shown in the review inbox (bug #3).
+  evidence: z.string().min(1),
 });
 
 export const ExtractResultSchema = z.object({

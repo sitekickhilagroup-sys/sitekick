@@ -97,6 +97,15 @@ export function WorkTableRow({ task, labels, relations, taskOptions, editorOptio
             blocking ? 'bg-coral shadow-[0_0_0_4px_var(--color-coral-soft)]' : 'bg-line'
           }`} />
           <span className="min-w-0">
+            {/* Noa round 3, request #1: the sub-stage as a small eyebrow ABOVE
+                the task name — the middle column kept it too easy to miss, and
+                this line is what ties the register row to the process view at
+                a glance. */}
+            {stageLabel && (
+              <span className="block text-[8px] font-bold uppercase tracking-[0.08em] text-sk-muted-light">
+                {stageLabel}
+              </span>
+            )}
             <span className="flex items-baseline gap-2">
               {rank != null && (
                 <span className="font-mono text-[11px] font-medium text-sage">{String(rank).padStart(2, '0')}</span>

@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { activateSubstage, setSubstageNote, setSubstageStatus, undoSubstageChange } from '@/app/actions/process';
+import { activateSubstage, addSubstageTemplate, moveSubstage, setSubstageDepends, setSubstageNote, setSubstageStatus, undoSubstageChange } from '@/app/actions/process';
 import { selectConnectedTasks } from '@/lib/process';
 import { ScenarioBox } from '@/components/process/scenario-box';
 import { SavedChip } from '@/components/work/saved-chip';
@@ -51,8 +51,11 @@ const STATUSES: ProjectSubstageStatus[] = [
 
 // Spec §טז semantics: green = progress/done, blue = external waiting,
 // red = blocked, amber = verify, gray = upcoming / N-A.
+// Noa round 3, bug #6: done and active shared the same soft green, so a list
+// couldn't be scanned for finished-vs-running. Done is now solid green (the
+// same treatment the DOT already used), active keeps the soft chip.
 const CHIP: Record<ProjectSubstageStatus, string> = {
-  done: 'bg-sage-soft text-sage',
+  done: 'bg-sage text-white',
   active: 'bg-sage-soft text-sage',
   waiting: 'bg-mist-soft text-mist',
   submitted: 'bg-mist-soft text-mist',
@@ -201,12 +204,15 @@ export function ProcessExplorer({ projectId, phases, labels, editorOptions }: Pr
                 const label = activated ? labels['status.' + status] : labels.notActivated;
                 const active = selectedSub?.template.id === template.id;
                 return (
-                  <li key={template.id}>
+                  // Reorder arrows live BESIDE the row button, not inside it —
+                  // nested <button>s are invalid HTML and the inner click
+                  // would also select the row.
+                  <li key={template.id} className="mb-1.5 flex items-stretch gap-1">
                     <button
                       type="button"
                       onClick={() => setSel(selectedKey, template.id)}
                       aria-expanded={active}
-                      className={`mb-1.5 flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-[9px] border px-3 py-3 text-start transition-colors ${
+                      className={`flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-[9px] border px-3 py-3 text-start transition-colors ${
                         active ? 'border-sage-line bg-sk-green-soft' : 'border-transparent bg-sk-surface-soft hover:bg-sk-green-soft/60'
                       }`}
                     >
@@ -217,6 +223,13 @@ export function ProcessExplorer({ projectId, phases, labels, editorOptions }: Pr
                           so a long sub-stage name or note was unreadable. */}
                       <span className="min-w-0 flex-1">
                         <span className="block text-[10px] font-[550] leading-[1.35] text-sk-ink">{template.name}</span>
+                        {/* Noa bug #5: the dependency line gets its own slot
+                            under the name — "after X · parallel to Y". */}
+                        {instance?.depends_on && (
+                          <span className="block text-[8px] leading-[1.35] text-sk-muted">
+                            <span aria-hidden="true" className="rtl:hidden">→ </span><span aria-hidden="true" className="hidden rtl:inline">← </span>{instance.depends_on}
+                          </span>
+                        )}
                         {instance?.note && (
                           <span className="block text-[8px] leading-[1.35] text-sk-muted">{instance.note}</span>
                         )}
@@ -228,22 +241,41 @@ export function ProcessExplorer({ projectId, phases, labels, editorOptions }: Pr
                       </span>
                       <span aria-hidden="true" className="text-sk-muted rtl:-scale-x-100">›</span>
                     </button>
+                    {/* Noa request #2: manual order — one visible row up/down
+                        per press. Only an activated row can hold a position. */}
+                    {instance && (
+                      <MoveArrows
+                        projectId={projectId}
+                        instanceId={instance.id}
+                        name={template.name}
+                        labels={{ up: labels.moveUp, down: labels.moveDown }}
+                      />
+                    )}
                   </li>
                 );
               })}
             </ul>
           )}
 
-          {selected.unactivated.length > 0 && (
-            <details className="mt-3 border-t border-line2 pt-2">
-              <summary className="min-h-11 cursor-pointer py-1 text-xs text-ink3 hover:text-ink sm:min-h-0">{labels.activate}</summary>
+          {/* Noa bug #7: the bank disclosure now renders for EVERY phase —
+              Bidding had no conditional templates, so the whole control was
+              missing and the phase read as three fixed rows. A phase with an
+              empty bank still offers the add-your-own input below. */}
+          <details className="mt-3 border-t border-line2 pt-2">
+            <summary className="min-h-11 cursor-pointer py-1 text-xs text-ink3 hover:text-ink sm:min-h-0">{labels.activate}</summary>
+            {selected.unactivated.length > 0 && (
               <ul className="mt-1">
                 {selected.unactivated.map((template) => (
                   <ActivateRow key={template.id} projectId={projectId} template={template} labels={labels} />
                 ))}
               </ul>
-            </details>
-          )}
+            )}
+            <AddSubstage
+              projectId={projectId}
+              phaseKey={selected.key}
+              labels={{ add: labels.addSubstage, placeholder: labels.addSubstagePh, error: labels.error }}
+            />
+          </details>
         </div>
 
         {selectedSub && (
@@ -258,6 +290,63 @@ export function ProcessExplorer({ projectId, phases, labels, editorOptions }: Pr
           />
         )}
       </div>
+    </div>
+  );
+}
+
+// One visible row up/down per press (Noa request #2). The server recomputes
+// the same displayed order (computeSubstageMove) so a stale client can't
+// write a position that contradicts what's on screen after refresh.
+function MoveArrows({ projectId, instanceId, name, labels }: {
+  projectId: string; instanceId: string; name: string; labels: { up: string; down: string };
+}) {
+  const [pending, start] = useTransition();
+  const move = (dir: 'up' | 'down') => start(async () => { await moveSubstage(projectId, instanceId, dir); });
+  const cls = 'flex h-5 w-6 cursor-pointer items-center justify-center rounded border border-line bg-sk-surface text-[9px] leading-none text-sk-muted hover:text-sk-ink disabled:opacity-40';
+  return (
+    <span className={`flex flex-col justify-center gap-0.5 ${pending ? 'opacity-40' : ''}`}>
+      <button type="button" disabled={pending} onClick={() => move('up')} aria-label={`${labels.up}: ${name}`} className={cls}>▲</button>
+      <button type="button" disabled={pending} onClick={() => move('down')} aria-label={`${labels.down}: ${name}`} className={cls}>▼</button>
+    </span>
+  );
+}
+
+// Noa bug #7: add a named sub-stage to this phase's shared bank and activate
+// it here in one step — the control Bidding was missing entirely.
+function AddSubstage({ projectId, phaseKey, labels }: {
+  projectId: string; phaseKey: string; labels: { add: string; placeholder: string; error: string };
+}) {
+  const [draft, setDraft] = useState('');
+  const [failed, setFailed] = useState(false);
+  const [pending, start] = useTransition();
+  const submit = () => start(async () => {
+    const name = draft.trim();
+    if (!name) return;
+    setFailed(false);
+    const res = await addSubstageTemplate(projectId, phaseKey as Parameters<typeof addSubstageTemplate>[1], name);
+    if (res && 'error' in res) { setFailed(true); return; }
+    setDraft('');
+  });
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <input
+        value={draft}
+        disabled={pending}
+        aria-label={labels.placeholder}
+        placeholder={labels.placeholder}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+        className="min-h-11 min-w-0 flex-1 rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink outline-none disabled:opacity-50 sm:min-h-0"
+      />
+      <button
+        type="button"
+        disabled={pending || !draft.trim()}
+        onClick={submit}
+        className="min-h-11 cursor-pointer whitespace-nowrap rounded-full bg-card2 px-2.5 py-1 text-xs text-ink3 ring-line transition-shadow hover:ring-2 disabled:opacity-50 sm:min-h-0"
+      >
+        {labels.add}
+      </button>
+      {failed && <span role="alert" className="w-full text-[11px] text-coral">{labels.error}</span>}
     </div>
   );
 }
@@ -354,20 +443,37 @@ function SubstageDetail({ projectId, template, instance, tasks, labels, editorOp
       <h2 className="mt-2 text-[22px] font-[650] leading-[1.2] tracking-[-0.025em] text-sk-ink">{template.name}</h2>
 
       {instance ? (
-        <textarea
-          defaultValue={instance.note ?? ''}
-          rows={2}
-          disabled={pending}
-          aria-label={labels.notePh}
-          placeholder={labels.notePh}
-          onBlur={(e) => start(async () => {
-            if ((instance.note ?? '') === e.target.value) return;
-            setFailed(false);
-            const res = await setSubstageNote(projectId, instance.id, e.target.value);
-            if (res?.error) setFailed(true);
-          })}
-          className="mt-2 w-full rounded-lg border border-line2 bg-card2 p-2 text-sm leading-relaxed text-ink outline-none disabled:opacity-50"
-        />
+        <>
+          <textarea
+            defaultValue={instance.note ?? ''}
+            rows={2}
+            disabled={pending}
+            aria-label={labels.notePh}
+            placeholder={labels.notePh}
+            onBlur={(e) => start(async () => {
+              if ((instance.note ?? '') === e.target.value) return;
+              setFailed(false);
+              const res = await setSubstageNote(projectId, instance.id, e.target.value);
+              if (res?.error) setFailed(true);
+            })}
+            className="mt-2 w-full rounded-lg border border-line2 bg-card2 p-2 text-sm leading-relaxed text-ink outline-none disabled:opacity-50"
+          />
+          {/* Noa bug #5: the dependency line as its own field — "after X ·
+              parallel to Y" — instead of free text buried inside the note. */}
+          <input
+            defaultValue={instance.depends_on ?? ''}
+            disabled={pending}
+            aria-label={labels.dependsPh}
+            placeholder={labels.dependsPh}
+            onBlur={(e) => start(async () => {
+              if ((instance.depends_on ?? '') === e.target.value) return;
+              setFailed(false);
+              const res = await setSubstageDepends(projectId, instance.id, e.target.value);
+              if (res?.error) setFailed(true);
+            })}
+            className="mt-1.5 w-full rounded-lg border border-line2 bg-card2 px-2 py-1.5 text-xs leading-relaxed text-ink outline-none disabled:opacity-50"
+          />
+        </>
       ) : (
         // C5: same fix as the chip above — this placeholder stood in for the
         // note textarea when there's no instance, but showed "Upcoming"

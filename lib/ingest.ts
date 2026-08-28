@@ -54,11 +54,13 @@ export async function processDocument(
   doc: { id: string; kind: DocKind; raw_text?: string | null; pdf_base64?: string; project_hint?: string | null },
 ): Promise<unknown> {
   const [projectsQ, tasksQ, vendorsQ] = await Promise.all([
-    admin.from('projects').select('id,name'),
+    // city_case rides along for extract-comms' project-attribution rules —
+    // a case number in an email subject is often the only property evidence.
+    admin.from('projects').select('id,name,city_case'),
     admin.from('tasks').select('*').eq('status', 'open'),
     admin.from('vendors').select('id,name'),
   ]);
-  const projects = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name'>[];
+  const projects = (projectsQ.data ?? []) as (Pick<Project, 'id' | 'name'> & { city_case?: string | null })[];
   const openTasks = (tasksQ.data ?? []) as Task[];
   const vendors = (vendorsQ.data ?? []) as Pick<Vendor, 'id' | 'name'>[];
 

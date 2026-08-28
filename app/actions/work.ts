@@ -82,6 +82,30 @@ export async function undoWorkVerb(logId: string) {
   return { ok: true as const };
 }
 
+/** Noa round 3, critical #1 + request #3: a task closed by mistake was
+ *  unrecoverable once the undo toast expired — no "Completed" view, no way
+ *  back. This is the way back: open again, full audit row, and the same
+ *  undoWorkVerb-compatible snapshot so the reopen itself can be undone. */
+export async function reopenTask(taskId: string) {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const { data: before } = await admin.from('tasks').select('*').eq('id', taskId).maybeSingle();
+  if (!before) return { error: 'not found' };
+  const prior = before as { status: string };
+  // 'merged' rows are duplicates folded into a master — un-merging is
+  // undoMerge's job (it restores the pair's relationship too), not reopen's.
+  if (prior.status !== 'done' && prior.status !== 'dropped') return { error: 'not closed' };
+  const { error } = await admin.from('tasks')
+    .update({ status: 'open', last_touched: laToday() }).eq('id', taskId);
+  if (error) return { error: error.message };
+  const undoId = await logActivity(admin, {
+    entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id,
+    action: 'reopen', before, after: { status: 'open' },
+  });
+  revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
+  return { ok: true as const, undoId };
+}
+
 export async function snoozeTask(taskId: string, until: string) {
   const user = await requireUser();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(until)) return { error: 'invalid date' };

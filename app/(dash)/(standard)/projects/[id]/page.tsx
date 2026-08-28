@@ -72,6 +72,13 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     parallelNoteTitle: t('process.parallel_note_title'),
     parallelNote: t('process.parallel_note'),
     activate: t('process.activate'),
+    // Noa round 3: manual order arrows (#2), dependency field (#5), and the
+    // add-your-own bank entry Bidding was missing (#7).
+    moveUp: t('process.move_up'),
+    moveDown: t('process.move_down'),
+    dependsPh: t('process.depends_ph'),
+    addSubstage: t('process.add_substage'),
+    addSubstagePh: t('process.add_substage_ph'),
     emptyPhase: t('process.empty_phase'),
     error: t('common.error_save'),
     'status.upcoming': t('process.status.upcoming'),
@@ -133,6 +140,9 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     scheduled: t('work.verb.scheduled'),
     not_applicable: t('work.verb.not_applicable'),
     note: t('work.verb.note'),
+    // Noa critical #2: armed second-press labels for record-closing verbs.
+    'confirm.completed': t('work.verb.confirm_completed'),
+    'confirm.not_applicable': t('work.verb.confirm_not_applicable'),
     ...verbResultLabels(t),
     'msg.details': t('work.msg.details'),
     update: t('work.update'),

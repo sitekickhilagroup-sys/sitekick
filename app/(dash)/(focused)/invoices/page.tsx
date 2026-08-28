@@ -134,6 +134,10 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     approved: t('invoices.st_approved'),
     paid: t('invoices.st_paid'),
     on_hold: t('invoices.st_on_hold'),
+    // Rotem QA round 2: void for a record entered by mistake — off-chain,
+    // out of the open totals (the openInvoices filter above only counts
+    // received / for_rowan_approval / approved), never deleted.
+    cancelled: t('invoices.st_cancelled'),
   };
 
   // Spec §6: two primary views. `david` is a real workbook tab and the spec
