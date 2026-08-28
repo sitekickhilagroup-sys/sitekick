@@ -137,7 +137,7 @@ export function IdentityForm({
                 aria-label={key}
                 aria-pressed={selected}
                 onClick={() => setPreset(key)}
-                className={`cursor-pointer rounded-full leading-none transition-transform hover:scale-105 ${
+                className={`cursor-pointer rounded-full leading-none transition-transform hover:scale-105 active:scale-95 ${
                   selected ? 'ring-2 ring-sk-green ring-offset-2 ring-offset-card' : ''
                 }`}
               >
@@ -174,7 +174,7 @@ export function IdentityForm({
           {labels.save}
         </button>
         {message && (
-          <span role={message.ok ? 'status' : 'alert'} className={`text-[11px] ${message.ok ? 'text-sk-green' : 'text-coral'}`}>
+          <span role={message.ok ? 'status' : 'alert'} className={`text-[11px] motion-safe:animate-sk-fade ${message.ok ? 'text-sk-green' : 'text-coral'}`}>
             {message.text}
           </span>
         )}
@@ -228,7 +228,7 @@ export function PasswordForm({ labels }: { labels: Labels }) {
           {labels.changePw}
         </button>
         {message && (
-          <span role={message.ok ? 'status' : 'alert'} className={`text-[11px] ${message.ok ? 'text-sk-green' : 'text-coral'}`}>
+          <span role={message.ok ? 'status' : 'alert'} className={`text-[11px] motion-safe:animate-sk-fade ${message.ok ? 'text-sk-green' : 'text-coral'}`}>
             {message.text}
           </span>
         )}

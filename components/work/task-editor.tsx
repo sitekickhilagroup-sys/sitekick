@@ -168,12 +168,12 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
 
   return (
     <>
-      <span aria-hidden="true" onClick={onClose} className="fixed inset-0 z-20 bg-ink/40 sm:bg-transparent" />
+      <span aria-hidden="true" onClick={onClose} className="fixed inset-0 z-20 bg-ink/40 motion-safe:animate-sk-fade sm:bg-transparent" />
       <span
         role="dialog"
         aria-label={labels.editDetails}
         onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
-        className="fixed inset-x-0 bottom-0 z-30 flex max-h-[80dvh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-line bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-card sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:max-h-[70dvh] sm:w-80 sm:rounded-lg sm:border sm:p-3"
+        className="fixed inset-x-0 bottom-0 z-30 flex max-h-[80dvh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-line bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-card motion-safe:animate-sk-rise sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:max-h-[70dvh] sm:w-80 sm:origin-top sm:rounded-lg sm:border sm:p-3 sm:motion-safe:animate-sk-pop"
       >
         <span aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 shrink-0 rounded-full bg-line sm:hidden" />
         {/* Smaller-items fix: was <p> — invalid nested inside this dialog's

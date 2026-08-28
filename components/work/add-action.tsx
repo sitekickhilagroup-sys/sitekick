@@ -65,14 +65,14 @@ export function AddAction({ projects, labels }: Props) {
         type="button"
         aria-label={labels.cancel}
         onClick={reset}
-        className="fixed inset-0 z-40 cursor-default bg-ink/30"
+        className="fixed inset-0 z-40 cursor-default bg-ink/30 motion-safe:animate-sk-fade"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={labels.addAction}
         onKeyDown={(e) => { if (e.key === 'Escape') reset(); }}
-        className="fixed inset-x-3 top-[12dvh] z-50 mx-auto max-w-md rounded-2xl border border-line bg-card p-5 shadow-card"
+        className="fixed inset-x-3 top-[12dvh] z-50 mx-auto max-w-md rounded-2xl border border-line bg-card p-5 shadow-card motion-safe:animate-sk-pop"
       >
         {duplicates === null ? (
           <>

@@ -142,14 +142,14 @@ export function AddInvoice({ options, labels }: Props) {
         type="button"
         aria-label={labels.cancel}
         onClick={reset}
-        className="fixed inset-0 z-40 cursor-default bg-ink/30"
+        className="fixed inset-0 z-40 cursor-default bg-ink/30 motion-safe:animate-sk-fade"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={labels.addInvoice}
         onKeyDown={(e) => { if (e.key === 'Escape') reset(); }}
-        className="fixed inset-x-3 top-[8dvh] z-50 mx-auto max-h-[85dvh] max-w-md overflow-y-auto rounded-2xl border border-line bg-card p-5 text-start shadow-card"
+        className="fixed inset-x-3 top-[8dvh] z-50 mx-auto max-h-[85dvh] max-w-md overflow-y-auto rounded-2xl border border-line bg-card p-5 text-start shadow-card motion-safe:animate-sk-pop"
       >
         {dup === null ? (
           <>

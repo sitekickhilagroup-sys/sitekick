@@ -67,7 +67,7 @@ export function NotificationBell({ labels }: { labels: Record<string, string> })
       {preview && (
         <aside
           role="status"
-          className="fixed inset-x-3 top-16 z-50 rounded-(--radius-card) border border-line bg-card p-4 shadow-card sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-80"
+          className="fixed inset-x-3 top-16 z-50 origin-top rounded-(--radius-card) border border-line bg-card p-4 shadow-card motion-safe:animate-sk-pop sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-80"
         >
           <button
             type="button"
@@ -118,7 +118,7 @@ export function NotificationBell({ labels }: { labels: Record<string, string> })
       )}
 
       {open && (
-        <aside className="fixed inset-x-3 top-16 z-50 rounded-(--radius-card) border border-line bg-card p-4 shadow-card sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-72">
+        <aside className="fixed inset-x-3 top-16 z-50 origin-top rounded-(--radius-card) border border-line bg-card p-4 shadow-card motion-safe:animate-sk-pop sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-72">
           <header className="flex items-baseline justify-between gap-2 border-b border-line pb-2">
             <strong className="font-serif text-sm text-ink">{labels.title}</strong>
             <span className="text-[10px] text-ink3">{labels.waiting.replace('{n}', String(items.length))}</span>

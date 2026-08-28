@@ -103,8 +103,8 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
       </button>
       {open && (
         <>
-          <span aria-hidden="true" onClick={() => { setOpen(false); setArmedVerb(null); }} className="fixed inset-0 z-20 bg-ink/40 sm:bg-transparent" />
-          <span role="menu" className="fixed inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border-t border-line bg-card p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-card sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:w-44 sm:rounded-lg sm:border sm:p-1">
+          <span aria-hidden="true" onClick={() => { setOpen(false); setArmedVerb(null); }} className="fixed inset-0 z-20 bg-ink/40 motion-safe:animate-sk-fade sm:bg-transparent" />
+          <span role="menu" className="fixed inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border-t border-line bg-card p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-card motion-safe:animate-sk-rise sm:absolute sm:inset-x-auto sm:bottom-auto sm:end-0 sm:top-full sm:mt-1 sm:w-44 sm:origin-top sm:rounded-lg sm:border sm:p-1 sm:motion-safe:animate-sk-pop">
             <span aria-hidden="true" className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-line sm:hidden" />
             {VERBS.map((v) => {
               const armed = armedVerb === v;

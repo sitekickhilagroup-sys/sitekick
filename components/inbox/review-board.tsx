@@ -182,14 +182,14 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
             type="button"
             aria-label={labels.close}
             onClick={() => setSelected(null)}
-            className="fixed inset-0 z-40 cursor-default bg-ink/30"
+            className="fixed inset-0 z-40 cursor-default bg-ink/30 motion-safe:animate-sk-fade"
           />
           <aside
             role="dialog"
             aria-modal="true"
             aria-label={labels.kicker}
             onKeyDown={(e) => { if (e.key === 'Escape') setSelected(null); }}
-            className="fixed inset-y-0 end-0 z-50 flex w-full max-w-[560px] flex-col border-s border-line bg-card shadow-card"
+            className="fixed inset-y-0 end-0 z-50 flex w-full max-w-[560px] flex-col border-s border-line bg-card shadow-card motion-safe:animate-sk-slide-end"
           >
             <header className="flex items-center justify-between border-b border-line px-5 py-4">
               <div>

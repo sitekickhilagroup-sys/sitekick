@@ -332,7 +332,7 @@ export function LinkEditor({
           {/* Dimmed on every size (not just mobile): the desktop dialog below
               is a centered fixed modal, not a small popover attached to the
               row, so it needs the same "this is a blocking overlay" cue. */}
-          <span aria-hidden="true" onClick={() => setEditing(false)} className="fixed inset-0 z-20 bg-ink/40" />
+          <span aria-hidden="true" onClick={() => setEditing(false)} className="fixed inset-0 z-20 bg-ink/40 motion-safe:animate-sk-fade" />
           {/*
             Positioning: `sm:absolute … sm:top-full` (anchored under the
             trigger, TaskEditor's pattern) breaks here specifically because
@@ -354,7 +354,7 @@ export function LinkEditor({
             role="dialog"
             aria-label={context ? `${labels.edit} · ${context}` : labels.edit}
             onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); }}
-            className="fixed inset-x-0 bottom-0 z-30 flex max-h-[85dvh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-line bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-start shadow-card sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[75dvh] sm:w-80 sm:rounded-lg sm:border sm:p-3"
+            className="fixed inset-x-0 bottom-0 z-30 flex max-h-[85dvh] flex-col gap-2 overflow-y-auto rounded-t-2xl border-t border-line bg-card p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-start shadow-card motion-safe:animate-sk-rise sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[75dvh] sm:w-80 sm:rounded-lg sm:border sm:p-3 sm:motion-safe:animate-sk-pop"
           >
             <span aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 shrink-0 rounded-full bg-line sm:hidden" />
             <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink3">

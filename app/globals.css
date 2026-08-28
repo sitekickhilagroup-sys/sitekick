@@ -177,6 +177,43 @@
   --shadow-card: var(--shadow-soft);
 }
 
+/* Motion tokens — one easing family for the whole app (apple-design round).
+   Enter-only: overlays unmount on close, so exits are instant by design.
+   Every use site pairs these with the motion-safe: variant. */
+@theme {
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --animate-sk-pop: sk-pop 180ms var(--ease-out-strong);
+  --animate-sk-fade: sk-fade 200ms var(--ease-out-strong);
+  --animate-sk-rise: sk-rise 320ms var(--ease-drawer);
+  --animate-sk-drop: sk-drop 200ms var(--ease-out-strong);
+  --animate-sk-slide-end: sk-slide-end 320ms var(--ease-drawer);
+
+  @keyframes sk-pop {
+    from { opacity: 0; transform: scale(0.95); }
+  }
+  @keyframes sk-fade {
+    from { opacity: 0; }
+  }
+  @keyframes sk-rise {
+    from { transform: translateY(100%); }
+  }
+  @keyframes sk-drop {
+    from { opacity: 0; transform: translateY(-8px); }
+  }
+  /* Side panels anchored to the inline-end edge slide in from off-screen.
+     Keyframes can't take logical directions, so the offset lives in a var
+     the RTL root flips below. */
+  @keyframes sk-slide-end {
+    from { transform: translateX(var(--sk-slide-from, 100%)); }
+  }
+}
+
+[dir='rtl'] {
+  --sk-slide-from: -100%;
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
@@ -184,6 +221,19 @@ body {
   font-size: 14.5px;
   line-height: 1.6;
   min-height: 100dvh;
+}
+
+/* Press feedback: the interface reacts on pointer-down, not on release.
+   scale() carries children, so labels and icons press with the surface.
+   Buttons that also set transition-colors keep that list (utilities win the
+   cascade) — their release simply snaps, which at 3% is imperceptible. */
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition: transform 160ms var(--ease-out-strong);
+  }
+  button:not(:disabled):active {
+    transform: scale(0.97);
+  }
 }
 
 /* Filled accent buttons: dark theme lightens --sage/--mist, so the hardcoded

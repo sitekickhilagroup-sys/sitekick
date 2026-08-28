@@ -27,7 +27,7 @@ interface Props {
  */
 export function SavedChip({ message, undoId, onUndo, onDismiss, labels, pending }: Props) {
   return (
-    <span role="status" className="inline-flex max-w-72 items-start gap-2 rounded-lg bg-sage-soft px-2.5 py-1.5 text-start">
+    <span role="status" className="inline-flex max-w-72 items-start gap-2 rounded-lg bg-sage-soft px-2.5 py-1.5 text-start motion-safe:animate-sk-pop">
       <span className="min-w-0">
         <strong className="block text-[11px] font-semibold text-sage">{labels.recorded}</strong>
         <span className="mt-0.5 block text-[10px] leading-relaxed text-ink2">{message}</span>

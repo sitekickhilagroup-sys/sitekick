@@ -87,7 +87,7 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
             <span aria-hidden="true" className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
           </button>
           {open && (
-            <div role="menu" className="absolute start-0 top-full z-50 mt-1 min-w-40 rounded-(--radius-card) border border-line bg-card py-1 shadow-card">
+            <div role="menu" className="absolute start-0 top-full z-50 mt-1 min-w-40 origin-top rounded-(--radius-card) border border-line bg-card py-1 shadow-card motion-safe:animate-sk-pop">
               {more.map((l) => {
                 const active = isActive(l.href, pathname);
                 return (
@@ -194,9 +194,9 @@ export function MobileNav({
             type="button"
             aria-label={menuLabel}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 top-16 z-30 cursor-default bg-ink/20"
+            className="fixed inset-0 top-16 z-30 cursor-default bg-ink/20 motion-safe:animate-sk-fade"
           />
-          <nav className="fixed inset-x-0 top-16 z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-line bg-bg px-3 py-2 shadow-card">
+          <nav className="fixed inset-x-0 top-16 z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-line bg-bg px-3 py-2 shadow-card motion-safe:animate-sk-drop">
             {links.map((l) => renderLink(l))}
             {more && more.length > 0 && (
               <div className="mt-2 border-t border-line pt-2">
