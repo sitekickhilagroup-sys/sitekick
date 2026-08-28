@@ -56,7 +56,7 @@ export async function AppHeader() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-bg/90 backdrop-blur">
+    <header className="sk-edge sticky top-0 z-40 bg-bg/85 backdrop-blur-md backdrop-saturate-150 reduce-transparency:bg-bg reduce-transparency:backdrop-filter-none">
       {/* Spec §1: taller, cleaner header. Contents are unchanged — More pages
           keep every utility, only the proportions move. */}
       <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:gap-8">

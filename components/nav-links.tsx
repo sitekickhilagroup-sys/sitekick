@@ -55,7 +55,7 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
             key={l.href}
             href={l.href}
             aria-current={active ? 'page' : undefined}
-            className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] leading-none transition-colors ${
+            className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] leading-none transition-colors active:scale-[0.98] ${
               active
                 ? 'bg-sk-green-soft font-[650] text-sk-green'
                 : 'font-[450] text-sk-muted hover:bg-sk-surface-soft hover:text-sk-ink'
@@ -87,7 +87,7 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
             <span aria-hidden="true" className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
           </button>
           {open && (
-            <div role="menu" className="absolute start-0 top-full z-50 mt-1 min-w-40 origin-top rounded-(--radius-card) border border-line bg-card py-1 shadow-card motion-safe:animate-sk-pop">
+            <div role="menu" className="absolute start-0 top-full z-50 mt-1 min-w-40 origin-top rounded-(--radius-card) border border-line bg-card/90 py-1 shadow-card backdrop-blur-md motion-safe:animate-sk-pop reduce-transparency:bg-card reduce-transparency:backdrop-filter-none">
               {more.map((l) => {
                 const active = isActive(l.href, pathname);
                 return (
@@ -196,7 +196,7 @@ export function MobileNav({
             onClick={() => setOpen(false)}
             className="fixed inset-0 top-16 z-30 cursor-default bg-ink/20 motion-safe:animate-sk-fade"
           />
-          <nav className="fixed inset-x-0 top-16 z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-line bg-bg px-3 py-2 shadow-card motion-safe:animate-sk-drop">
+          <nav className="fixed inset-x-0 top-16 z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-line bg-bg/85 px-3 py-2 shadow-card backdrop-blur-lg motion-safe:animate-sk-drop reduce-transparency:bg-bg reduce-transparency:backdrop-filter-none">
             {links.map((l) => renderLink(l))}
             {more && more.length > 0 && (
               <div className="mt-2 border-t border-line pt-2">

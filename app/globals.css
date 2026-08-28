@@ -223,6 +223,53 @@ body {
   min-height: 100dvh;
 }
 
+/* Round B (apple-design §12/§14/§15) ------------------------------------ */
+
+/* Users who ask the OS for less transparency get frosted surfaces back as
+   solids: pair every translucent material with reduce-transparency:*. */
+@custom-variant reduce-transparency (@media (prefers-reduced-transparency: reduce));
+
+/* Scroll edge: a soft fade where content meets floating chrome, instead of
+   a hard 1px divider. color-mix keeps it theme-aware (ink over bg). */
+.sk-edge {
+  position: relative;
+}
+.sk-edge::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: 10px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--ink) 9%, transparent), transparent);
+}
+
+/* §15 optical tracking: display serif tightens as it grows; small serif
+   (chips, card titles) keeps natural tracking from the .font-serif base. */
+h1.font-serif,
+h2.font-serif {
+  letter-spacing: -0.015em;
+}
+
+/* Animated <details> (invoices history groups): height-to-auto via
+   interpolate-size — browsers without it just snap open, which is fine. */
+.sk-collapse {
+  interpolate-size: allow-keywords;
+}
+.sk-collapse::details-content {
+  height: 0;
+  overflow: clip;
+  transition: height 200ms var(--ease-out-strong), content-visibility 200ms allow-discrete;
+}
+.sk-collapse[open]::details-content {
+  height: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-collapse::details-content {
+    transition: none;
+  }
+}
+
 /* Press feedback: the interface reacts on pointer-down, not on release.
    scale() carries children, so labels and icons press with the surface.
    Buttons that also set transition-colors keep that list (utilities win the
