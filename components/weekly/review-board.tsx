@@ -59,9 +59,8 @@ export function ReviewBoard({ review, groups, labels, pendingProposals }: Props)
   // (Sunday draft / Monday presentation) the URL happens to be on — it's an
   // orthogonal, stronger axis than present/draft, not a third mode.
   const finalized = review.status === 'final';
-  const [openProjects, setOpenProjects] = useState<Set<string>>(
-    () => new Set(groups.map((g) => g.projectName)),
-  );
+  // Spec §יא: one project accordion open at a time — first one to start.
+  const [openProject, setOpenProject] = useState<string | null>(groups[0]?.projectName ?? null);
   const allItems = groups.flatMap((g) => g.subtopics.flatMap((s) => s.items));
   const doneCount = allItems.filter((r) => r.item.status_snapshot === 'done').length;
 
@@ -74,28 +73,14 @@ export function ReviewBoard({ review, groups, labels, pendingProposals }: Props)
   const activeStep = present ? 2 : 1;
 
   return (
-    <div className="mt-6 space-y-5">
-      {/* The mode control lives in the header (spec §2). Progress is derived
-          from server data, so switching modes never resets it. */}
-      {allItems.length > 0 && labels.progress && (
-        <section role="status" className="rounded-[9px] bg-sk-green-dark px-5 py-4">
-          <p className="font-mono text-[26px] font-[650] leading-none tabular-nums text-white">
-            {doneCount}<span className="text-white/60">/{allItems.length}</span>
-          </p>
-          <p className="mt-1 text-[10px] text-white/70">{labels.progress.replace('{done}/{total} ', '')}</p>
-        </section>
-      )}
-
-      {/* Mode context banner (§5): cream while preparing, blue while presenting.
-          Same review either way — the copy says so, rather than implying the
-          two modes hold different data. */}
-      {(present ? labels.modeNoteMeeting : labels.modeNoteDraft) && (
-        <p className={`rounded-[10px] border px-4 py-2.5 text-[11px] leading-[1.5] ${
-          present ? 'border-sk-blue/30 bg-sk-blue-soft text-sk-blue' : 'border-sk-cream-border bg-sk-cream text-sk-amber'
-        }`}>
-          {present ? labels.modeNoteMeeting : labels.modeNoteDraft}
-        </p>
-      )}
+    <div className="mt-6 space-y-4">
+      {/* Option-2 compaction: progress, meeting date, mode note, Save/Finalize
+          and Upload all live in one sticky band (was a KPI card + a banner +
+          two full cards pushing the agenda 600px down). */}
+      <ReviewControls
+        review={review} labels={labels} present={present} finalized={finalized}
+        done={doneCount} total={allItems.length}
+      />
 
       {/* D5: agent_proposals is a real, already-built approval queue (0002 +
           0008, /inbox) — extraction runs on .txt/.docx weekly uploads same as
@@ -113,39 +98,40 @@ export function ReviewBoard({ review, groups, labels, pendingProposals }: Props)
         </p>
       )}
 
-      <ol className="grid gap-2 sm:grid-cols-3">
-        {steps.map((s, i) => (
-          <li key={i} className={`rounded-[10px] border p-3 ${
-            i === activeStep ? 'border-sage-line bg-sk-green-soft' : 'border-line bg-sk-surface'
-          }`}>
-            <p className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">
-              <span aria-hidden="true" className={`grid h-5 w-5 place-items-center rounded-full font-mono text-[9px] ${
-                i <= activeStep ? 'bg-sage text-white' : 'bg-sk-surface-soft text-sk-muted'
-              }`}>{i + 1}</span>
-              {s.t}
-            </p>
-            <p className="mt-1 text-[10px] leading-[1.45] text-sk-text">{s.d}</p>
-          </li>
-        ))}
-      </ol>
-
-      {/* §7 and §16: Save and the upload card stay available in Monday mode.
-          They used to disappear entirely when presenting. */}
-      <ReviewControls review={review} labels={labels} present={present} finalized={finalized} />
+      {/* The 3-step explainer used to render open every single week; it is
+          reference material, not work — collapsed by default (§16.6). */}
+      {labels.howTitle && (
+        <details className="sk-collapse rounded-[13px] border border-line bg-sk-surface">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 px-4 py-2.5 text-[10px] font-[650] text-sk-muted transition-colors hover:text-sk-ink sm:min-h-0">
+            {labels.howTitle} <span aria-hidden="true">▾</span>
+          </summary>
+          <ol className="grid gap-2 border-t border-line2 p-3 sm:grid-cols-3">
+            {steps.map((s, i) => (
+              <li key={i} className={`rounded-[10px] border p-3 ${
+                i === activeStep ? 'border-sage-line bg-sk-green-soft' : 'border-line bg-sk-surface'
+              }`}>
+                <p className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">
+                  <span aria-hidden="true" className={`grid h-5 w-5 place-items-center rounded-full font-mono text-[9px] ${
+                    i <= activeStep ? 'bg-sage text-white' : 'bg-sk-surface-soft text-sk-muted'
+                  }`}>{i + 1}</span>
+                  {s.t}
+                </p>
+                <p className="mt-1 text-[10px] leading-[1.45] text-sk-text">{s.d}</p>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
 
       {groups.length === 0 && labels.noItems && (
         <p className="rounded-(--radius-card) border border-line bg-card p-5 text-sm text-ink2">{labels.noItems}</p>
       )}
       {groups.map((group) => {
-        const open = openProjects.has(group.projectName);
+        const open = openProject === group.projectName;
         const groupRows = group.subtopics.flatMap((s) => s.items);
         const groupDone = groupRows.filter((r) => r.item.status_snapshot === 'done').length;
-        const toggle = () => setOpenProjects((prev) => {
-          const next = new Set(prev);
-          if (next.has(group.projectName)) next.delete(group.projectName);
-          else next.add(group.projectName);
-          return next;
-        });
+        // Spec §יא: opening one project closes the previous one.
+        const toggle = () => setOpenProject((prev) => (prev === group.projectName ? null : group.projectName));
         return (
           <section key={group.projectName} className="overflow-hidden rounded-[13px] border border-line bg-sk-surface shadow-card">
             <button
@@ -158,7 +144,15 @@ export function ReviewBoard({ review, groups, labels, pendingProposals }: Props)
               <span className="font-mono text-[10px] text-sk-muted">{groupDone}/{groupRows.length}</span>
               <span aria-hidden="true" className={`inline-block text-sk-muted transition-transform rtl:-scale-x-100 ${open ? 'rotate-90' : ''}`}>▸</span>
             </button>
-            {open && (
+            {/* Body stays mounted for the two-way grid-rows collapse; inert
+                keeps its many inputs out of the tab order while closed. */}
+            <div
+              inert={open ? undefined : true}
+              className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out-strong motion-reduce:transition-none ${
+                open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+              }`}
+            >
+              <div className="overflow-hidden">
               <div className="divide-y divide-line2">
                 {group.subtopics.map((sub) => (
                   <div key={sub.name} className="px-4 py-3">
@@ -198,7 +192,8 @@ export function ReviewBoard({ review, groups, labels, pendingProposals }: Props)
                   <p className="px-4 py-3 text-center text-[10px] text-sk-muted">{labels.noSubtopics}</p>
                 )}
               </div>
-            )}
+              </div>
+            </div>
           </section>
         );
       })}
@@ -227,24 +222,57 @@ function SubtopicContext({ reviewId, projectId, subtopic, value, labels, placeho
 }) {
   const [pending, start] = useTransition();
   const [failed, setFailed] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  const save = (text: string) => start(async () => {
+    setFailed(null);
+    const res = await saveSubtopicContext(reviewId, projectId, subtopic, text);
+    if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
+  });
+
+  // §10: pale-green surface with a green rule on the leading edge —
+  // border-inline-start, not border-left, so Hebrew puts it on the right.
+  // Option-2 compaction: same disclosure rhythm as the per-item fields —
+  // prose when filled, a quiet "+ chip" when empty, textarea on demand.
+  const surface = 'w-full max-w-2xl rounded-[13px] border border-line2 bg-sk-green-soft p-2 text-[11px] leading-[1.5] text-sk-ink [border-inline-start:3px_solid_var(--sk-green)]';
 
   return (
     <div className="mt-1.5">
-      {/* §10: pale-green surface with a green rule on the leading edge —
-          border-inline-start, not border-left, so Hebrew puts it on the right. */}
-      <textarea
-        defaultValue={value ?? ''}
-        rows={2}
-        onBlur={(e) => start(async () => {
-          setFailed(null);
-          const res = await saveSubtopicContext(reviewId, projectId, subtopic, e.target.value);
-          if (res?.error) setFailed(weeklyErrorMessage(res.error, labels));
-        })}
-        disabled={pending || finalized}
-        aria-label={placeholder}
-        placeholder={placeholder}
-        className="w-full max-w-2xl rounded-[13px] border border-line2 bg-sk-green-soft p-2 text-[11px] leading-[1.5] text-sk-ink outline-none [border-inline-start:3px_solid_var(--sk-green)] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted"
-      />
+      {editing ? (
+        <textarea
+          autoFocus
+          defaultValue={value ?? ''}
+          rows={2}
+          onBlur={(e) => {
+            if (e.target.value !== (value ?? '')) save(e.target.value);
+            setEditing(false);
+          }}
+          disabled={pending}
+          aria-label={placeholder}
+          placeholder={placeholder}
+          className={`${surface} outline-none motion-safe:animate-sk-fade disabled:opacity-60 disabled:cursor-not-allowed`}
+        />
+      ) : value ? (
+        finalized ? (
+          <p className={`${surface} whitespace-pre-wrap`}>{value}</p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className={`${surface} block cursor-text whitespace-pre-wrap text-start transition-colors hover:bg-sage-soft`}
+          >
+            {value}
+          </button>
+        )
+      ) : finalized ? null : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="min-h-11 cursor-pointer whitespace-nowrap rounded-full px-2 py-1 text-[10px] text-sk-muted transition-colors hover:bg-sk-surface-soft hover:text-sk-ink sm:min-h-0"
+        >
+          + {placeholder}
+        </button>
+      )}
       {failed && <p role="alert" className="text-[10px] text-coral">{failed}</p>}
     </div>
   );
@@ -281,15 +309,6 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
     : item.status_snapshot === 'carried' ? 'bg-mist-soft text-mist'
     : item.status_snapshot === 'dropped' || item.status_snapshot === 'no_update' ? 'bg-card2 text-ink3'
     : 'bg-mist-soft text-mist';
-  const statusText =
-    item.status_snapshot === 'done' ? labels.completed
-    : item.status_snapshot === 'dropped' ? labels.notApplicable
-    : item.status_snapshot === 'carried' ? labels.stCarried
-    : item.status_snapshot === 'waiting' ? labels.stWaiting
-    : item.status_snapshot === 'blocked' ? labels.stBlocked
-    : item.status_snapshot === 'no_update' ? labels.stNoUpdate
-    : labels.statusOpen;
-
   const saveNote = (note: string) => start(async () => {
     setFailed(null);
     const res = await saveItemNote(item.id, { weekly_note: note });
@@ -382,8 +401,8 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
         )}
       </span>
 
-      {/* Status: read-only badge + the dropdown that changes it, together */}
-      <span role="status" className={`rounded-[6px] px-2 py-1 text-[9px] font-[650] uppercase leading-none ${statusClass}`}>{statusText}</span>
+      {/* Status: one control — the dropdown itself wears the status colour
+          (was a badge + a dropdown announcing the same value twice). */}
       <span className="flex basis-full flex-wrap items-center gap-2 sm:basis-auto">
         <label className="flex items-center gap-1.5 text-[10px] text-sk-muted">
           {labels.statusLabel}
@@ -392,7 +411,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
             value={currentStatus}
             onChange={(e) => onStatusChange(e.target.value)}
             aria-label={`${labels.statusLabel}: ${title}`}
-            className="min-h-11 cursor-pointer rounded-[8px] border border-line bg-sk-surface px-2 py-1 text-[10px] text-sk-ink outline-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted sm:min-h-0"
+            className={`min-h-11 cursor-pointer rounded-[8px] border border-transparent px-2 py-1 text-[10px] font-[650] outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed sm:min-h-0 ${statusClass}`}
           >
             {statusOptions.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -401,36 +420,19 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
         </label>
       </span>
 
-      {/* Latest note. Editable in both modes — §13: the note is multiline,
-          this was an <input>, which forced a week's meeting notes onto one
-          line. Locked only by `finalized`, never by `present`. */}
-      <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
-        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.noteKicker}</span>
-        <textarea
-          defaultValue={item.weekly_note ?? ''}
-          rows={2}
-          onBlur={(e) => saveNote(e.target.value)}
-          disabled={pending || finalized}
-          aria-label={labels.noteKicker}
-          placeholder={labels.note}
-          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted"
-        />
-      </span>
-
-      {/* Next step (D2) — mirrors the note field exactly: same styling, same
-          onBlur save, same both-modes editability, only the column differs. */}
-      <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
-        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.nextStepKicker}</span>
-        <textarea
-          defaultValue={item.next_step ?? ''}
-          rows={2}
-          onBlur={(e) => saveNextStep(e.target.value)}
-          disabled={pending || finalized}
-          aria-label={labels.nextStepKicker}
-          placeholder={labels.nextStepPh}
-          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-sk-surface-soft disabled:text-sk-muted"
-        />
-      </span>
+      {/* Latest note + Next step (D2). Editable in both modes, locked only by
+          `finalized`. Option-2 compaction: 246 of these textareas rendered
+          empty at once — now a filled field shows as prose (click to edit)
+          and an empty one is a quiet "+ Add" chip that expands on demand.
+          The onBlur save path is unchanged. */}
+      <DisclosureField
+        kicker={labels.noteKicker} addLabel={labels.addNote} placeholder={labels.note}
+        value={item.weekly_note ?? null} locked={finalized} busy={pending} onSave={saveNote}
+      />
+      <DisclosureField
+        kicker={labels.nextStepKicker} addLabel={labels.addNextStep} placeholder={labels.nextStepPh}
+        value={item.next_step ?? null} locked={finalized} busy={pending} onSave={saveNextStep}
+      />
 
       {/* Due — last, per the required order. Sunday-mode input or read-only
           text; hidden entirely when read-only and empty, same as before. */}
@@ -461,7 +463,12 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
 }
 
 function ReviewControls(
-  { review, labels, present, finalized }: { review: WeeklyReview; labels: Record<string, string>; present: boolean; finalized: boolean },
+  { review, labels, present, finalized, done, total }: {
+    review: WeeklyReview; labels: Record<string, string>; present: boolean; finalized: boolean;
+    /** Progress numbers for the band — derived from server data in ReviewBoard,
+     *  so switching modes never resets them. */
+    done: number; total: number;
+  },
 ) {
   const saved = review.status === 'saved';
   const [pending, start] = useTransition();
@@ -537,13 +544,27 @@ function ReviewControls(
     }
   });
 
+  const modeNote = present ? labels.modeNoteMeeting : labels.modeNoteDraft;
+
   return (
-    // §7 proportions: the save card is the narrower of the two.
-    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)]">
-      <div className="rounded-[13px] border border-line bg-sk-surface p-4 shadow-card">
-        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-green">{labels.saveKicker}</p>
-        <p className="mt-1 text-[10px] leading-[1.45] text-sk-text">{labels.saveSub}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
+    // Option-2 compaction: one sticky band replaces the KPI card, the mode
+    // banner and the two Save/Upload cards — controls stay reachable while
+    // scrolling a long agenda. Same translucent-material treatment as the
+    // app header, with the reduce-transparency solid fallback.
+    <div className="sticky top-16 z-30 rounded-[13px] border border-line bg-bg/85 px-4 py-3 shadow-card backdrop-blur-md reduce-transparency:bg-bg reduce-transparency:backdrop-filter-none">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {total > 0 && (
+          <p className="flex items-baseline gap-1.5">
+            <span className="font-mono text-lg font-[650] leading-none tabular-nums text-sk-ink">
+              {done}<span className="text-sk-muted-light">/{total}</span>
+            </span>
+            {labels.progress && (
+              <span className="text-[10px] text-sk-muted">{labels.progress.replace('{done}/{total} ', '')}</span>
+            )}
+          </p>
+        )}
+        <span className="font-mono text-[10px] text-sk-muted">{labels.meeting} · <bdi>{fmtDate(review.meeting_date)}</bdi></span>
+        <span className="ms-auto flex flex-wrap items-center gap-2">
           {finalized ? (
             <>
               {/* D1: badge + Reopen replace Save + Finalize once locked —
@@ -564,7 +585,8 @@ function ReviewControls(
           ) : (
             <>
               {/* Save is a checkpoint, not a lock: it stays enabled after
-                  saving so a review can be saved again during the meeting. */}
+                  saving so a review can be saved again during the meeting.
+                  Finalize is confirmed inline (window.confirm above). */}
               <button
                 type="button"
                 disabled={pending}
@@ -573,9 +595,6 @@ function ReviewControls(
               >
                 {justSaved || saved ? labels.saved : labels.save}
               </button>
-              {/* D1: secondary action beside Save, per the checklist —
-                  confirmed inline (window.confirm above), locks every item
-                  for the meeting; Reopen is how it reverses. */}
               <button
                 type="button"
                 disabled={pending}
@@ -586,20 +605,7 @@ function ReviewControls(
               </button>
             </>
           )}
-          <span className="font-mono text-[10px] text-sk-muted">{labels.meeting} · <bdi>{fmtDate(review.meeting_date)}</bdi></span>
-        </div>
-        {justSaved && !failed && <p role="status" className="mt-2 text-[10px] text-sk-green">{labels.saved}</p>}
-        {failed && <p role="alert" className="mt-2 text-[10px] text-coral">{failed}</p>}
-      </div>
-
-      <div className="rounded-[13px] border border-line bg-sk-surface p-4 shadow-card">
-        {/* §7: the eyebrow reflects which side of the meeting we are on. */}
-        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-blue">
-          {present ? labels.uploadKicker : (labels.uploadKickerDraft ?? labels.uploadKicker)}
-        </p>
-        <p className="mt-1 text-[10px] leading-[1.45] text-sk-text">{labels.uploadSub}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink2 hover:bg-card2 sm:min-h-0">
+          <label className="inline-flex min-h-11 cursor-pointer items-center rounded-[8px] border border-line bg-sk-surface px-3 py-2 text-[10px] font-[650] leading-none text-sk-ink hover:bg-card2 sm:min-h-0">
             {labels.upload}
             <input
               type="file"
@@ -610,24 +616,91 @@ function ReviewControls(
               onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ''; }}
             />
           </label>
-          {/* D4: on success, name + date + status — not just a bare flag.
-              Both wrapped in <bdi> (same as due/meeting-date elsewhere in
-              this file) since a file name can be arbitrary text sitting next
-              to a numeric date in an RTL layout. */}
+          {/* Exactly the formats accept= allows and route.ts handles — .mp4
+              stores + links only, .txt/.docx run the transcript pipeline. */}
+          <span className="font-mono text-[9px] text-sk-muted">MP4 · TXT · DOCX</span>
+        </span>
+      </div>
+      {(modeNote || (justSaved && !failed) || failed || lastFile || uploadError) && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] leading-[1.5]">
+          {/* Mode context (§5) as a quiet line: amber preparing, blue presenting. */}
+          {modeNote && <span className={present ? 'text-sk-blue' : 'text-sk-amber'}>{modeNote}</span>}
+          {justSaved && !failed && <span role="status" className="text-sk-green">{labels.saved}</span>}
+          {failed && <span role="alert" className="text-coral">{failed}</span>}
+          {/* D4: on success, name + date + status — not just a bare flag;
+              <bdi> keeps arbitrary file names sane in the RTL layout. */}
           {lastFile && (
-            <span role="status" className="text-xs text-sage">
+            <span role="status" className="text-sage">
               <bdi>{lastFile.name}</bdi> · <bdi>{lastFile.at}</bdi> · {labels.processed}
             </span>
           )}
-          {uploadError && <span role="alert" className="text-xs text-coral">{uploadError}</span>}
-        </div>
-        {/* D4: state exactly the formats accept= allows and route.ts genuinely
-            handles — .mp4 stores + links only (no transcription yet), .txt
-            and .docx both run through the real transcript pipeline. Same
-            casing/format as the identical MP4/TXT/DOCX set already shown on
-            the Data Inbox's "Meeting recording" tab (app/(dash)/(focused)/upload/page.tsx). */}
-        <p className="mt-2 font-mono text-[9px] text-sk-muted">MP4 · TXT · DOCX</p>
-      </div>
+          {uploadError && <span role="alert" className="text-coral">{uploadError}</span>}
+        </p>
+      )}
     </div>
+  );
+}
+
+// Option-2 compaction: a field that only becomes a form control on demand.
+// Filled -> prose (click to edit unless locked); empty -> a quiet "+ Add"
+// chip; editing -> the exact textarea (autofocus) with the caller's own
+// onBlur save. Skips the save when nothing changed, so opening and leaving
+// a field never writes.
+function DisclosureField({ kicker, addLabel, placeholder, value, locked, busy, onSave }: {
+  kicker: string; addLabel: string; placeholder?: string; value: string | null;
+  locked: boolean; busy: boolean; onSave: (text: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
+        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{kicker}</span>
+        <textarea
+          autoFocus
+          defaultValue={value ?? ''}
+          rows={2}
+          placeholder={placeholder}
+          aria-label={kicker}
+          disabled={busy}
+          onBlur={(e) => {
+            if (e.target.value !== (value ?? '')) onSave(e.target.value);
+            setEditing(false);
+          }}
+          className="mt-0.5 w-full resize-y rounded-[8px] border border-sk-line-strong bg-sk-green-soft px-2.5 py-1.5 text-[10px] leading-[1.5] text-sk-ink outline-none focus-within:shadow-[0_0_0_2px_var(--color-sage-soft)] motion-safe:animate-sk-fade disabled:opacity-60 disabled:cursor-not-allowed"
+        />
+      </span>
+    );
+  }
+  if (value) {
+    return (
+      <span className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
+        <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{kicker}</span>
+        {locked ? (
+          <span className="mt-0.5 block whitespace-pre-wrap text-[11px] leading-[1.5] text-sk-ink">{value}</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            title={addLabel}
+            className="mt-0.5 block w-full cursor-text whitespace-pre-wrap rounded-[8px] text-start text-[11px] leading-[1.5] text-sk-ink transition-colors hover:bg-sk-green-soft/60"
+          >
+            {value}
+          </button>
+        )}
+      </span>
+    );
+  }
+  if (locked) return null;
+  return (
+    <span className="basis-auto">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="min-h-11 cursor-pointer whitespace-nowrap rounded-full px-2 py-1 text-[10px] text-sk-muted transition-colors hover:bg-sk-surface-soft hover:text-sk-ink sm:min-h-0"
+      >
+        + {addLabel}
+      </button>
+    </span>
   );
 }

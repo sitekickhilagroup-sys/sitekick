@@ -157,6 +157,10 @@ export default async function WeeklyPage() {
                 // D2: Next step field + Owner/Due inline editing.
                 nextStepKicker: t('weekly.next_step_kicker'),
                 nextStepPh: t('weekly.next_step_ph'),
+                // Option-2 compaction: collapsed explainer + on-demand fields.
+                howTitle: t('weekly.how_title'),
+                addNote: t('weekly.add_note'),
+                addNextStep: t('weekly.add_next_step'),
                 // Reuses the same "Due" label /work already shows for this
                 // column, rather than a second weekly-only translation of it.
                 dueLabel: t('work.col_due'),
