@@ -4,6 +4,10 @@
    Light default, dark via [data-theme="dark"]. WCAG AA checked against client spec. */
 
 :root {
+  /* Native widgets (select popups, scrollbars, date pickers) follow the app
+     theme — without this a dark-theme <select> opens a UA-white popup with
+     inherited near-white ink: invisible options. */
+  color-scheme: light;
   --bg: #FBFBF7; --card: #FFFFFF; --card2: #F4F4EE; --inset: #EFEFE9;
   --line: #DFE5DF; --line2: #E9EDE9;
   --ink: #16221F; --ink2: #71807B; --ink3: #65716C;
@@ -19,6 +23,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg: #141C19; --card: #1C2622; --card2: #212C27; --inset: #18211D;
   --line: #32403A; --line2: #283530;
   --ink: #E7ECEA; --ink2: #A4B0AB; --ink3: #899490;

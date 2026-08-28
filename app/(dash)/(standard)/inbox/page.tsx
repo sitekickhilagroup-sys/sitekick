@@ -143,6 +143,7 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     restore: t('review.btn_restore'), undo: t('review.undo'), undone: t('review.undone'), undoFailed: t('common.error_save'),
     'ct.new_task': t('review.ct.new_task'), 'ct.update_existing': t('review.ct.update_existing'),
     'ct.complete_existing': t('review.ct.complete_existing'), 'ct.merge_duplicate': t('review.ct.merge_duplicate'),
+    'ct.keep_both_linked': t('review.ct.keep_both_linked'),
     'ct.keep_open': t('review.ct.keep_open'), 'ct.information_only': t('review.ct.information_only'),
     'state.pending': t('review.f_pending'), 'state.accepted': t('review.f_approved'),
     'state.auto_applied': t('review.state_auto'), 'state.rejected': t('review.f_wrong'),
