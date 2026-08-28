@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
@@ -25,6 +26,10 @@ export const maxDuration = 300;
 //   .zip / .olm     -> email archive (Outlook export): store all, agent-process the newest few
 //   .csv            -> text -> comms agent
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // zip-based formats can inflate — cap the input
+
+/** Content identity: the same bytes (or same extracted text) under a new
+ *  filename must dedup — the name+size external_id alone misses renames. */
+const sha256 = (data: Buffer | string) => `sha256:${createHash('sha256').update(data).digest('hex')}`;
 
 /**
  * Sort key for an email's own Date header.
@@ -86,6 +91,9 @@ export async function POST(req: NextRequest) {
       const bundleKey = `upload:bundle:${a.name}:${a.size}+${b.name}:${b.size}`;
       const { documentId, deduped, processed } = await ingestDocument(admin, {
         kind: 'transcript', source: 'upload', raw_text: merged, external_id: bundleKey,
+        // Hash of the MERGED text: orderBundle normalizes which file comes
+        // first, so the same pair re-uploaded under new names still dedups.
+        content_hash: sha256(merged),
       });
       if (!documentId) return NextResponse.json({ ok: true, deduped: true });
       if (deduped) {
@@ -114,6 +122,7 @@ export async function POST(req: NextRequest) {
       });
       const { documentId, deduped, processed } = await ingestDocument(admin, {
         kind: 'invoice_pdf', source: 'upload', storage_path: path, external_id: dedupKey,
+        content_hash: sha256(buffer),
       });
       if (!documentId) return NextResponse.json({ ok: true, deduped: true });
       if (deduped) {
@@ -142,6 +151,7 @@ export async function POST(req: NextRequest) {
       });
       const { documentId, deduped } = await ingestDocument(admin, {
         kind: 'transcript', source: 'upload', storage_path: path, external_id: dedupKey,
+        content_hash: sha256(buffer),
       });
       if (!documentId) return NextResponse.json({ ok: true, deduped: true });
       if (deduped) return NextResponse.json({ ok: true, type: 'recording', documentId, deduped: true });
@@ -153,6 +163,7 @@ export async function POST(req: NextRequest) {
       const parsed = parseWorkbook(buffer);
       const { documentId, deduped, processed } = await ingestDocument(admin, {
         kind: 'sheet', source: 'upload', external_id: dedupKey,
+        content_hash: sha256(buffer),
         raw_text: parsed.kind === 'text' ? parsed.text : `tracker:${parsed.kind} rows:${parsed.rows.length}`,
       });
       if (!documentId) return NextResponse.json({ ok: true, deduped: true });
@@ -215,6 +226,7 @@ export async function POST(req: NextRequest) {
       const raw = `From: ${parsed.from}\nTo: ${parsed.to}\nDate: ${parsed.date}\nSubject: ${parsed.subject}\n\n${parsed.body}`;
       const { documentId, deduped, processed } = await ingestDocument(admin, {
         kind: 'email', source: 'upload', external_id: parsed.messageId ?? dedupKey, raw_text: raw,
+        content_hash: sha256(raw),
       });
       if (!documentId) return NextResponse.json({ ok: true, deduped: true });
       if (deduped) {
@@ -257,6 +269,9 @@ export async function POST(req: NextRequest) {
     else text = buffer.toString('utf8');
     const { documentId, deduped, processed } = await ingestDocument(admin, {
       kind: 'transcript', source: 'upload', raw_text: text, external_id: dedupKey,
+      // Hash of the extracted TEXT, not the file bytes: a re-saved .docx with
+      // identical words but fresh metadata still dedups.
+      content_hash: sha256(text),
     });
     if (!documentId) return NextResponse.json({ ok: true, deduped: true });
     if (deduped) {

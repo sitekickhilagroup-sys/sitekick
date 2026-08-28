@@ -3,7 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { runStructured } from '../lib/claude.ts';
 import type { Project, Task } from '../lib/types.ts';
 import { ExtractResultSchema, type ExtractResult } from './schemas.ts';
-import { routeExtractResult } from '../lib/proposals.ts';
+import { routeExtractResult, filterDuplicateProposals, type ProposalIdentity } from '../lib/proposals.ts';
 import { logActivity } from '../lib/state-writer.ts';
 
 const SYSTEM = `You are the operations chief-of-staff for Hilla Group, an LA real-estate developer.
@@ -167,6 +167,9 @@ export interface ApplySummary {
   vendor_hours: number;
   deadline_updates: number;
   proposals?: number;
+  /** Proposals dropped because an identical one already sits in the inbox
+   *  (or was already accepted) — re-uploads must not double the queue. */
+  proposals_skipped?: number;
 }
 
 // Server-side reconciliation: even if the model said "create", a strong match
@@ -191,9 +194,26 @@ export async function applyExtractResult(
   };
   const blockerIds: string[] = [];
 
-  const { autoCreates, proposals } = routeExtractResult(result, {
+  const { autoCreates, proposals: routedProposals } = routeExtractResult(result, {
     resolveProject, defaultProjectId: docProjectId, openTasks: ctx.openTasks,
   });
+
+  // Cross-document dedup: the same communication re-uploaded (renamed file,
+  // or a new version with additions) re-asserts the same claims. An identical
+  // proposal already pending or accepted must not enter the inbox twice.
+  const { data: existingProps } = await admin.from('agent_proposals')
+    .select('type, project_id, target_task_id, payload')
+    .in('state', ['pending', 'accepted'])
+    .order('created_at', { ascending: false })
+    .limit(500);
+  const { kept: proposals, skipped } = filterDuplicateProposals(
+    routedProposals,
+    (existingProps ?? []) as ProposalIdentity[],
+  );
+  if (skipped > 0) {
+    summary.proposals_skipped = skipped;
+    console.log(`[extract-comms] ${skipped} duplicate proposal(s) skipped for doc ${docId}`);
+  }
 
   for (const { op, project_id } of autoCreates) {
     const { data, error } = await admin.from('tasks').insert({

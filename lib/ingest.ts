@@ -7,6 +7,9 @@ export interface IngestInput {
   kind: DocKind;
   source: DocSource;
   external_id?: string | null;
+  /** sha256 of the extracted content — catches the same file re-uploaded
+   *  under another name, which the name+size external_id misses. */
+  content_hash?: string | null;
   project_hint?: string | null;
   raw_text?: string | null;
   storage_path?: string | null;
@@ -20,7 +23,9 @@ export interface IngestOutcome {
   processed: boolean;
 }
 
-// Every raw input lands in documents first; dedup on external_id.
+// Every raw input lands in documents first; dedup on external_id, then on
+// content_hash (same file, different name — the external_id encodes name+size
+// so a rename slips past it).
 export async function ingestDocument(
   admin: SupabaseClient,
   input: IngestInput,
@@ -33,12 +38,22 @@ export async function ingestDocument(
       .maybeSingle();
     if (existing) return { documentId: existing.id, deduped: true, processed: existing.processed_at != null };
   }
+  if (input.content_hash) {
+    const { data: existing } = await admin
+      .from('documents')
+      .select('id, processed_at')
+      .eq('content_hash', input.content_hash)
+      .limit(1)
+      .maybeSingle();
+    if (existing) return { documentId: existing.id, deduped: true, processed: existing.processed_at != null };
+  }
   const { data, error } = await admin
     .from('documents')
     .insert({
       kind: input.kind,
       source: input.source,
       external_id: input.external_id ?? null,
+      content_hash: input.content_hash ?? null,
       raw_text: input.raw_text ?? null,
       storage_path: input.storage_path ?? null,
     })

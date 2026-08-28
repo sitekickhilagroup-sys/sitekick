@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { routeExtractResult, type RouteContext } from './proposals.ts';
+import { routeExtractResult, filterDuplicateProposals, proposalKey, type ProposalDraft, type RouteContext } from './proposals.ts';
 import type { Task } from './types.ts';
 
 const openTask = {
@@ -154,6 +154,109 @@ describe('routeExtractResult', () => {
       ctx(),
     );
     expect(r.proposals).toHaveLength(0);
+  });
+  it('re-asserted claims are skipped against the existing inbox; changed facts pass (re-upload scenario)', () => {
+    const draft = (over: Partial<ProposalDraft>): ProposalDraft => ({
+      type: 'blocker_create', project_id: 'p1', payload: {}, target_task_id: null,
+      confidence: 0.7, reasoning: 'r', ...over,
+    });
+    const drafts: ProposalDraft[] = [
+      draft({ type: 'blocker_create', payload: { what: 'No civil engineer retained', blocked_by: 'MSA refusal' } }),
+      draft({ type: 'decision_create', payload: { title: 'Scope split between surveyor and civil' } }),
+      draft({ type: 'deadline_update', payload: { task_match: 'PC Extension', new_due: '2026-09-01' } }),
+      // Same task_match but the date MOVED — new fact, must pass.
+      draft({ type: 'deadline_update', payload: { task_match: 'PC Extension', new_due: '2026-09-15' } }),
+      draft({ type: 'task_update', target_task_id: 't1', payload: { title: 'Retain civil engineer', status: 'open' } }),
+      // Same target but new content (done) — must pass.
+      draft({ type: 'task_done', target_task_id: 't1', payload: { title: 'Retain civil engineer', status: 'done' } }),
+      draft({ type: 'task_create', project_id: null, payload: { title: 'Pay all outstanding invoices' } }),
+    ];
+    const existing = [
+      { type: 'blocker_create', project_id: 'p1', target_task_id: null, payload: { what: 'No civil  engineer retained!' } },
+      { type: 'decision_create', project_id: 'p1', target_task_id: null, payload: { title: 'Scope split between surveyor and civil' } },
+      { type: 'deadline_update', project_id: 'p1', target_task_id: null, payload: { task_match: 'PC Extension', new_due: '2026-09-01' } },
+      { type: 'task_update', project_id: 'p1', target_task_id: 't1', payload: { title: 'Retain civil engineer', status: 'open' } },
+      { type: 'task_create', project_id: null, target_task_id: null, payload: { title: 'Pay all outstanding invoices' } },
+    ];
+    const { kept, skipped } = filterDuplicateProposals(drafts, existing);
+    expect(skipped).toBe(5);
+    expect(kept.map((k) => k.type)).toEqual(['deadline_update', 'task_done']);
+    expect((kept[0].payload as { new_due: string }).new_due).toBe('2026-09-15');
+  });
+  it('REPHRASED claims are fuzzy-skipped; changed deadline facts still pass (LLM re-run wording)', () => {
+    const d = (type: string, payload: Record<string, unknown>): ProposalDraft => ({
+      type: type as ProposalDraft['type'], project_id: 'p1', payload, target_task_id: null, confidence: 0.5, reasoning: 'r',
+    });
+    const existing = [
+      { type: 'blocker_create', project_id: 'p1', target_task_id: null, payload: { what: 'No civil engineer retained for grading plan and Hold Letter response' } },
+      { type: 'decision_create', project_id: 'p1', target_task_id: null, payload: { title: 'Scope split between surveyor and civil engineer' } },
+      { type: 'relationship_create', project_id: 'p1', target_task_id: null, payload: { from_match: 'Pay Quality Mapping invoice', to_match: 'Neighbor notices before hearing', type: 'blocks' } },
+      { type: 'deadline_update', project_id: 'p1', target_task_id: null, payload: { task_match: 'PC Extension', new_due: '2026-09-01' } },
+    ];
+    const { kept, skipped } = filterDuplicateProposals(
+      [
+        d('blocker_create', { what: 'Grading plan and Hold Letter response cannot proceed' }),
+        d('decision_create', { title: 'Surveyor and civil engineer scope split' }),
+        d('relationship_create', { from_match: 'Quality Mapping invoice payment', to_match: 'neighbor notices / hearing', type: 'blocks' }),
+        // Same task but a MOVED date — real information, must pass.
+        d('deadline_update', { task_match: 'PC Extension', new_due: '2026-09-15' }),
+        // Same wording on ANOTHER project — must pass.
+        { type: 'blocker_create', project_id: 'p2', payload: { what: 'Grading plan and Hold Letter response cannot proceed' }, target_task_id: null, confidence: 0.5, reasoning: 'r' },
+      ],
+      existing,
+    );
+    expect(skipped).toBe(3);
+    expect(kept.map((k) => k.type)).toEqual(['deadline_update', 'blocker_create']);
+  });
+  it('reworded task_update on the same target skips when hard facts match; a changed fact passes', () => {
+    const d = (payload: Record<string, unknown>, type = 'task_update'): ProposalDraft => ({
+      type: type as ProposalDraft['type'], project_id: 'p1', payload, target_task_id: 't1', confidence: 0.8, reasoning: 'r',
+    });
+    const existing = [{
+      type: 'task_update', project_id: 'p1', target_task_id: 't1',
+      payload: { title: 'Retain replacement civil engineer', description: 'Rowan sourcing alternative engineers after MSA refusal', waiting_for: 'Rowan' },
+    }];
+    const { kept, skipped } = filterDuplicateProposals(
+      [
+        // Same facts, reworded — skip.
+        d({ title: 'Retain replacement civil engineer', description: 'Alternative engineers being sourced by Rowan; MSA was refused', waiting_for: 'Rowan' }),
+        // New due date — real change, keep.
+        d({ title: 'Retain replacement civil engineer', description: 'Rowan sourcing alternative engineers after MSA refusal', waiting_for: 'Rowan', due: '2026-09-05' }),
+        // Marked done — real change, keep.
+        d({ title: 'Retain replacement civil engineer', description: 'Engineer retained', status: 'done' }, 'task_done'),
+      ],
+      existing,
+    );
+    expect(skipped).toBe(1);
+    expect(kept).toHaveLength(2);
+  });
+  it('a create loosely matching an open task becomes a 0.5 task_update proposal, never a duplicate task', () => {
+    const open = {
+      id: 't9', project_id: 'p1', title: 'Retain Civil Engineer for Grading Plan & B Permit - 2 quotes was received', status: 'open',
+    } as unknown as Task;
+    const r = routeExtractResult(
+      { ...base, tasks: [{ op: 'create', stage_key: null, project_name: 'San Marco', title: 'Retain civil engineer for grading at San Marco', priority: 'normal' }] },
+      ctx({ openTasks: [open] }),
+    );
+    expect(r.autoCreates).toHaveLength(0);
+    expect(r.proposals[0]).toMatchObject({ type: 'task_update', target_task_id: 't9', confidence: 0.5 });
+  });
+  it('the same claim twice in ONE batch also collapses; unknown types are never skipped', () => {
+    const d = (type: string, payload: Record<string, unknown>): ProposalDraft => ({
+      type: type as ProposalDraft['type'], project_id: 'p1', payload, target_task_id: null, confidence: 0.5, reasoning: 'r',
+    });
+    const { kept, skipped } = filterDuplicateProposals(
+      [
+        d('relationship_create', { from_match: 'A', to_match: 'B', type: 'blocks' }),
+        d('relationship_create', { from_match: 'a', to_match: 'b', type: 'blocks' }),
+        d('phase_set', { phase_key: 'planning' }),
+        d('phase_set', { phase_key: 'planning' }),
+      ],
+      [],
+    );
+    expect(skipped).toBe(1);
+    expect(kept).toHaveLength(3);
+    expect(proposalKey({ type: 'phase_set', project_id: 'p1', target_task_id: null, payload: {} })).toBeNull();
   });
   it('two creates for the same deliverable in ONE batch collapse to one (agent bug #2 — the triple LID)', () => {
     const r = routeExtractResult(

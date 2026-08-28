@@ -6,9 +6,23 @@
 // covered four, and the old single-project contract silently discarded all
 // eleven extracted tasks. Every item resolves its own project; an item with
 // no resolvable project becomes a review proposal, NEVER a silent drop.
-import { matchExistingTask } from './dedup.ts';
+import { matchExistingTask, tokenize } from './dedup.ts';
 import type { ExtractResult, TaskOp } from '../agents/schemas.ts';
 import type { ProposalType, Task } from './types.ts';
+
+/** Containment of the smaller token set in the larger — how much of the
+ *  shorter phrase the longer one covers. LLM re-runs rephrase the same claim
+ *  ("Grading plan cannot proceed" vs "No civil engineer retained for grading
+ *  plan"), so exact keys alone let re-uploads double the review queue. */
+function overlapScore(a: string, b: string): number {
+  const ta = tokenize(a);
+  const tb = tokenize(b);
+  const [small, big] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  if (!small.size) return 0;
+  let shared = 0;
+  for (const w of small) if (big.has(w)) shared++;
+  return shared / small.size;
+}
 
 export interface ProposalDraft {
   type: ProposalType;
@@ -39,13 +53,135 @@ export interface RouteContext {
   openTasks: Task[];
 }
 
+function norm(v: unknown): string {
+  return typeof v === 'string' ? v.toLowerCase().replace(/[^a-z0-9֐-׿]+/g, ' ').trim() : '';
+}
+
 /** In-batch duplicate key: same deliverable worded identically enough after
  *  normalization. Guards one communication producing two creates for the
  *  same thing (agent bug #2 — the LID item existed three times). Scoped per
  *  project: "Retain civil engineer" for San Marco and for Rinconia are two
  *  real, distinct work items (the Aug 24 meeting had exactly this pair). */
 function createKey(projectId: string | null, title: string): string {
-  return `${projectId ?? '∅'}|${title.toLowerCase().replace(/[^a-z0-9֐-׿]+/g, ' ').trim()}`;
+  return `${projectId ?? '∅'}|${norm(title)}`;
+}
+
+/** The identity of a proposal for cross-document dedup. Re-uploading the
+ *  same communication (renamed, or extended with additions) re-asserts the
+ *  same blockers/decisions/relationships — without this every re-run doubled
+ *  them in Noa's review inbox. A changed FACT changes the key (a deadline
+ *  moved to a new date, an update with different content), so genuinely new
+ *  information still comes through. */
+export interface ProposalIdentity {
+  type: string;
+  project_id: string | null;
+  target_task_id: string | null;
+  payload: Record<string, unknown>;
+}
+
+export function proposalKey(p: ProposalIdentity): string | null {
+  const proj = p.project_id ?? '∅';
+  const pay = p.payload ?? {};
+  switch (p.type) {
+    case 'blocker_create':
+      return `b|${proj}|${norm(pay.what)}`;
+    case 'decision_create':
+      return `d|${proj}|${norm(pay.title)}`;
+    case 'relationship_create':
+      return `r|${proj}|${norm(pay.from_match)}|${pay.type ?? ''}|${norm(pay.to_match)}`;
+    case 'deadline_update':
+      return `dl|${proj}|${norm(pay.task_match)}|${pay.new_due ?? ''}`;
+    case 'task_create':
+      return `tc|${proj}|${norm(pay.title)}`;
+    case 'task_update':
+    case 'task_done':
+      // Same target + same asserted content = same proposal. Any changed
+      // field (a new owner, new due, different status) makes a new key.
+      return `tu|${p.target_task_id ?? ''}|${norm(pay.title)}|${norm(pay.description)}|${pay.due ?? ''}|${pay.status ?? ''}|${norm(pay.waiting_for)}|${norm(pay.owner)}`;
+    default:
+      return null; // unknown types are never silently skipped
+  }
+}
+
+/** Claim text per type for the fuzzy pass. task_update/task_done/deadline
+ *  stay exact-key only — their payload deltas (a moved date, a done status)
+ *  ARE the information, and fuzzy matching would eat real changes. */
+function fuzzyFields(p: ProposalIdentity): { bucket: string; a: string; b?: string } | null {
+  const pay = p.payload ?? {};
+  const s = (v: unknown) => (typeof v === 'string' ? v : '');
+  switch (p.type) {
+    case 'blocker_create': return { bucket: `b|${p.project_id ?? '∅'}`, a: s(pay.what) };
+    case 'decision_create': return { bucket: `d|${p.project_id ?? '∅'}`, a: s(pay.title) };
+    case 'task_create': return { bucket: `tc|${p.project_id ?? '∅'}`, a: s(pay.title) };
+    case 'relationship_create':
+      return { bucket: `r|${p.project_id ?? '∅'}|${s(pay.type)}`, a: s(pay.from_match), b: s(pay.to_match) };
+    default: return null;
+  }
+}
+
+const FUZZY_AT = 0.6;
+
+export function filterDuplicateProposals(
+  drafts: ProposalDraft[],
+  existing: ProposalIdentity[],
+): { kept: ProposalDraft[]; skipped: number } {
+  const seen = new Set<string>();
+  const fuzzySeen: Array<{ bucket: string; a: string; b?: string }> = [];
+  const admit = (p: ProposalIdentity) => {
+    const k = proposalKey(p);
+    if (k) seen.add(k);
+    const f = fuzzyFields(p);
+    if (f && f.a) fuzzySeen.push(f);
+  };
+  for (const e of existing) admit(e);
+
+  // task_update/task_done: an LLM re-run rewords the same assertion every
+  // time, so exact keys never collapse them. Skip ONLY when every hard fact
+  // matches an existing proposal on the same target (due, status, owner,
+  // waiting_for) AND the text substantially overlaps — any changed fact
+  // passes untouched.
+  const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  // Empty-vs-set is not a conflict for people fields (a re-run randomly
+  // dropping or adding the same owner is wording noise, not information);
+  // two DIFFERENT non-empty values are a real change and pass.
+  const peopleConflict = (a: unknown, b: unknown) => s(a) !== '' && s(b) !== '' && s(a) !== s(b);
+  const updSeen = existing
+    .filter((e) => e.type === 'task_update' || e.type === 'task_done')
+    .map((e) => ({ target: e.target_task_id, pay: e.payload ?? {} }));
+  const sameUpdate = (d: ProposalDraft): boolean => {
+    const pay = d.payload ?? {};
+    return updSeen.some((e) =>
+      e.target === d.target_task_id
+      && s(e.pay.due) === s(pay.due)
+      && (s(e.pay.status) || 'open') === (s(pay.status) || 'open')
+      && !peopleConflict(e.pay.owner, pay.owner)
+      && !peopleConflict(e.pay.waiting_for, pay.waiting_for)
+      && overlapScore(
+        `${s(e.pay.title)} ${s(e.pay.description)}`,
+        `${s(pay.title)} ${s(pay.description)}`,
+      ) >= FUZZY_AT);
+  };
+
+  const kept: ProposalDraft[] = [];
+  let skipped = 0;
+  for (const d of drafts) {
+    const identity: ProposalIdentity = { type: d.type, project_id: d.project_id, target_task_id: d.target_task_id, payload: d.payload };
+    const k = proposalKey(identity);
+    if (k && seen.has(k)) { skipped++; continue; }
+    const f = fuzzyFields(identity);
+    if (f && f.a && fuzzySeen.some((e) =>
+      e.bucket === f.bucket
+      && overlapScore(e.a, f.a) >= FUZZY_AT
+      && (f.b === undefined || overlapScore(e.b ?? '', f.b) >= FUZZY_AT),
+    )) { skipped++; continue; }
+    if ((d.type === 'task_update' || d.type === 'task_done') && sameUpdate(d)) { skipped++; continue; }
+    admit(identity);
+    if (d.type === 'task_update' || d.type === 'task_done') {
+      updSeen.push({ target: d.target_task_id, pay: d.payload ?? {} });
+    }
+    kept.push(d);
+  }
+  return { kept, skipped };
 }
 
 export function routeExtractResult(
@@ -118,6 +254,27 @@ export function routeExtractResult(
     const key = createKey(itemProject, op.title);
     if (batchKeys.has(key)) continue;
     batchKeys.add(key);
+    // Second chance before auto-creating: a loose same-project containment
+    // ("Retain civil engineer for grading at San Marco" vs the open "Retain
+    // Civil Engineer for Grading Plan & B Permit" scored 0.47 and became a
+    // duplicate task). Looser than matchExistingTask, so it only gets to
+    // PROPOSE an update — never to write one.
+    if (itemProject) {
+      const loose = ctx.openTasks.find((t) =>
+        t.project_id === itemProject && overlapScore(t.title, op.title) >= 0.65);
+      if (loose) {
+        proposals.push({
+          type: 'task_update',
+          project_id: itemProject,
+          payload: op as unknown as Record<string, unknown>,
+          target_task_id: loose.id,
+          confidence: 0.5,
+          reasoning: 'loose title match against open task — possible duplicate, review',
+          title: op.title,
+        });
+        continue;
+      }
+    }
     if (itemProject) {
       autoCreates.push({ op, project_id: itemProject });
     } else {

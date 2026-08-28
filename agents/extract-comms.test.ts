@@ -43,10 +43,15 @@ function fakeAdmin(calls: Array<{ table: string; op: string; payload?: unknown }
       upsert: (payload: unknown) => { calls.push({ table, op: 'upsert', payload }); return chain; },
       select: () => chain,
       eq: () => chain,
+      in: () => chain,
+      order: () => chain,
+      limit: () => chain,
       single: async () => ({ data: { id: 'row-1' }, error: null }),
       maybeSingle: async () => ({ data: null, error: null }),
+      // Awaited bare chains (selects with filters) resolve to an empty list —
+      // the shape applyExtractResult's existing-proposals query expects.
       then: (resolve: (v: { data: unknown; error: null }) => void) =>
-        resolve({ data: { id: 'row-1' }, error: null }),
+        resolve({ data: [], error: null }),
     };
     return chain;
   };
