@@ -96,6 +96,49 @@ relationships, and the transcript-only ISA status-table ask as a
 project-less task_create for review. The 15 summary-only proposals were
 marked `ignored` (superseded) so Noa's inbox holds ONE coherent set.
 
+## Iteration 1.6 — the Aug-3 pair (`1239dd2`, deployed)
+
+Second pair from Dor: `8326 Internal Meeting Summary .pdf` ("8326" = the
+DATE 8/3/26 — Noa's summary email, PDF export, @tags and open questions) +
+`Weekly LA Team Meeting (8).docx` (the Aug-3 meeting itself, 4 hours,
+49.6K chars). Note: OLDER than the Aug-24 meeting already in the system —
+updates go through review, so stale data is human-gated.
+
+Run 1 (doc `aa46e4ce`): 10 tasks + 24 proposals + the URGENT Blair draft
+(PC expires 9/1, no filing appointment) + a vendor-quote-in-vendor_hours
+oddity ($6K/$10K civil quotes with hours=0). Found:
+- **BUG — cross-project existing_id**: model handed San Marco's landscape
+  task id for a Rinconia item and Rinconia's designer id for an Alta Mesa
+  item (the exact near-twin pairs Noa ruled `unrelated`). The
+  hallucination guard checked existence, not project consistency.
+- **MISS**: the Serena alignment meeting ("coordinate it ASAP") was not
+  extracted. Interpersonal sensitivity likely suppressed it.
+- **GAP**: the product bundle branch rejected .pdf — this real pair could
+  not have been uploaded through the UI.
+
+Fixes (all in `1239dd2`):
+- routing: existing_id on ANOTHER project than the item's own attribution
+  is rejected → same-project fuzzy → review proposal. Test added.
+- prompt: a scheduling ask IS a task, neutral title, concern in the
+  description.
+- lib/pdf.ts (pdf-parse deep import — package root runs debug file reads
+  under bundling and kills the build); .pdf bundleable; meeting tab accepts
+  .pdf; single PDFs still go to the invoice agent.
+
+Guarded re-run (round-1 proposals marked ignored): +4 tasks (Serena
+expedite-intake, verify property lines, call structural re stamped plans,
+reach Amin) + 37 proposals. Verified: Landscape→Rinconia, ID→Alta Mesa,
+"Schedule alignment meeting with Serena re payments and expediting"
+(neutral wording), deadline 2026-09-08 on the filing-appointment task,
+decisions incl. "No ZAD required for Rinconia", ZAD dependency chain.
+
+Residuals (accepted): "Reach Amin to schedule topo" is a near-dup of an
+existing open task (fuzzy scored under 0.55 — the /work duplicate list
+will offer the pair); two Dennis follow-up creates overlap (both in
+review); two stage misjudgments (Carlos kickoff → construction, AM civil
+→ bidding) — iteration-2 learning material; vendor quotes need a home
+that isn't vendor_hours.
+
 ## Iteration 2 — planned, NOT started
 
 - Sub-stage mapping: the 45 substage_templates (5 phases) into the prompt;
