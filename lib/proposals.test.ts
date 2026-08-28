@@ -21,7 +21,7 @@ const base = { project_name: null, tasks: [], blockers: [], decisions: [], draft
 describe('routeExtractResult', () => {
   it('new unmatched create goes to autoCreates under its own project', () => {
     const r = routeExtractResult(
-      { ...base, tasks: [{ op: 'create', project_name: 'San Marco', title: 'Order tree report', priority: 'normal' }] },
+      { ...base, tasks: [{ op: 'create', stage_key: null, project_name: 'San Marco', title: 'Order tree report', priority: 'normal' }] },
       ctx(),
     );
     expect(r.autoCreates).toHaveLength(1);
@@ -30,7 +30,7 @@ describe('routeExtractResult', () => {
   });
   it('update with existing_id becomes task_update proposal at 0.8, project taken from the matched task', () => {
     const r = routeExtractResult(
-      { ...base, tasks: [{ op: 'update', existing_id: 't1', project_name: null, title: 'Retain civil engineer', priority: 'normal', owner: 'Noa' }] },
+      { ...base, tasks: [{ op: 'update', existing_id: 't1', stage_key: null, project_name: null, title: 'Retain civil engineer', priority: 'normal', owner: 'Noa' }] },
       ctx(),
     );
     expect(r.autoCreates).toHaveLength(0);
@@ -38,14 +38,14 @@ describe('routeExtractResult', () => {
   });
   it('status done becomes task_done proposal', () => {
     const r = routeExtractResult(
-      { ...base, tasks: [{ op: 'update', existing_id: 't1', project_name: 'San Marco', title: 'Retain civil engineer', priority: 'normal', status: 'done' }] },
+      { ...base, tasks: [{ op: 'update', existing_id: 't1', stage_key: null, project_name: 'San Marco', title: 'Retain civil engineer', priority: 'normal', status: 'done' }] },
       ctx(),
     );
     expect(r.proposals[0].type).toBe('task_done');
   });
   it('create that fuzzy-matches an open task becomes a 0.6 proposal, not a duplicate', () => {
     const r = routeExtractResult(
-      { ...base, tasks: [{ op: 'create', project_name: 'San Marco', title: 'retain the civil engineer', priority: 'normal' }] },
+      { ...base, tasks: [{ op: 'create', stage_key: null, project_name: 'San Marco', title: 'retain the civil engineer', priority: 'normal' }] },
       ctx(),
     );
     expect(r.autoCreates).toHaveLength(0);
@@ -56,8 +56,8 @@ describe('routeExtractResult', () => {
       {
         ...base,
         tasks: [
-          { op: 'create', project_name: 'San Marco', title: 'Respond to Hold Letter', priority: 'normal' },
-          { op: 'create', project_name: 'Rinconia', title: 'Pay City intake invoice', priority: 'critical' },
+          { op: 'create', stage_key: null, project_name: 'San Marco', title: 'Respond to Hold Letter', priority: 'normal' },
+          { op: 'create', stage_key: null, project_name: 'Rinconia', title: 'Pay City intake invoice', priority: 'critical' },
         ],
       },
       ctx({ openTasks: [] }),
@@ -69,8 +69,8 @@ describe('routeExtractResult', () => {
       {
         ...base,
         tasks: [
-          { op: 'create', project_name: 'San Marco', title: 'Retain replacement civil engineer', priority: 'normal' },
-          { op: 'create', project_name: 'Rinconia', title: 'Retain replacement civil engineer', priority: 'normal' },
+          { op: 'create', stage_key: null, project_name: 'San Marco', title: 'Retain replacement civil engineer', priority: 'normal' },
+          { op: 'create', stage_key: null, project_name: 'Rinconia', title: 'Retain replacement civil engineer', priority: 'normal' },
         ],
       },
       ctx({ openTasks: [] }),
@@ -79,7 +79,7 @@ describe('routeExtractResult', () => {
   });
   it('create with NO resolvable project becomes a task_create proposal — never silently dropped', () => {
     const r = routeExtractResult(
-      { ...base, tasks: [{ op: 'create', project_name: null, title: 'Pay all outstanding invoices', priority: 'normal' }] },
+      { ...base, tasks: [{ op: 'create', stage_key: null, project_name: null, title: 'Pay all outstanding invoices', priority: 'normal' }] },
       ctx({ openTasks: [] }),
     );
     expect(r.autoCreates).toHaveLength(0);
@@ -87,14 +87,14 @@ describe('routeExtractResult', () => {
   });
   it('hallucinated existing_id falls back to fuzzy match instead of proposing against nothing', () => {
     const r = routeExtractResult(
-      { ...base, tasks: [{ op: 'update', existing_id: 'no-such-task', project_name: 'San Marco', title: 'Retain civil engineer', priority: 'normal' }] },
+      { ...base, tasks: [{ op: 'update', existing_id: 'no-such-task', stage_key: null, project_name: 'San Marco', title: 'Retain civil engineer', priority: 'normal' }] },
       ctx(),
     );
     expect(r.proposals[0]).toMatchObject({ type: 'task_update', target_task_id: 't1', confidence: 0.6 });
   });
   it('update claim with no match at all becomes a task_create proposal for review', () => {
     const r = routeExtractResult(
-      { ...base, tasks: [{ op: 'update', project_name: 'San Marco', title: 'Completely unknown deliverable', priority: 'normal' }] },
+      { ...base, tasks: [{ op: 'update', stage_key: null, project_name: 'San Marco', title: 'Completely unknown deliverable', priority: 'normal' }] },
       ctx({ openTasks: [] }),
     );
     expect(r.autoCreates).toHaveLength(0);
@@ -102,7 +102,7 @@ describe('routeExtractResult', () => {
   });
   it('document-level default project catches items that name none (single-project email)', () => {
     const r = routeExtractResult(
-      { ...base, tasks: [{ op: 'create', project_name: null, title: 'Order tree report', priority: 'normal' }] },
+      { ...base, tasks: [{ op: 'create', stage_key: null, project_name: null, title: 'Order tree report', priority: 'normal' }] },
       ctx({ defaultProjectId: 'p2', openTasks: [] }),
     );
     expect(r.autoCreates[0]).toMatchObject({ project_id: 'p2' });
@@ -111,7 +111,7 @@ describe('routeExtractResult', () => {
     const r = routeExtractResult(
       {
         ...base,
-        blockers: [{ project_name: 'San Marco', what: 'CE not retained', blocked_by: 'Noa decision', evidence: 'we cannot proceed until the CE is retained' }],
+        blockers: [{ project_name: 'San Marco', blocks_phase: null, what: 'CE not retained', blocked_by: 'Noa decision', evidence: 'we cannot proceed until the CE is retained' }],
         decisions: [{ project_name: 'Rinconia', title: 'Go with waiver' }],
         deadline_updates: [{ project_name: 'San Marco', task_match: 'Retain civil engineer', new_due: '2026-09-01', evidence: 'email says so' }],
       },
@@ -136,7 +136,7 @@ describe('routeExtractResult', () => {
     const r = routeExtractResult(
       {
         ...base,
-        blockers: [{ project_name: null, what: '  ', blocked_by: 'Noa', evidence: 'q' }],
+        blockers: [{ project_name: null, blocks_phase: null, what: '  ', blocked_by: 'Noa', evidence: 'q' }],
         deadline_updates: [{ project_name: null, task_match: 'x', new_due: '2026-09-01', evidence: '  ' }],
         relationships: [{ project_name: null, from_match: ' ', to_match: 'y', type: 'blocks' as const, reason: 'r', evidence: 'q' }],
         decisions: [{ project_name: null, title: '  ' }],
@@ -150,9 +150,9 @@ describe('routeExtractResult', () => {
       {
         ...base,
         tasks: [
-          { op: 'create' as const, project_name: 'San Marco', title: 'Submit LID clearance package', priority: 'normal' as const },
-          { op: 'create' as const, project_name: 'San Marco', title: 'Submit LID  clearance package!', priority: 'normal' as const },
-          { op: 'create' as const, project_name: 'San Marco', title: 'Order tree report', priority: 'normal' as const },
+          { op: 'create' as const, stage_key: null, project_name: 'San Marco', title: 'Submit LID clearance package', priority: 'normal' as const },
+          { op: 'create' as const, stage_key: null, project_name: 'San Marco', title: 'Submit LID  clearance package!', priority: 'normal' as const },
+          { op: 'create' as const, stage_key: null, project_name: 'San Marco', title: 'Order tree report', priority: 'normal' as const },
         ],
       },
       ctx({ openTasks: [] }),

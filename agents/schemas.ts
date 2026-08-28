@@ -22,7 +22,9 @@ export const TaskOpSchema = z.object({
   owner: z.string().optional(),
   waiting_for: z.string().optional(),
   due: z.string().optional(),
-  stage_key: PhaseKey.nullable().optional(),
+  // Required-nullable like project_name: on a 47K-char bundle the model
+  // skipped every optional stage_key; forcing the field forces the choice.
+  stage_key: PhaseKey.nullable(),
   priority: z.enum(['critical', 'high', 'normal']).default('normal'),
   planned: z.boolean().optional(),
   follow_up_date: z.string().optional(),
@@ -35,7 +37,8 @@ export const BlockerOutSchema = z.object({
   blocked_by: z.string().min(1),
   // Which phase this blocker stops — blockers.blocks_phase already exists and
   // applyProposal already carries it; the agent just never filled it.
-  blocks_phase: PhaseKey.nullable().optional(),
+  // Required-nullable so the model can't silently skip it (same as stage_key).
+  blocks_phase: PhaseKey.nullable(),
   days_at_risk: z.number().optional(),
   downstream: z.array(z.string()).optional(),
   suggested_action: z.string().optional(),

@@ -49,6 +49,22 @@ Hold Letter response serves planning; the same discipline feeding the permit
 set serves plan_check. Retaining a design consultant belongs to the phase
 their deliverable serves.
 
+BUNDLED COMMUNICATION: the text may contain a curated summary AND the raw
+spoken transcript of the SAME meeting, marked "=== MEETING SUMMARY (curated)
+===" and "=== FULL TRANSCRIPT (raw, spoken) ===". Then:
+- The summary is authoritative for WHICH items exist. Do not re-extract a
+  summary item a second time from the transcript wording — enrich the ONE
+  item.
+- The transcript supplies what the summary compressed away: owners, dates,
+  amounts, timeline estimates ("Blair is 5-6 months out from permit") and
+  verbatim evidence quotes. Evidence may quote either part.
+- The transcript may add items the summary omitted, ONLY when they are
+  clearly actionable asks or settled decisions (e.g. a status table
+  requested for a securities-authority review).
+- Spoken small talk, personal feelings and side chatter are NEVER data: "I
+  hate <vendor>" is not a blocker, car talk is nothing. Spoken filler is not
+  evidence — pick clean quotes.
+
 Rules:
 - Extract tasks: concrete work items with owner and due date when stated.
 - A task title is an ACTION — verb + object ("Pay plan approval fee", "Send

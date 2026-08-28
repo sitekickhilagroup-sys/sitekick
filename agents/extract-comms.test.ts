@@ -9,7 +9,7 @@ import type { Task } from '../lib/types';
 const canned = {
   project_name: '2361-2367 San Marco',
   tasks: [
-    { op: 'update', existing_id: 'task-1', project_name: '2361-2367 San Marco', title: 'Retain Surveyor (Updated Survey / Topo)', waiting_for: 'Refael', priority: 'critical' },
+    { op: 'update', existing_id: 'task-1', project_name: '2361-2367 San Marco', stage_key: null, title: 'Retain Surveyor (Updated Survey / Topo)', waiting_for: 'Refael', priority: 'critical' },
     { op: 'create', project_name: '2361-2367 San Marco', title: 'Order soils report addendum', owner: 'Noa', due: '2026-08-28', priority: 'normal', stage_key: 'plan_check' },
   ],
   blockers: [
@@ -127,7 +127,7 @@ describe('applyExtractResult', () => {
     const admin = fakeAdmin(calls);
     const result = ExtractResultSchema.parse({
       ...canned,
-      tasks: [{ op: 'create', project_name: '2361-2367 San Marco', title: 'Retain surveyor updated survey topo', priority: 'normal' }],
+      tasks: [{ op: 'create', project_name: '2361-2367 San Marco', stage_key: null, title: 'Retain surveyor updated survey topo', priority: 'normal' }],
       blockers: [], decisions: [], drafts: [], vendor_hours: [],
     });
     const openTasks = [
@@ -186,7 +186,7 @@ describe('applyExtractResult', () => {
     const result = ExtractResultSchema.parse({
       ...canned,
       project_name: null,
-      tasks: [{ op: 'create', project_name: null, title: 'Pay all outstanding invoices', priority: 'normal' }],
+      tasks: [{ op: 'create', project_name: null, stage_key: null, title: 'Pay all outstanding invoices', priority: 'normal' }],
       blockers: [], decisions: [], drafts: [], vendor_hours: [],
     });
     const summary = await applyExtractResult(admin, 'doc1', result, {
