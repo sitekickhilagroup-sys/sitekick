@@ -9,17 +9,17 @@ import type { Task } from '../lib/types';
 const canned = {
   project_name: '2361-2367 San Marco',
   tasks: [
-    { op: 'update', existing_id: 'task-1', title: 'Retain Surveyor (Updated Survey / Topo)', waiting_for: 'Refael', priority: 'critical' },
-    { op: 'create', title: 'Order soils report addendum', owner: 'Noa', due: '2026-08-28', priority: 'normal' },
+    { op: 'update', existing_id: 'task-1', project_name: '2361-2367 San Marco', title: 'Retain Surveyor (Updated Survey / Topo)', waiting_for: 'Refael', priority: 'critical' },
+    { op: 'create', project_name: '2361-2367 San Marco', title: 'Order soils report addendum', owner: 'Noa', due: '2026-08-28', priority: 'normal', stage_key: 'plan_check' },
   ],
   blockers: [
     // evidence is required as of Noa round 3 (agent bug #3) — a blocker claim
     // must quote the communication it came from.
-    { what: 'Grading plan has no engineer', blocked_by: 'Mid-Cities MSA refusal', downstream: ['plan_check'], evidence: 'Mid-Cities declined the MSA, so the grading plan has no engineer' },
+    { project_name: '2361-2367 San Marco', what: 'Grading plan has no engineer', blocked_by: 'Mid-Cities MSA refusal', blocks_phase: 'plan_check', downstream: ['plan_check'], evidence: 'Mid-Cities declined the MSA, so the grading plan has no engineer' },
   ],
-  decisions: [{ title: 'Proceed with Crest for entitlements' }],
+  decisions: [{ project_name: '2361-2367 San Marco', title: 'Proceed with Crest for entitlements' }],
   drafts: [{ subject: 'MSA decision needed', body: 'Refael — decision needed this week.', re_blocker_index: 0 }],
-  vendor_hours: [{ vendor_name: 'KGS Structural', hours: 12, rate: 180 }],
+  vendor_hours: [{ project_name: '2361-2367 San Marco', vendor_name: 'KGS Structural', hours: 12, rate: 180 }],
   deadline_updates: [],
   relationships: [],
 };
@@ -127,7 +127,7 @@ describe('applyExtractResult', () => {
     const admin = fakeAdmin(calls);
     const result = ExtractResultSchema.parse({
       ...canned,
-      tasks: [{ op: 'create', title: 'Retain surveyor updated survey topo', priority: 'normal' }],
+      tasks: [{ op: 'create', project_name: '2361-2367 San Marco', title: 'Retain surveyor updated survey topo', priority: 'normal' }],
       blockers: [], decisions: [], drafts: [], vendor_hours: [],
     });
     const openTasks = [
@@ -149,25 +149,56 @@ describe('applyExtractResult', () => {
     expect(proposalInserts[0].payload).toMatchObject({ type: 'task_update', target_task_id: 'task-9', confidence: 0.6 });
   });
 
-  it('stamps the document processed even when no project matches, instead of leaving it looking never-run', async () => {
+  it('multi-project document (top-level project null) still lands every item on its own project', async () => {
+    // The Aug 24 meeting summary: four projects in one document. The old
+    // document-level gate returned early on null and silently discarded all
+    // eleven extracted tasks. Per-item attribution routes them instead.
     const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
     const admin = fakeAdmin(calls);
-    // project_name from the model matches nothing in the supplied project list.
-    const result = ExtractResultSchema.parse({ ...canned, project_name: 'Some Unlisted Project' });
+    const result = ExtractResultSchema.parse({
+      ...canned,
+      project_name: null,
+      tasks: [
+        { op: 'create', project_name: '2361-2367 San Marco', title: 'Respond to Hold Letter', priority: 'normal', stage_key: 'planning' },
+        { op: 'create', project_name: '2650 Rinconia', title: 'Pay City intake invoice', priority: 'critical', stage_key: 'plan_check' },
+      ],
+      blockers: [], decisions: [], drafts: [], vendor_hours: [],
+    });
+    const summary = await applyExtractResult(admin, 'doc1', result, {
+      projects: [{ id: 'p1', name: '2361-2367 San Marco' }, { id: 'p2', name: '2650 Rinconia' }],
+      openTasks: [],
+      today: '2026-08-20',
+    });
+    expect(summary.project_id).toBeNull();
+    expect(summary.tasks_created).toBe(2);
+    const taskInserts = calls.filter((c) => c.table === 'tasks' && c.op === 'insert');
+    expect(taskInserts.map((c) => (c.payload as { project_id: string }).project_id)).toEqual(['p1', 'p2']);
+    // Document stays project-less (it belongs to no single project) but is
+    // stamped processed — the agent genuinely ran to completion.
+    const docUpdates = calls.filter((c) => c.table === 'documents' && c.op === 'update');
+    expect(docUpdates).toHaveLength(1);
+    expect(docUpdates[0].payload).toMatchObject({ processed_at: expect.any(String), project_id: null });
+  });
+
+  it('an unattributable item becomes a task_create proposal — never a silent drop', async () => {
+    const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
+    const admin = fakeAdmin(calls);
+    const result = ExtractResultSchema.parse({
+      ...canned,
+      project_name: null,
+      tasks: [{ op: 'create', project_name: null, title: 'Pay all outstanding invoices', priority: 'normal' }],
+      blockers: [], decisions: [], drafts: [], vendor_hours: [],
+    });
     const summary = await applyExtractResult(admin, 'doc1', result, {
       projects: [{ id: 'p1', name: '2361-2367 San Marco' }],
       openTasks: [],
       today: '2026-08-20',
     });
-    expect(summary.project_id).toBeNull();
-    // Nothing is created or proposed without a resolved project.
+    expect(summary.tasks_created).toBe(0);
+    expect(summary.proposals).toBe(1);
     expect(calls.filter((c) => c.table === 'tasks')).toHaveLength(0);
-    expect(calls.filter((c) => c.table === 'agent_proposals')).toHaveLength(0);
-    // But the agent genuinely ran, so the document is still stamped processed —
-    // otherwise a later dedup hit on the same file reports it as never processed
-    // (lib/ingest.ts's `processed`) even though this ran to completion.
-    const docUpdates = calls.filter((c) => c.table === 'documents' && c.op === 'update');
-    expect(docUpdates).toHaveLength(1);
-    expect(docUpdates[0].payload).toMatchObject({ processed_at: expect.any(String) });
+    const proposalInserts = calls.filter((c) => c.table === 'agent_proposals' && c.op === 'insert');
+    expect(proposalInserts).toHaveLength(1);
+    expect(proposalInserts[0].payload).toMatchObject({ type: 'task_create', project_id: null, state: 'pending' });
   });
 });

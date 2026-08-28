@@ -3,7 +3,6 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { runStructured } from '../lib/claude.ts';
 import type { Project, Task } from '../lib/types.ts';
 import { ExtractResultSchema, type ExtractResult } from './schemas.ts';
-import { laToday } from '../lib/date.ts';
 import { routeExtractResult } from '../lib/proposals.ts';
 import { logActivity } from '../lib/state-writer.ts';
 
@@ -13,13 +12,42 @@ You read one communication (email or meeting transcript) and extract operational
 PROJECT ATTRIBUTION (Noa round 3, agent bug #1: six tasks landed on the wrong
 property, and an arborist was filed under the wrong project because he was
 recognized by his company name):
-- Identify the project ONLY from property evidence in the text: the property
-  address or its parts, the project name, or the city case number given in the
-  project list. A VENDOR NAME IS NEVER PROJECT EVIDENCE — the same vendor
-  (arborist, surveyor, engineer) works on several of these properties at once.
-- If the text does not name the property and the evidence is ambiguous,
-  set project_name to null. A communication filed under no project is
-  recoverable; one filed under the WRONG project corrupts three screens.
+- A communication often covers SEVERAL projects (weekly meetings and status
+  summaries usually do). Attribution is PER ITEM, not per document: every
+  task, blocker, decision, deadline update, relationship and vendor-hours
+  entry carries its own project_name — the EXACT name from the project list —
+  taken from the section of text that item came from.
+- The top-level project_name is set ONLY when the ENTIRE communication is
+  about one project; for a multi-project communication set it to null and
+  rely on the per-item fields. Never force one project onto the whole
+  document.
+- Identify a project ONLY from property evidence in the text: the property
+  address or its parts, the project name (section headings like "BLAIR" or
+  "SAN MARCO" count), or the city case number given in the project list. A
+  VENDOR NAME IS NEVER PROJECT EVIDENCE — the same vendor (arborist,
+  surveyor, engineer) works on several of these properties at once.
+- If an item's own text has no property evidence, set THAT item's
+  project_name to null — it goes to human review, never guessed. An item
+  filed under no project is recoverable; one filed under the WRONG project
+  corrupts three screens.
+
+PHASES — stage_key on tasks and blocks_phase on blockers take EXACTLY one of
+these five keys (or null when genuinely unclear):
+- planning — entitlements: planning submittals and hearings, hold-letter
+  responses, neighbor notices, deemed-complete, covenants and recordings
+  required for entitlement, planning-condition corrections.
+- plan_check — building plan check: intake packages and intake fees,
+  plan-check corrections, the permit drawing set and its consultants
+  (civil/grading, structural, geotechnical/soils, survey), permit issuance,
+  extensions and resubmittals of the plan-check set.
+- bidding — contractor pricing: bid packages, leveling, buyout, retaining
+  the builder.
+- financing — lender, appraisal, loan draws.
+- construction — work on site after permits.
+Choose by WHICH CITY PROCESS the work serves: a grading plan feeding a
+Hold Letter response serves planning; the same discipline feeding the permit
+set serves plan_check. Retaining a design consultant belongs to the phase
+their deliverable serves.
 
 Rules:
 - Extract tasks: concrete work items with owner and due date when stated.
@@ -37,6 +65,10 @@ Rules:
   duplicates. Within one communication, never emit two creates for the same
   deliverable.
 - Mark a task done via op="update" + status="done" when the communication says it happened.
+- A status report about a waiting/pending item ("waiting to learn whether the
+  City accepts", "still expecting the letter", "corrections are underway")
+  UPDATES the open task tracking that item — refresh its description and
+  waiting_for. It is never a new task.
 - planned=false marks unplanned/reactive work (Hebrew: balatam).
 - priority="critical" means BLOCKING: this item STOPS a phase or sub-stage
   from progressing until resolved (agent bug #4: chasing an invoice, updating
@@ -48,7 +80,10 @@ Rules:
 - Extract blockers: something stuck that STOPS work, who/what blocks it,
   downstream impact — always with an evidence quote. Waiting without
   stoppage is not a blocker.
-- Extract decisions actually made (not proposals).
+- Extract decisions actually made (not proposals). Scope allocations between
+  vendors stated as settled ("the surveyor handles the topo survey; the civil
+  engineer is responsible for grading") and structure/ownership choices ARE
+  decisions — capture them.
 - STYLE: be direct and short. Task titles <= 12 words. Descriptions and reasoning
   one tight sentence each (up to ~30 words when the detail earns it) — facts only,
   no framing, no restating the source.
@@ -115,40 +150,33 @@ export interface ApplySummary {
 
 // Server-side reconciliation: even if the model said "create", a strong match
 // against an existing open task becomes an update (belt and braces, item 1).
+// Attribution is per item: a multi-project communication (document project
+// null) still lands every item on ITS project — the Aug 24 meeting summary
+// was discarded whole by the old document-level gate.
 export async function applyExtractResult(
   admin: SupabaseClient,
   docId: string,
   result: ExtractResult,
   ctx: { projects: Pick<Project, 'id' | 'name'>[]; openTasks: Task[]; today?: string },
 ): Promise<ApplySummary> {
-  const project = result.project_name
-    ? ctx.projects.find((p) => p.name === result.project_name) ?? null
-    : null;
+  const byName = new Map(ctx.projects.map((p) => [p.name.toLowerCase(), p.id]));
+  const resolveProject = (name: string | null | undefined): string | null =>
+    name ? byName.get(name.toLowerCase()) ?? null : null;
+  const docProjectId = resolveProject(result.project_name);
   const summary: ApplySummary = {
-    project_id: project?.id ?? null,
+    project_id: docProjectId,
     tasks_created: 0, tasks_updated: 0, blockers: 0, decisions: 0,
     drafts: 0, vendor_hours: 0, deadline_updates: 0,
   };
-  const today = ctx.today ?? laToday();
-  if (!project) {
-    // The agent still ran — it read the communication and genuinely found no
-    // project to attach it to. That's a real outcome, not a stalled one, so
-    // the document is stamped processed here too. Without this, a later
-    // dedup hit on the same file (lib/ingest.ts's `processed`) would report
-    // it as never processed even though it was.
-    await admin.from('documents').update({ processed_at: new Date().toISOString() }).eq('id', docId);
-    return summary;
-  }
-
   const blockerIds: string[] = [];
 
   const { autoCreates, proposals } = routeExtractResult(result, {
-    projectId: project.id, openTasks: ctx.openTasks,
+    resolveProject, defaultProjectId: docProjectId, openTasks: ctx.openTasks,
   });
 
-  for (const op of autoCreates) {
+  for (const { op, project_id } of autoCreates) {
     const { data, error } = await admin.from('tasks').insert({
-      project_id: project.id, document_id: docId, title: op.title,
+      project_id, document_id: docId, title: op.title,
       description: op.description ?? null, owner: op.owner ?? null,
       waiting_for: op.waiting_for ?? null, due: op.due ?? null,
       stage_key: op.stage_key ?? null, priority: op.priority ?? 'normal',
@@ -162,9 +190,10 @@ export async function applyExtractResult(
 
   for (const pr of proposals) {
     const { error } = await admin.from('agent_proposals').insert({
-      document_id: docId, project_id: project.id, type: pr.type,
+      document_id: docId, project_id: pr.project_id, type: pr.type,
       payload: pr.payload, target_task_id: pr.target_task_id,
       confidence: pr.confidence, reasoning: pr.reasoning,
+      title: pr.title ?? null,
       // Agent bug #3 (Noa round 3): this was hardcoded null, so the review
       // inbox showed proposals with no quote — nothing to approve or reject
       // against. routeExtractResult now carries the model's verbatim quote.
@@ -186,13 +215,20 @@ export async function applyExtractResult(
   }
 
   for (const vh of result.vendor_hours) {
+    // vendor_hours.project_id is NOT NULL — an entry whose project can't be
+    // resolved is logged loudly and skipped rather than mis-filed.
+    const vhProject = resolveProject(vh.project_name) ?? docProjectId;
+    if (!vhProject) {
+      console.error('[extract-comms] vendor_hours skipped, no resolvable project:', vh.vendor_name);
+      continue;
+    }
     const { data: vendor } = await admin.from('vendors')
       .upsert({ name: vh.vendor_name }, { onConflict: 'name' })
       .select('id').single();
     if (vendor) {
       await admin.from('vendor_hours').insert({
         vendor_id: vendor.id,
-        project_id: project.id,
+        project_id: vhProject,
         document_id: docId,
         hours: vh.hours,
         rate: vh.rate ?? null,
@@ -203,9 +239,11 @@ export async function applyExtractResult(
     }
   }
 
+  // Always stamped: the agent ran to completion. project_id stays null for a
+  // multi-project document — its items carry their own projects.
   await admin.from('documents').update({
     processed_at: new Date().toISOString(),
-    project_id: project.id,
+    project_id: docProjectId,
   }).eq('id', docId);
 
   return summary;

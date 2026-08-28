@@ -3,15 +3,26 @@ import { z } from 'zod';
 // extract-comms output contract (forced-tool JSON).
 // op=update requires existing_id (an open task the model matched).
 
+// The five canonical lifecycle phases (matches substage_templates.phase_key
+// and projects.current_phase_key). The agent may only speak this vocabulary —
+// tasks.stage_key historically accumulated 12 dialects ('entitlements',
+// 'Legal', …) precisely because nothing constrained it.
+export const PHASE_KEYS = ['planning', 'plan_check', 'bidding', 'financing', 'construction'] as const;
+const PhaseKey = z.enum(PHASE_KEYS);
+
 export const TaskOpSchema = z.object({
   op: z.enum(['create', 'update']),
   existing_id: z.string().optional(),
+  // Per-item attribution (multi-project communications — the Aug 24 meeting
+  // summary covered four projects and the old document-level project_name
+  // silently discarded all of it). Exact name from the project list, or null.
+  project_name: z.string().nullable(),
   title: z.string().min(1),
   description: z.string().optional(),
   owner: z.string().optional(),
   waiting_for: z.string().optional(),
   due: z.string().optional(),
-  stage_key: z.string().optional(),
+  stage_key: PhaseKey.nullable().optional(),
   priority: z.enum(['critical', 'high', 'normal']).default('normal'),
   planned: z.boolean().optional(),
   follow_up_date: z.string().optional(),
@@ -19,8 +30,12 @@ export const TaskOpSchema = z.object({
 });
 
 export const BlockerOutSchema = z.object({
+  project_name: z.string().nullable(),
   what: z.string().min(1),
   blocked_by: z.string().min(1),
+  // Which phase this blocker stops — blockers.blocks_phase already exists and
+  // applyProposal already carries it; the agent just never filled it.
+  blocks_phase: PhaseKey.nullable().optional(),
   days_at_risk: z.number().optional(),
   downstream: z.array(z.string()).optional(),
   suggested_action: z.string().optional(),
@@ -30,6 +45,7 @@ export const BlockerOutSchema = z.object({
 });
 
 export const DecisionOutSchema = z.object({
+  project_name: z.string().nullable(),
   title: z.string().min(1),
   detail: z.string().optional(),
   decided_at: z.string().optional(),
@@ -43,6 +59,7 @@ export const DraftOutSchema = z.object({
 });
 
 export const VendorHoursOutSchema = z.object({
+  project_name: z.string().nullable(),
   vendor_name: z.string().min(1),
   hours: z.number(),
   rate: z.number().optional(),
@@ -51,6 +68,7 @@ export const VendorHoursOutSchema = z.object({
 });
 
 export const DeadlineUpdateSchema = z.object({
+  project_name: z.string().nullable(),
   task_match: z.string().min(1),
   new_due: z.string(),
   // min(1) — agent bug #3: '' satisfied the old contract and produced a
@@ -59,6 +77,7 @@ export const DeadlineUpdateSchema = z.object({
 });
 
 export const RelationshipOutSchema = z.object({
+  project_name: z.string().nullable(),
   from_match: z.string().min(1),
   to_match: z.string().min(1),
   type: z.enum(['blocks', 'supports', 'parallel', 'unrelated', 'needs_verification']),
@@ -101,7 +120,7 @@ export type InvoiceParse = z.infer<typeof InvoiceParseSchema>;
 // infer-phase output contract (forced-tool JSON) — one pass of the iterative
 // phase-inference loop (agents/infer-phase.ts).
 export const PhaseInferenceSchema = z.object({
-  phase_key: z.enum(['planning', 'plan_check', 'bidding', 'financing', 'construction']),
+  phase_key: PhaseKey,
   confidence: z.number().min(0).max(1),
   evidence: z.string().min(1),
   reasoning: z.string().min(1),
