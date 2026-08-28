@@ -15,6 +15,9 @@ export interface DropzoneLabels {
    *  a document only, or an invoice that created no row (no project match /
    *  duplicate). */
   invoiceCreated: string; notAnInvoice: string; invoiceSkipped: string;
+  /** Summary + raw transcript of one meeting, dropped together and processed
+   *  as a single communication. */
+  bundleDone: string;
 }
 
 interface Props {
@@ -37,7 +40,7 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
   const [detail, setDetail] = useState('');
   const [report, setReport] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const last = useRef<File | null>(null);
+  const last = useRef<File[] | null>(null);
 
   // The route answers with real numbers — upserted/failed for an invoice
   // tracker, created/updated for a task tracker, stored/processed for an
@@ -61,16 +64,19 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
       if (summary.document_kind && summary.document_kind !== 'invoice') return labels.notAnInvoice;
       return summary.invoice_id ? labels.invoiceCreated : labels.invoiceSkipped;
     }
+    if (json.type === 'transcript_bundle') return labels.bundleDone;
     return null;
   }
 
-  async function send(file: File) {
-    last.current = file;
+  // One file = today's flow. Two files = a summary + raw-transcript pair of
+  // the same meeting, sent in ONE request so the agent reads them together.
+  async function send(files: File[]) {
+    last.current = files;
     setState('busy');
-    setDetail(file.name);
+    setDetail(files.map((f) => f.name).join(' + '));
     setReport(null);
     const fd = new FormData();
-    fd.append('file', file);
+    for (const f of files) fd.append('file', f);
     if (project) fd.append('project', project);
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
@@ -90,7 +96,7 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
         setReport(reportFor(json));
       } else {
         setState('error');
-        setDetail(json.error ?? file.name);
+        setDetail(json.error ?? files.map((f) => f.name).join(' + '));
       }
       // Either way, a `documents` row can now exist that didn't before —
       // ingestDocument's insert runs before processing does, so a failure
@@ -128,8 +134,8 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
           e.preventDefault();
           setDragging(false);
           if (busy) return;
-          const file = e.dataTransfer.files?.[0];
-          if (file) void send(file);
+          const files = Array.from(e.dataTransfer.files ?? []);
+          if (files.length) void send(files.slice(0, 2));
         }}
         aria-busy={busy}
         className={`flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed px-5 py-8 text-center transition-colors ${
@@ -173,7 +179,7 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
         {state === 'error' && (
           <button
             type="button"
-            onClick={() => { const f = last.current; if (f) void send(f); }}
+            onClick={() => { const f = last.current; if (f?.length) void send(f); }}
             className="min-h-11 cursor-pointer rounded-[8px] border border-sage-line px-3 py-1.5 text-[10px] font-[650] leading-none text-sk-green sm:min-h-0"
           >
             {labels.retry}
@@ -189,8 +195,12 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
       </div>
 
       <input
-        ref={input} type="file" accept={accept} className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) void send(f); e.target.value = ''; }}
+        ref={input} type="file" accept={accept} multiple className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (files.length) void send(files.slice(0, 2));
+          e.target.value = '';
+        }}
       />
     </div>
   );

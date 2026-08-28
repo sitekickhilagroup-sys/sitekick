@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { ingestDocument, processDocument } from '@/lib/ingest';
+import { bundleCommunication, isBundleableName } from '@/lib/bundle';
 import { docxToText } from '@/lib/docx';
 import { parseWorkbook } from '@/lib/parse/xlsx';
 import { parseEml } from '@/lib/parse/eml';
@@ -46,16 +47,57 @@ export async function POST(req: NextRequest) {
   }
 
   const form = await req.formData();
-  const file = form.get('file');
+  const allFiles = form.getAll('file').filter((f): f is File => f instanceof File);
+  const file = allFiles[0];
   const projectHint = (form.get('project') as string | null) || null;
-  if (!(file instanceof File)) {
+  if (!file) {
     return NextResponse.json({ error: 'file missing' }, { status: 400 });
   }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: 'file too large (max 20MB)' }, { status: 413 });
+  if (allFiles.length > 2) {
+    return NextResponse.json({ error: 'one file, or a summary + transcript pair' }, { status: 400 });
+  }
+  for (const f of allFiles) {
+    if (f.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json({ error: 'file too large (max 20MB)' }, { status: 413 });
+    }
   }
 
   const admin = supabaseAdmin();
+
+  // Summary + raw transcript of the SAME meeting, uploaded together — one
+  // communication, one agent pass. Both files must be text-like; anything
+  // else (a PDF next to a transcript) is two unrelated uploads, not a pair.
+  if (allFiles.length === 2) {
+    const [a, b] = allFiles;
+    if (!isBundleableName(a.name) || !isBundleableName(b.name)) {
+      return NextResponse.json({ error: 'a pair must be two transcript files (.txt / .docx)' }, { status: 400 });
+    }
+    try {
+      const toText = async (f: File) => {
+        const buf = Buffer.from(await f.arrayBuffer());
+        return f.name.toLowerCase().endsWith('.docx') ? docxToText(buf) : buf.toString('utf8');
+      };
+      const [textA, textB] = await Promise.all([toText(a), toText(b)]);
+      const merged = bundleCommunication({ name: a.name, text: textA }, { name: b.name, text: textB });
+      const bundleKey = `upload:bundle:${a.name}:${a.size}+${b.name}:${b.size}`;
+      const { documentId, deduped, processed } = await ingestDocument(admin, {
+        kind: 'transcript', source: 'upload', raw_text: merged, external_id: bundleKey,
+      });
+      if (!documentId) return NextResponse.json({ ok: true, deduped: true });
+      if (deduped) {
+        return NextResponse.json({
+          ok: true, documentId, deduped: true,
+          type: processed ? 'transcript_bundle' : 'stored_unprocessed',
+        });
+      }
+      const summary = await processDocument(admin, {
+        id: documentId, kind: 'transcript', raw_text: merged, project_hint: projectHint,
+      });
+      return NextResponse.json({ ok: true, type: 'transcript_bundle', documentId, summary });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: String(e) }, { status: 200 });
+    }
+  }
   const buffer = Buffer.from(await file.arrayBuffer());
   const name = file.name.toLowerCase();
   const dedupKey = `upload:${file.name}:${buffer.length}`;
