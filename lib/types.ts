@@ -462,3 +462,12 @@ export interface WeeklyReviewItem {
   sequence: number;
   carried_from: string | null;
 }
+
+/** 0020_profiles.sql — per-user profile (name the AI uses, avatar). */
+export interface Profile {
+  user_id: string;
+  display_name: string | null;
+  /** 'preset:<key>' for a built-in colored initial, or a public image URL. */
+  avatar: string | null;
+  updated_at: string;
+}

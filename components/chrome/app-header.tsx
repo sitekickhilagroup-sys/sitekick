@@ -8,16 +8,24 @@ import { signOut } from '@/app/actions/auth';
 import { Logo } from '@/components/logo';
 import { MobileNav, NavLinks } from '@/components/nav-links';
 import { NotificationBell } from '@/components/inbox/notification-bell';
+import { requireUser } from '@/lib/auth';
+import { getProfile } from '@/lib/profile';
+import { presetOf } from '@/lib/avatar-presets';
+import { PresetAvatar } from '@/components/profile/preset-avatar';
 
-// The standard global header. Extracted from the (dash) layout so the
-// (standard) and (focused) route groups can each decide whether to render it —
-// Data Inbox, Invoices and Weekly Review get route-specific headers of their
-// own, and More pages must keep this one exactly as it is.
+// The one global header, rendered by both the (standard) and (focused) group
+// layouts — every page shares the same navigation (navigation-consistency).
+// More pages must keep this header exactly as it is.
 export async function AppHeader() {
   const store = await cookies();
   const locale = (store.get(LOCALE_COOKIE)?.value === 'he' ? 'he' : 'en') as Locale;
   const theme = store.get(THEME_COOKIE)?.value === 'dark' ? 'dark' : 'light';
   const t = getT(locale);
+  const user = await requireUser();
+  const profile = await getProfile(user.id);
+  const avatarPreset = presetOf(profile?.avatar);
+  const avatarUrl = !avatarPreset && profile?.avatar && !profile.avatar.startsWith('preset:') ? profile.avatar : null;
+  const initial = (profile?.display_name ?? user.email ?? '?').slice(0, 1).toUpperCase();
 
   // Her top bar shows the open-task count on My Work — head count only.
   const supabase = await supabaseServer();
@@ -42,6 +50,7 @@ export async function AppHeader() {
     { href: '/drafts', label: t('nav.drafts') },
     { href: '/digest', label: t('nav.digest') },
     { href: '/directory', label: t('nav.directory') },
+    { href: '/profile', label: t('nav.profile') },
     { href: '/settings', label: t('nav.settings') },
     { href: '/guide', label: t('nav.guide') },
   ];
@@ -79,6 +88,26 @@ export async function AppHeader() {
           }} />
           <LocaleToggle locale={locale} label={t('lang.toggle')} />
           <ThemeToggle theme={theme} label={t('theme.toggle')} />
+          {/* Profile: avatar chip → /profile (password, avatar, AI name, own
+              log). Hidden on phones — the cluster would overflow 360px-wide
+              viewports — where the mobile menu's Profile link covers it. */}
+          <Link
+            href="/profile"
+            aria-label={t('nav.profile')}
+            title={profile?.display_name ?? user.email ?? undefined}
+            className="hidden h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full ring-1 ring-line transition-shadow hover:ring-sage sm:grid"
+          >
+            {avatarPreset ? (
+              <PresetAvatar preset={avatarPreset} size={32} />
+            ) : avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span aria-hidden="true" className="grid h-full w-full place-items-center bg-sage text-[13px] font-[650] text-white">
+                {initial}
+              </span>
+            )}
+          </Link>
           <form action={signOut} className="hidden lg:block">
             <button type="submit" className="rounded-full px-3 py-1 text-xs text-ink3 transition-colors hover:text-ink">
               {t('nav.signout')}

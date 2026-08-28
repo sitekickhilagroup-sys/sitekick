@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
-import { FinancialHeader } from '@/components/chrome/financial-header';
 import { PaymentSummary } from '@/components/invoices/payment-summary';
 import { FilterBar } from '@/components/invoices/filter-bar';
 import { StatusChain } from '@/components/invoices/status-chain';
@@ -239,7 +238,6 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
 
   return (
     <>
-      <FinancialHeader sourceLabel={t('invoices.open_total').replace('{n}', `⁨${invoices.length}⁩`)} />
       <div className="sk-page mx-auto max-w-[980px] space-y-4 px-4 pt-6 pb-16 sm:px-6">
         {loadFailed && (
           <p role="alert" className="rounded-[9px] border border-coral/40 bg-sk-salmon px-4 py-2.5 text-[11px] text-sk-salmon-text">

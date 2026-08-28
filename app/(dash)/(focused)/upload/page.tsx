@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
-import { DataInboxHeader } from '@/components/chrome/data-inbox-header';
 import { IntakePanel, type IntakeTab } from '@/components/upload/intake-panel';
 import type { DocumentRow, Project } from '@/lib/types';
 
@@ -49,9 +48,17 @@ export default async function UploadPage() {
     { t: t('upload.step5'), d: t('upload.step5_d') },
   ];
 
+  // The old route-specific header carried this environment banner; the global
+  // header does not, so it renders here — full-bleed, above the page body.
+  const envLabel = process.env.NEXT_PUBLIC_ENV_LABEL;
+
   return (
     <>
-      <DataInboxHeader />
+      {envLabel && (
+        <div className="bg-sk-green-dark px-4 py-1.5 text-center text-[8px] font-[500] uppercase tracking-[0.04em] text-white">
+          {envLabel}
+        </div>
+      )}
       <div className="sk-page mx-auto max-w-[1320px] space-y-5 px-4 pt-6 pb-16 sm:px-7">
         {/* Intro — spec §5-§6: copy on the start side, the human-approval card
             on the end side. */}
@@ -105,6 +112,7 @@ export default async function UploadPage() {
               invoiceCreated: t('upload.result_invoice_created'),
               notAnInvoice: t('upload.result_not_an_invoice'),
               invoiceSkipped: t('upload.result_invoice_skipped'),
+              bundleDone: t('upload.result_bundle'),
             }}
             pasteLabels={{
               kicker: t('paste.kicker'), title: t('paste.title'), sub: t('paste.sub'),

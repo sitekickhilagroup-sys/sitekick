@@ -46,3 +46,6 @@ next-env.d.ts
 
 # supabase cli scratch (version marker, cached credentials)
 supabase/.temp/
+
+# playwright-mcp session artifacts (snapshots, console logs, screenshots)
+.playwright-mcp/

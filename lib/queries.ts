@@ -213,8 +213,13 @@ export async function getOverviewData(): Promise<OverviewData> {
     );
     const blockingCount = blockerView.counts.blocking;
     const projectEvents = events.filter((e) => e.project_id === p.id);
+    // Tracker imports left literal "—" placeholders in some event_date rows;
+    // anything that is not a date must not win the max() or the card renders
+    // "Last evidence —" with no date.
     const lastEvidence = projectEvents.reduce<string | null>(
-      (max, e) => (e.event_date && (!max || e.event_date > max) ? e.event_date : max), null,
+      (max, e) => (e.event_date && /^\d{4}-\d{2}-\d{2}/.test(e.event_date) && (!max || e.event_date > max)
+        ? e.event_date : max),
+      null,
     );
     const hasWaiting = openTasks.some((t) => t.project_id === p.id && !!t.waiting_for);
     return {

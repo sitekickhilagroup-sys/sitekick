@@ -7,17 +7,7 @@ import { WaitingEditor } from '@/components/overview/waiting-editor';
 import { VerbMenu } from './verb-menu';
 import type { TaskEditorOptions } from './task-editor';
 import { RelationEditor, type RelationRow } from './relation-editor';
-
-/**
- * Spec §9 column proportions: What must move | Phase / sub-stage |
- * Owner / waiting on | Due | Status & update.
- *
- * Exported because the header row in work/page.tsx and every data row here
- * must stay in lockstep — they were two separate literals before, which is a
- * silent misalignment waiting to happen.
- */
-export const WORK_COLS =
-  'lg:grid-cols-[minmax(240px,2.2fr)_minmax(130px,1.15fr)_minmax(150px,1.25fr)_minmax(70px,0.55fr)_minmax(120px,0.9fr)]';
+import { WORK_COLS } from './work-cols';
 
 interface Props {
   task: Task;

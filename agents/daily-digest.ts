@@ -23,13 +23,14 @@ export async function buildDigest(
   forDate: string,
   client?: Anthropic,
 ): Promise<{ body_md: string; top_actions: Action[] }> {
-  const [projectsQ, stagesQ, tasksQ, blockersQ, invoicesQ, relationshipsQ] = await Promise.all([
+  const [projectsQ, stagesQ, tasksQ, blockersQ, invoicesQ, relationshipsQ, profilesQ] = await Promise.all([
     admin.from('projects').select('*'),
     admin.from('project_stages').select('*'),
     admin.from('tasks').select('*').eq('status', 'open'),
     admin.from('blockers').select('*').eq('status', 'active'),
     admin.from('invoices').select('*').eq('status', 'for_rowan_approval'),
     admin.from('relationships').select('*').eq('type', 'blocks'),
+    admin.from('profiles').select('display_name'),
   ]);
   const projects = (projectsQ.data ?? []) as Project[];
   const stages = (stagesQ.data ?? []) as ProjectStage[];
@@ -72,10 +73,16 @@ export async function buildDigest(
     },
   };
 
+  // Profile display names (0020): the digest addresses the people who set
+  // one, instead of a nameless "the founders".
+  const audience = ((profilesQ.data ?? []) as { display_name: string | null }[])
+    .map((p) => p.display_name).filter((n): n is string => !!n);
+  const audienceLine = audience.length ? `AUDIENCE: written for ${audience.join(', ')}.\n` : '';
+
   const { body_md } = await runStructured({
     job: 'digest',
     system: SYSTEM,
-    messages: [{ role: 'user', content: `DATA:\n${JSON.stringify(payload, null, 1)}` }],
+    messages: [{ role: 'user', content: `${audienceLine}DATA:\n${JSON.stringify(payload, null, 1)}` }],
     schema: DigestSchema,
     toolName: 'report_digest',
     toolDescription: 'Report the digest markdown.',

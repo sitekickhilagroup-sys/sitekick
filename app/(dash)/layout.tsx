@@ -3,9 +3,9 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 
 // Common shell for the (standard) and (focused) route groups. Auth is enforced
 // in proxy.ts by pathname, not here, so route grouping cannot affect it.
-// The header and <main id="main"> live in the group layouts — the three focused
-// pages replace the header with their own during the redesign, and a layout at
-// this level would reach every route including the protected More section.
+// Both groups render the same global AppHeader; they differ only in <main> —
+// (standard) width-caps it, (focused) leaves it full-bleed for pages that
+// manage their own width (and can carry full-width banners).
 export default async function DashLayout({ children }: { children: React.ReactNode }) {
   const store = await cookies();
   const locale = (store.get(LOCALE_COOKIE)?.value === 'he' ? 'he' : 'en') as Locale;

@@ -3,7 +3,7 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { laToday } from '@/lib/date';
 import { nextMonday } from '@/lib/weekly';
-import { WeeklyHeader } from '@/components/chrome/weekly-header';
+import { WeeklyModeToggle } from '@/components/weekly/mode-toggle';
 import { PrepareButton } from '@/components/weekly/prepare-button';
 import { ReviewBoard } from '@/components/weekly/review-board';
 import type { WeeklyReview, WeeklyReviewItem, WeeklyReviewSubtopic } from '@/lib/types';
@@ -54,12 +54,18 @@ export default async function WeeklyPage() {
 
   return (
     <>
-      <WeeklyHeader />
       <div className="sk-page mx-auto max-w-[1040px] px-4 pt-6 pb-16 sm:px-6">
-      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{t('weekly.title')}</p>
-      <h1 className="mt-1 text-[clamp(26px,2.6vw,30px)] font-[650] leading-[1.1] tracking-[-0.035em] text-sk-ink">
-        {t('weekly.sub')}
-      </h1>
+      {/* The Sunday/Monday segmented control lived in the removed
+          route-specific header; it now sits beside the page title. */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{t('weekly.title')}</p>
+          <h1 className="mt-1 text-[clamp(26px,2.6vw,30px)] font-[650] leading-[1.1] tracking-[-0.035em] text-sk-ink">
+            {t('weekly.sub')}
+          </h1>
+        </div>
+        <WeeklyModeToggle draftLabel={t('weekly.mode_draft')} presentLabel={t('weekly.mode_present')} />
+      </div>
       {!embedded ? (
         <div className="mt-6 rounded-(--radius-card) border border-line bg-card p-6">
           <PrepareButton
