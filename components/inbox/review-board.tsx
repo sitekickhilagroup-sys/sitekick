@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
 import type { ChangeType, ProposalState } from '@/lib/types';
+import { fmtDate } from '@/lib/format';
 
 export interface ReviewRow {
   id: string;
@@ -225,7 +226,7 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
                           [labels.fStatus, selected.matched.status],
                           [labels.fOwner, selected.matched.owner],
                           [labels.fLocation, [selected.matched.phase, selected.matched.substage].filter(Boolean).join(' — ')],
-                          [labels.fDue, selected.matched.due],
+                          [labels.fDue, fmtDate(selected.matched.due)],
                         ].map(([k, v]) => (
                           <div key={k} className="flex justify-between gap-2">
                             <dt className="text-ink3">{k}</dt>
@@ -248,7 +249,7 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
                         {[
                           [labels.fOwner, selected.owner],
                           [labels.fLocation, [selected.phase, selected.substage].filter(Boolean).join(' — ')],
-                          [labels.fDue, selected.due],
+                          [labels.fDue, fmtDate(selected.due)],
                         ].map(([k, v]) => (
                           <div key={k} className="flex justify-between gap-2">
                             <dt className="text-ink3">{k}</dt>

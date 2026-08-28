@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { getInvoiceHistory, updateInvoice, undoInvoiceEdit, type InvoiceHistoryEntry, type InvoicePatch } from '@/app/actions/invoices';
 import { INVOICE_ERRORS, parseAmountInput, patchKeyForColumn, type InvoicePatchKey } from '@/lib/invoice-rules';
+import { fmtDateTime } from '@/lib/format';
 import { SavedChip } from '@/components/work/saved-chip';
 import type { InvoiceStatus } from '@/lib/types';
 
@@ -547,7 +548,7 @@ export function LinkEditor({
                       <li key={h.id} className="border-b border-line2 pb-1.5 text-[10px] leading-relaxed text-ink2 last:border-0 last:pb-0">
                         <span className="font-semibold text-ink">{actionLabel(h.action)}</span>
                         <span className="text-ink3"> · {h.actor} · </span>
-                        <span className="font-mono text-ink3">{h.createdAt}</span>
+                        <span className="font-mono text-ink3">{fmtDateTime(h.createdAt)}</span>
                         {h.changedKeys.length > 0 && (
                           <span className="mt-0.5 block text-ink3">
                             {labels.historyChanged} {h.changedKeys.map(columnLabel).join(', ')}

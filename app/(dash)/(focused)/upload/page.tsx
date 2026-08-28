@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
+import { fmtDate } from '@/lib/format';
 import { IntakePanel, type IntakeTab } from '@/components/upload/intake-panel';
 import type { DocumentRow, Project } from '@/lib/types';
 
@@ -172,7 +173,7 @@ export default async function UploadPage() {
                       {doc.kind}
                     </span>
                     <span className="min-w-0 truncate text-[11px] text-sk-ink"><bdi>{name}</bdi></span>
-                    <span className="hidden font-mono text-[9px] text-sk-muted sm:inline"><bdi>{doc.received_at.slice(0, 10)}</bdi></span>
+                    <span className="hidden font-mono text-[9px] text-sk-muted sm:inline"><bdi>{fmtDate(doc.received_at)}</bdi></span>
                     <span className={`hidden justify-self-start rounded-full px-2 py-1 text-[9px] font-[650] uppercase tracking-[0.06em] sm:inline ${
                       ready ? 'bg-sk-amber-halo text-sk-amber'
                       : doc.processed_at ? 'bg-sk-green-soft-strong text-sk-green'

@@ -16,6 +16,7 @@ import { DuplicateReview, type DupPairSide, type DupPairView, type DuplicateRevi
 import type { RelationRow } from '@/components/work/relation-editor';
 import type { TaskEditorOptions } from '@/components/work/task-editor';
 import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relationship, SubstageTemplate, Task, Vendor, Workstream } from '@/lib/types';
+import { fmtDate } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -648,7 +649,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
                 <span className="block text-[11px] font-[650] leading-[1.4] text-sk-ink">{task.title}</span>
                 <span className="block text-[10px] text-sk-muted">
                   {task.project_id ? (projectNames.get(task.project_id) ?? t('common.general')) : t('common.general')}
-                  {task.last_touched ? ` · ${task.last_touched}` : ''}
+                  {task.last_touched ? ` · ${fmtDate(task.last_touched)}` : ''}
                   {task.owner ? ` · ${task.owner}` : ''}
                 </span>
               </span>

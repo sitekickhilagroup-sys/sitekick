@@ -1,6 +1,6 @@
 'use client';
 
-import { moneyExact } from '@/lib/format';
+import { fmtDate, moneyExact } from '@/lib/format';
 import { useState, useTransition, type ReactNode } from 'react';
 import {
   flagReconciledRowForVerification, parseReconciliationSource, undoFlagReconciledRowForVerification,
@@ -106,7 +106,7 @@ function RowLine({ row, labels }: { row: InvoiceRowRef; labels: ReconcileReportL
       <span className="min-w-0">
         <span className="block truncate text-[11px] font-[650] text-sk-ink">{row.vendor || '—'}</span>
         <span className="block text-[10px] text-sk-muted">
-          {labels.number} {row.invoice_no ?? '—'}{row.received_date ? ` · ${row.received_date}` : ''}
+          {labels.number} {row.invoice_no ?? '—'}{row.received_date ? ` · ${fmtDate(row.received_date)}` : ''}
         </span>
       </span>
       <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-sk-ink">{moneyExact(row.amount_usd)}</span>

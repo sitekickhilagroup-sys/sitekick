@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { mergeTasks, undoMerge } from '@/app/actions/tasks';
 import { markPairNotDuplicate } from '@/app/actions/relationships';
 import { pickDefaultMaster } from '@/lib/merge';
+import { fmtDate } from '@/lib/format';
 import { SavedChip } from './saved-chip';
 
 /** One side of a detected pair, reduced to exactly what Noa needs to tell the
@@ -319,8 +320,8 @@ function DupPairCard({ pair, labels, onResolved, onHide }: {
                 <div><dt className="inline font-medium text-ink2">{labels.project}: </dt><dd className="inline">{side.projectName}</dd></div>
                 <div><dt className="inline font-medium text-ink2">{labels.owner}: </dt><dd className="inline">{side.owner ?? '—'}</dd></div>
                 <div><dt className="inline font-medium text-ink2">{labels.waiting}: </dt><dd className="inline">{side.waiting_for ?? '—'}</dd></div>
-                <div><dt className="inline font-medium text-ink2">{labels.due}: </dt><dd className="inline">{side.due ?? '—'}</dd></div>
-                <div><dt className="inline font-medium text-ink2">{labels.lastTouched}: </dt><dd className="inline">{side.last_touched}</dd></div>
+                <div><dt className="inline font-medium text-ink2">{labels.due}: </dt><dd className="inline">{side.due ? fmtDate(side.due) : '—'}</dd></div>
+                <div><dt className="inline font-medium text-ink2">{labels.lastTouched}: </dt><dd className="inline">{fmtDate(side.last_touched)}</dd></div>
               </dl>
             </label>
           );

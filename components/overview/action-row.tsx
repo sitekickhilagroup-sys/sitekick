@@ -5,6 +5,7 @@ import { setTaskStatus } from '@/app/actions/tasks';
 import { releaseBlocker } from '@/app/actions/blockers';
 import { WaitingEditor } from './waiting-editor';
 import type { Action } from '@/lib/types';
+import { fmtDate } from '@/lib/format';
 
 interface Labels {
   markDone: string;
@@ -37,7 +38,7 @@ export function ActionRow({ action, index, labels }: { action: Action; index: nu
   // why-parts arrive locale-neutral from the priority engine; translate here.
   const why = [
     action.why.critical ? labels.whyCritical : null,
-    action.why.due ? `${labels.whyDue} ${action.why.due}` : null,
+    action.why.due ? `${labels.whyDue} ${fmtDate(action.why.due)}` : null,
     action.why.waiting ? `${labels.waiting}: ${action.why.waiting}` : null,
     action.why.unlocks ? labels.unlocksN.replace('{n}', String(action.why.unlocks)) : null,
     action.why.stuck_days != null ? labels.stuckDays.replace('{n}', String(action.why.stuck_days)) : null,

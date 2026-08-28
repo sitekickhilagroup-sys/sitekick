@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Task } from '@/lib/types';
+import { fmtDate } from '@/lib/format';
 import { isBlockingTask } from '@/lib/blockers';
 import { WaitingEditor } from '@/components/overview/waiting-editor';
 import { VerbMenu } from './verb-menu';
@@ -137,13 +138,13 @@ export function WorkTableRow({ task, labels, relations, taskOptions, editorOptio
             {labels.colDue}
           </span>
           {dueState === 'overdue' && (
-            <span className="rounded-[6px] bg-sk-salmon px-2 py-0.5 font-mono text-[10px] text-sk-salmon-text">{labels.dueOverdue ?? task.due}</span>
+            <span className="rounded-[6px] bg-sk-salmon px-2 py-0.5 font-mono text-[10px] text-sk-salmon-text">{labels.dueOverdue ?? fmtDate(task.due)}</span>
           )}
           {dueState === 'now' && (
-            <span className="rounded-[6px] bg-sk-amber-halo px-2 py-0.5 font-mono text-[10px] text-sk-amber">{labels.dueNow ?? task.due}</span>
+            <span className="rounded-[6px] bg-sk-amber-halo px-2 py-0.5 font-mono text-[10px] text-sk-amber">{labels.dueNow ?? fmtDate(task.due)}</span>
           )}
           {dueState === 'future' && (
-            <span className="whitespace-nowrap font-mono text-[10px] text-sk-text">{task.due}</span>
+            <span className="whitespace-nowrap font-mono text-[10px] text-sk-text">{fmtDate(task.due)}</span>
           )}
         </div>
 

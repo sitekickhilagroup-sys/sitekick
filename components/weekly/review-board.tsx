@@ -8,6 +8,7 @@ import {
   setItemSnapshot, setItemStatus, type SnapshotState,
 } from '@/app/actions/weekly';
 import { laToday } from '@/lib/date';
+import { fmtDate } from '@/lib/format';
 import { WEEKLY_ERRORS } from '@/lib/weekly';
 import type { WeeklyReview, WeeklyReviewItem } from '@/lib/types';
 
@@ -448,7 +449,7 @@ function ReviewItemRow({ row, index, labels, present, finalized }: ReviewItemRow
               />
             </label>
           ) : (
-            <span className="text-[11px] text-ink3">{labels.dueLabel}: <bdi>{due}</bdi></span>
+            <span className="text-[11px] text-ink3">{labels.dueLabel}: <bdi>{fmtDate(due)}</bdi></span>
           )}
         </span>
       )}
@@ -549,7 +550,7 @@ function ReviewControls(
                   there's nothing left to save, and Save must never be the
                   thing that silently un-finalizes (see saveReview's guard). */}
               <span className="rounded-[6px] bg-sk-green-soft px-2 py-1 text-[10px] font-[650] text-sk-green">
-                {labels.finalizedBadge?.replace('{date}', review.finalized_at ? review.finalized_at.slice(0, 10) : '')}
+                {labels.finalizedBadge?.replace('{date}', review.finalized_at ? fmtDate(review.finalized_at) : '')}
               </span>
               <button
                 type="button"
@@ -585,7 +586,7 @@ function ReviewControls(
               </button>
             </>
           )}
-          <span className="font-mono text-[10px] text-sk-muted">{labels.meeting} · <bdi>{review.meeting_date}</bdi></span>
+          <span className="font-mono text-[10px] text-sk-muted">{labels.meeting} · <bdi>{fmtDate(review.meeting_date)}</bdi></span>
         </div>
         {justSaved && !failed && <p role="status" className="mt-2 text-[10px] text-sk-green">{labels.saved}</p>}
         {failed && <p role="alert" className="mt-2 text-[10px] text-coral">{failed}</p>}

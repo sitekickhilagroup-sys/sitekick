@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { PortfolioEntry } from '@/lib/queries';
+import { fmtDate } from '@/lib/format';
 
 export interface AccordionLabels {
   onHold: string;
@@ -116,8 +117,17 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
         </button>
       </div>
 
-      {open && (
-        <div className="border-t border-line2 p-4 pt-3">
+      {/* Body stays mounted so the grid-rows collapse can animate both ways
+          (open and close); inert keeps its links out of the tab order and
+          screen readers while collapsed. */}
+      <div
+        inert={open ? undefined : true}
+        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out-strong motion-reduce:transition-none ${
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-line2 p-4 pt-3">
           {project.summary && (
             <p className="max-w-3xl text-xs leading-relaxed text-ink2">{project.summary}</p>
           )}
@@ -204,7 +214,7 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
           {/* Her .portfolio-actions row: evidence line + solid green button. */}
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line2 pt-3">
             <p className="text-[11px] leading-[1.5] text-sk-muted">
-              {lastEvidence ? <>{labels.evidence.replace('{date}', '')}<bdi>{lastEvidence}</bdi></> : null}
+              {lastEvidence ? <>{labels.evidence.replace('{date}', '')}<bdi>{fmtDate(lastEvidence)}</bdi></> : null}
             </p>
             <Link
               href={`/projects/${project.id}`}
@@ -213,8 +223,9 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
               {labels.investigate} <span aria-hidden="true" className="ms-1 inline-block rtl:-scale-x-100">→</span>
             </Link>
           </div>
+          </div>
         </div>
-      )}
+      </div>
     </article>
   );
 }

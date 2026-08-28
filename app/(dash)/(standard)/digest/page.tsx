@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
+import { fmtDate } from '@/lib/format';
 import { GenerateButton } from './generate-button';
 import type { Digest } from '@/lib/types';
 
@@ -26,7 +27,7 @@ export default async function DigestPage() {
       )}
       {latest && (
         <article className="rounded-(--radius-card) border border-line bg-card p-6 shadow-card">
-          <p className="font-mono text-xs text-ink3">{latest.for_date}</p>
+          <p className="font-mono text-xs text-ink3">{fmtDate(latest.for_date)}</p>
           <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink">{latest.body_md}</div>
         </article>
       )}
@@ -36,7 +37,7 @@ export default async function DigestPage() {
           <div className="mt-3 space-y-4">
             {rest.map((d) => (
               <article key={d.id} className="border-t border-line2 pt-3">
-                <p className="font-mono text-xs text-ink3">{d.for_date}</p>
+                <p className="font-mono text-xs text-ink3">{fmtDate(d.for_date)}</p>
                 <div className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink2">{d.body_md}</div>
               </article>
             ))}

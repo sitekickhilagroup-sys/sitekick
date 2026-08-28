@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { createAppUser, deleteAppUser, type AppUser } from '@/app/actions/users';
+import { fmtDate } from '@/lib/format';
 
 export interface UserLabels {
   email: string; add: string; remove: string; confirmRemove: string;
@@ -22,7 +23,7 @@ export function UsersCard({ users, meId, labels }: { users: AppUser[]; meId: str
             <span className="text-ink">{u.email}</span>
             {u.id === meId && <span className="rounded-full bg-sage-soft px-2 py-0.5 text-[10px] text-sage">you</span>}
             <span className="ms-auto text-xs text-ink3">
-              {labels.lastSeen}: {u.last_sign_in_at ? u.last_sign_in_at.slice(0, 10) : labels.never}
+              {labels.lastSeen}: {u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : labels.never}
             </span>
             {u.id !== meId && (
               <button

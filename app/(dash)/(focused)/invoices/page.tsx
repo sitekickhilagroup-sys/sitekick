@@ -10,7 +10,7 @@ import { AddInvoice } from '@/components/invoices/add-invoice';
 import { ReconcileReport } from '@/components/invoices/reconcile-report';
 import { VerifyChip } from '@/components/invoices/verify-chip';
 import { canonVendorName, vendorKey } from '@/lib/invoice-rules';
-import { money, moneyExact } from '@/lib/format';
+import { fmtDate, money, moneyExact } from '@/lib/format';
 import type { Invoice, InvoiceStatus, InvoiceTab, Project, Vendor } from '@/lib/types';
 
 // E6: the reconciliation report is a demoted view like `david`, but unlike
@@ -70,9 +70,11 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const fProject = typeof sp.project === 'string' ? sp.project : '';
   const fEntity = typeof sp.entity === 'string' ? sp.entity : '';
   const fVendor = typeof sp.vendor === 'string' ? sp.vendor : '';
-  const fStatus = typeof sp.status === 'string' ? sp.status : '';
   const fFrom = typeof sp.from === 'string' ? sp.from : '';
   const fTo = typeof sp.to === 'string' ? sp.to : '';
+  // Open-first redesign (2026-08-28): `seg` narrows the open table by status.
+  // It replaces FilterBar's status select — one owner per dimension.
+  const seg = typeof sp.seg === 'string' ? sp.seg : '';
 
   // Payment Summary is a different grouping of the SAME invoices the
   // Invoices tab shows, not a separate stored population: every imported row
@@ -93,7 +95,6 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     if (fProject && projLabel !== fProject) return false;
     if (fEntity && inv.entity !== fEntity) return false;
     if (fVendor && vendorKey(vDisplay(inv.vendor_id)) !== vendorKey(fVendor)) return false;
-    if (fStatus && inv.status !== fStatus) return false;
     const d = inv.received_date ?? inv.invoice_date ?? inv.due;
     if (fFrom && (!d || d < fFrom)) return false;
     if (fTo && (!d || d > fTo)) return false;
@@ -107,25 +108,55 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
   const openInvoices = invoices.filter((i) => ['received', 'for_rowan_approval', 'approved'].includes(i.status));
   const openTotal = openInvoices.reduce((s, i) => s + Number(i.amount_usd), 0);
 
-  // Vendor quick-filter pills with counts, scoped to the active tab (via
-  // rowsTab — see above). Also PaymentSummary's own aggregation source below:
-  // the same "every invoice this view covers" set, before fProject/fEntity/
-  // fVendor/fStatus/fFrom/fTo narrow it down to `rows`.
+  // PaymentSummary's aggregation source: the same "every invoice this view
+  // covers" set, before fProject/fEntity/fVendor/fFrom/fTo narrow it to
+  // `rows`. (The vendor quick-pill row was folded into FilterBar's vendor
+  // select on 2026-08-28 — one filter surface instead of three layers.)
   const tabRows = invoices.filter((i) => i.tab === rowsTab);
-  const vendorCounts = new Map<string, number>();
-  for (const inv of tabRows) {
-    const nm = vDisplay(inv.vendor_id);
-    if (nm) vendorCounts.set(nm, (vendorCounts.get(nm) ?? 0) + 1);
-  }
-  // Spec §8 warns against "dozens of tiny vendor chips over several crowded
-  // rows", and the target screenshot shows roughly six. Busiest vendors lead;
-  // the rest stay reachable through the vendor filter rather than being lost.
-  const VENDOR_PILL_CAP = 6;
-  const allVendorPills = [...vendorCounts.entries()].sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
-  const vendorPills = allVendorPills.slice(0, VENDOR_PILL_CAP);
-  const hiddenVendorCount = allVendorPills.length - vendorPills.length;
+
+  // Open-first split: the table leads with the rows Noa can act on; paid and
+  // cancelled records collapse into per-month history groups below, so the
+  // page stops scrolling through 60% dead weight. `seg` narrows the open set
+  // one status further; segment links preserve every other active filter.
+  const OPEN_STATUSES = ['received', 'for_rowan_approval', 'approved', 'on_hold'] as const;
+  const openRows = rows
+    .filter((r) => (OPEN_STATUSES as readonly string[]).includes(r.status))
+    .sort((a, b) =>
+      (a.received_date ?? a.invoice_date ?? a.due ?? '9999') <
+      (b.received_date ?? b.invoice_date ?? b.due ?? '9999') ? -1 : 1);
+  const segRows = seg ? openRows.filter((r) => r.status === seg) : openRows;
+  const histRows = rows.filter((r) => r.status === 'paid' || r.status === 'cancelled');
+  const histMonths = (() => {
+    const m = new Map<string, { rows: Invoice[]; total: number }>();
+    for (const inv of histRows) {
+      const key = (inv.paid_date ?? inv.received_date ?? inv.invoice_date ?? inv.created_at ?? '').slice(0, 7) || '—';
+      const g = m.get(key) ?? { rows: [], total: 0 };
+      g.rows.push(inv);
+      g.total += Number(inv.amount_usd);
+      m.set(key, g);
+    }
+    return [...m.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  })();
+  const monthLabel = (ym: string) => {
+    const d = new Date(`${ym}-01T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? ym
+      : d.toLocaleDateString(locale === 'he' ? 'he' : 'en-US', { month: 'long', year: 'numeric' });
+  };
+  const segCounts = new Map<string, number>();
+  for (const r of openRows) segCounts.set(r.status, (segCounts.get(r.status) ?? 0) + 1);
+  const segHref = (v: string) => {
+    const q = new URLSearchParams();
+    if (tab !== 'invoices') q.set('tab', tab);
+    if (fProject) q.set('project', fProject);
+    if (fEntity) q.set('entity', fEntity);
+    if (fVendor) q.set('vendor', fVendor);
+    if (fFrom) q.set('from', fFrom);
+    if (fTo) q.set('to', fTo);
+    if (v) q.set('seg', v);
+    const s = q.toString();
+    return s ? `/invoices?${s}` : '/invoices';
+  };
 
   const statusLabels: Record<string, string> = {
     received: t('invoices.st_received'),
@@ -235,6 +266,8 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
     errorDuplicateNumber: t('invoices.error_duplicate_number'),
     errorMigrationPending: t('invoices.error_migration_pending'),
   };
+
+  const invoiceRow = makeInvoiceRow({ vDisplay, pName, t, statusLabels, editorOptions, editorLabels });
 
   return (
     <>
@@ -411,34 +444,26 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
         />
       )}
 
-      {tab !== 'reconciliation' && vendorPills.length > 1 && (
+      {/* Status segments — the coarse slice of the open work. Replaces the
+          vendor pill row (vendor filtering folded into FilterBar below) and
+          FilterBar's old status select; every link keeps the other filters. */}
+      {tab !== 'reconciliation' && (
         <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0 sm:pb-0">
-          <Link
-            href={`/invoices?tab=${tab}`}
-            aria-current={!fVendor ? 'page' : undefined}
-            className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs sm:min-h-0 ${
-              !fVendor ? 'bg-sk-green-soft font-[650] text-sk-green' : 'bg-sk-surface-soft text-sk-muted hover:text-sk-ink'
-            }`}
-          >
-            {t('common.all')} <span className={!fVendor ? 'opacity-70' : 'text-ink3'}>{tabRows.length}</span>
-          </Link>
-          {vendorPills.map(([nm, count]) => (
+          {[
+            { v: '', label: t('invoices.seg_all_open'), n: openRows.length },
+            ...OPEN_STATUSES.map((s) => ({ v: s as string, label: statusLabels[s], n: segCounts.get(s) ?? 0 })),
+          ].map(({ v, label, n }) => (
             <Link
-              key={nm}
-              href={`/invoices?tab=${tab}&vendor=${encodeURIComponent(nm)}`}
-              aria-current={fVendor === nm ? 'page' : undefined}
-              className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs sm:min-h-0 ${
-                fVendor === nm ? 'bg-sk-green-soft font-[650] text-sk-green' : 'bg-sk-surface-soft text-sk-muted hover:text-sk-ink'
+              key={v || 'all'}
+              href={segHref(v)}
+              aria-current={seg === v ? 'page' : undefined}
+              className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-xs transition-colors active:scale-[0.98] sm:min-h-0 ${
+                seg === v ? 'bg-sk-green-soft font-[650] text-sk-green' : 'bg-sk-surface-soft text-sk-muted hover:text-sk-ink'
               }`}
             >
-              {nm} <span className={fVendor === nm ? 'opacity-70' : 'text-sk-muted'}>{count}</span>
+              {label} <span className={seg === v ? 'opacity-70' : 'text-sk-muted'}>{n}</span>
             </Link>
           ))}
-          {hiddenVendorCount > 0 && (
-            <span className="inline-flex shrink-0 items-center whitespace-nowrap px-2 text-[10px] text-sk-muted-light">
-              +{hiddenVendorCount}
-            </span>
-          )}
         </div>
       )}
 
@@ -449,14 +474,12 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
           projects: [...projects.map((p) => p.name), t('common.general')].sort(),
           entities: entityOptions,
           vendors: [...new Set(vendors.map((v) => canonicalByKey.get(vendorKey(v.name)) ?? canonVendorName(v.name)))].sort(),
-          statuses: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
         }}
         labels={{
           all: t('common.all'),
           project: t('common.project'),
           entity: t('invoices.entity'),
           vendor: t('common.vendor'),
-          status: t('common.status'),
           from: t('invoices.from_date'),
           to: t('invoices.to_date'),
           advanced: t('invoices.filters_advanced'),
@@ -490,14 +513,85 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
             </tr>
           </thead>
           <tbody className="divide-y divide-line2">
-            {rows.length === 0 && (
+            {segRows.length === 0 && (
               <tr><td colSpan={6} className="px-3 py-8 text-center text-ink3">{t('invoices.empty')}</td></tr>
             )}
-            {rows.map((inv) => (
-              // id backs AddInvoice's "Same invoice — open it": the URL hash
-              // points here, and .sk-page tr:target (globals.css) does the
-              // highlight — no ref/state plumbing across components needed.
-              <tr key={inv.id} id={`invoice-${inv.id}`}>
+            {segRows.map(invoiceRow)}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Paid + cancelled records: out of the working table, grouped by month
+          behind collapsed <details> with a count and subtotal on each summary
+          — the page leads with actionable rows instead of history. */}
+      {histRows.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="pt-2 text-[10px] font-bold uppercase tracking-[0.12em] text-sk-muted">
+            {t('invoices.history_section')} · ⁨{histRows.length}⁩
+          </h2>
+          {histMonths.map(([ym, g]) => (
+            <details key={ym} className="sk-collapse overflow-hidden rounded-[15px] border border-line bg-sk-surface shadow-card">
+              <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-[11px] transition-colors hover:bg-sk-surface-soft">
+                <span className="font-[650] text-sk-ink">{monthLabel(ym)}</span>
+                <span className="text-sk-muted">
+                  {t('invoices.history_month_sum').replace('{n}', `⁨${g.rows.length}⁩`).replace('{total}', `⁨${money(g.total)}⁩`)}
+                </span>
+                <span aria-hidden="true" className="ms-auto text-sk-muted">▾</span>
+              </summary>
+              <div className="overflow-x-auto border-t border-line">
+                <table className="w-full min-w-[900px] table-fixed text-[11px]">
+                  <colgroup>
+                    <col className="w-[27%]" />
+                    <col className="w-[22%]" />
+                    <col className="w-[19%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[10%]" />
+                  </colgroup>
+                  <thead className="sr-only">
+                    <tr>
+                      <th scope="col">{t('invoices.col_vendor')}</th>
+                      <th scope="col">{t('invoices.col_project')}</th>
+                      <th scope="col">{t('tasks.description')}</th>
+                      <th scope="col">{t('invoices.date')}</th>
+                      <th scope="col">{t('common.status')}</th>
+                      <th scope="col">{t('common.amount')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line2">{g.rows.map(invoiceRow)}</tbody>
+                </table>
+              </div>
+            </details>
+          ))}
+        </section>
+      )}
+      </>
+      )}
+      </div>
+    </>
+  );
+}
+
+// One invoice <tr>, shared by the open table and every history month group —
+// extracted so both render the exact same cells and controls. Kept as a bound
+// helper created inside the page (below) so it can close over the page's own
+// lookups; this outer declaration only documents the shape.
+
+function makeInvoiceRow(deps: {
+  vDisplay: (id: string | null) => string;
+  pName: Map<string, string>;
+  t: (k: string) => string;
+  statusLabels: Record<string, string>;
+  editorOptions: LinkEditorOptions;
+  editorLabels: React.ComponentProps<typeof LinkEditor>['labels'];
+}) {
+  const { vDisplay, pName, t, statusLabels, editorOptions, editorLabels } = deps;
+  return function invoiceRow(inv: Invoice) {
+    return (
+      // id backs AddInvoice's "Same invoice — open it": the URL hash
+      // points here, and .sk-page tr:target (globals.css) does the
+      // highlight — no ref/state plumbing across components needed.
+      <tr key={inv.id} id={`invoice-${inv.id}`}>
                 <td className="px-3 py-2.5 align-top">
                   <span className="block font-[650] text-sk-ink">{vDisplay(inv.vendor_id)}</span>
                   {inv.number && <span className="block font-mono text-[10px] text-sk-muted">{t('invoices.number')} {inv.number}</span>}
@@ -556,8 +650,8 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                   {inv.notes && <span className="block truncate text-[11px] text-ink3" title={inv.notes}>{inv.notes}</span>}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-ink2">
-                  <span className="block">{inv.received_date ?? inv.invoice_date ?? ''}</span>
-                  {inv.paid_date && <span className="block text-[11px] text-ink3">{t('invoices.paid_date')} · {inv.paid_date}</span>}
+                  <span className="block">{fmtDate(inv.received_date ?? inv.invoice_date)}</span>
+                  {inv.paid_date && <span className="block text-[11px] text-ink3">{t('invoices.paid_date')} · {fmtDate(inv.paid_date)}</span>}
                   {/* service_month is imported and stored (0018) but not shown:
                       Noa (2026-08-28) — "אני לא צריכה service month, אני עובדת
                       לפי התאריכים שאני מקבלת את החשבונית". */}
@@ -594,14 +688,7 @@ export default async function InvoicesPage({ searchParams }: PageProps<'/invoice
                 <td className="whitespace-nowrap px-3 py-2.5 text-end align-top font-mono text-[11px] tabular-nums text-sk-ink">
                   {moneyExact(Number(inv.amount_usd))}
                 </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      </>
-      )}
-      </div>
-    </>
-  );
+      </tr>
+    );
+  };
 }
