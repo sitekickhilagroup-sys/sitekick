@@ -63,6 +63,39 @@ existing_id matches — thrown away by architecture, not by the model.)
 **15 proposals now sit pending in /inbox for Noa.** Her decisions there are
 real review work AND the iteration-2 training set.
 
+## Iteration 1.5 — summary + raw-transcript BUNDLE (`877766b` + `39b1c4f`, deployed)
+
+Dor's twist: the Aug-24 summary has a parent — the raw 45-minute Teams
+transcript (`Weekly LA Team Meeting (10).docx`, 41.6K chars, spoken, messy).
+The two complement each other: the summary is curated intent, the transcript
+carries owners, dates, amounts, timeline estimates and the verbatim quotes.
+
+Shipped:
+- `lib/bundle.ts` — orderBundle (name hints, then length) + bundleCommunication
+  (marked merge: summary first, transcript second) + isBundleableName.
+- `/api/upload` accepts TWO `file` entries: both .txt/.docx → one merged
+  document (`upload:bundle:<A>:<bytes>+<B>:<bytes>` dedup key), one agent
+  pass, result type `transcript_bundle`. Single file unchanged.
+- Dropzone: `multiple`, drop/select two files → one request; result card
+  "סיכום + תמלול עובדו יחד כפגישה אחת" (`upload.result_bundle`).
+- Prompt: BUNDLED COMMUNICATION rules — summary decides WHICH items exist,
+  transcript enriches + may add clearly-actionable items; small talk is
+  never data ("I hate <vendor>", car chat filtered — verified).
+- `stage_key`/`blocks_phase` required-nullable: on the 47K bundle the model
+  skipped every optional stage_key (0/15); forcing the field fixed it
+  (13/13 updates carried canonical stages on the next run).
+
+Real bundle run → document `a59b42a4`: 1 task (SM geotech corrections —
+genuinely new; the dry run had over-matched it onto Bob's soils-addendum
+task, the real run correctly created) + 24 proposals: 13 task updates
+(all 4 projects, canonical stages, transcript enrichment like "expects
+word today/tomorrow", "~2-3 business days", Rafael-email-before-DocuSign),
+2 blockers, 3 decisions (scope split, hold-structural, Carlos terms final),
+1 deadline (Planning submittal → 2026-08-25 — a round-1 miss), 4
+relationships, and the transcript-only ISA status-table ask as a
+project-less task_create for review. The 15 summary-only proposals were
+marked `ignored` (superseded) so Noa's inbox holds ONE coherent set.
+
 ## Iteration 2 — planned, NOT started
 
 - Sub-stage mapping: the 45 substage_templates (5 phases) into the prompt;
