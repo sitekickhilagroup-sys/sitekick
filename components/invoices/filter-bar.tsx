@@ -6,20 +6,20 @@ export interface FilterOptions {
   projects: string[];
   entities: string[];
   vendors: string[];
-  statuses: { value: string; label: string }[];
 }
 
 interface Props {
   options: FilterOptions;
   labels: {
-    all: string; project: string; entity: string; vendor: string; status: string;
+    all: string; project: string; entity: string; vendor: string;
     from: string; to: string; advanced: string; active: string; reset: string;
   };
 }
 
-/** The six filters this bar owns. `tab` is deliberately not among them: a
- *  reset must not knock the user out of the view they are in. */
-const KEYS = ['project', 'entity', 'vendor', 'status', 'from', 'to'] as const;
+/** The five filters this bar owns. `tab` is deliberately not among them: a
+ *  reset must not knock the user out of the view they are in. Status moved
+ *  out to the page's segment row (2026-08-28) — one owner per dimension. */
+const KEYS = ['project', 'entity', 'vendor', 'from', 'to'] as const;
 
 // Spec §9: collapsed by default with a count of active filters and a reset.
 // The filtering logic and URL persistence are untouched.
@@ -69,7 +69,6 @@ export function FilterBar({ options, labels }: Props) {
         {select('project', labels.project, options.projects.map((p) => ({ value: p, label: p })))}
         {select('entity', labels.entity, options.entities.map((e) => ({ value: e, label: e })))}
         {select('vendor', labels.vendor, options.vendors.map((v) => ({ value: v, label: v })))}
-        {select('status', labels.status, options.statuses)}
         <label className="flex items-center gap-1.5 text-[10px] text-sk-muted">
           {labels.from}
           <input type="date" value={params.get('from') ?? ''} onChange={(e) => set('from', e.target.value)}
