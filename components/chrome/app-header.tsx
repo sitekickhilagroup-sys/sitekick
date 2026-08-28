@@ -5,7 +5,6 @@ import { LOCALE_COOKIE, THEME_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { signOut } from '@/app/actions/auth';
-import { Logo } from '@/components/logo';
 import { MobileNav, NavLinks } from '@/components/nav-links';
 import { NotificationBell } from '@/components/inbox/notification-bell';
 import { requireUser } from '@/lib/auth';
@@ -60,18 +59,15 @@ export async function AppHeader() {
       {/* Spec §1: taller, cleaner header. Contents are unchanged — More pages
           keep every utility, only the proportions move. */}
       <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:gap-8">
-        {/* Both marks: our Sitekick stones + the real Hilla Group H mark,
-            with her HILLA GROUP/Sitekick lockup. The mark is cropped from her
-            demo's square logo (text layers dropped — the lockup already says
-            Hilla Group) and drawn via CSS mask so it inherits the ink token
-            in both themes instead of sitting in a white box. */}
+        {/* Dor's approved lockup: the real H mark, then HILLA GROUP over
+            SITEKICK in sage. Live text + CSS-masked mark (not the demo's
+            white-box PNG) so it stays crisp and follows both themes. */}
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <Logo size={26} />
-          <span className="leading-tight">
-            <span className="block text-[8px] font-bold uppercase tracking-[0.22em] text-sage">Hilla Group</span>
-            <span className="mt-0.5 block font-serif text-base font-semibold text-ink">Sitekick</span>
+          <span aria-hidden className="hilla-mark h-8" />
+          <span className="leading-none">
+            <span className="block text-[15px] font-bold uppercase tracking-[0.05em] text-ink">Hilla Group</span>
+            <span className="mt-1 block text-[8px] font-bold uppercase tracking-[0.3em] text-sage">Sitekick</span>
           </span>
-          <span aria-hidden className="hilla-mark ms-1.5 hidden h-8 sm:block lg:h-9" />
         </Link>
         <NavLinks links={links} more={moreLinks} moreLabel={t('nav.more')} />
         <div className="ms-auto flex items-center gap-1 lg:ms-0 lg:gap-2">
