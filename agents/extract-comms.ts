@@ -100,6 +100,11 @@ Rules:
   vendors stated as settled ("the surveyor handles the topo survey; the civil
   engineer is responsible for grading") and structure/ownership choices ARE
   decisions — capture them.
+- A scheduling ask IS a task: "a meeting must be arranged ASAP", "please
+  coordinate it" becomes a task to schedule that meeting, owner = whoever was
+  asked. Keep interpersonal judgments out of the title — neutral wording
+  ("Schedule alignment meeting with <person> re scope and payments"); the
+  concern itself goes in the description, factually.
 - STYLE: be direct and short. Task titles <= 12 words. Descriptions and reasoning
   one tight sentence each (up to ~30 words when the detail earns it) — facts only,
   no framing, no restating the source.

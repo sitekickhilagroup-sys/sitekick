@@ -66,6 +66,14 @@ export function routeExtractResult(
       ? ctx.openTasks.find((t) => t.id === op.existing_id) ?? null
       : null;
     let confidence = 0.8;
+    // Cross-project id (Aug-3 bundle: "Landscape for Rinconia" arrived with
+    // San Marco's landscape task id, "ID for Alta Mesa" with Rinconia's
+    // designer task id — the exact near-twin pairs Noa already ruled apart).
+    // An id living on ANOTHER project than the item's own attribution is not
+    // a match; fall through to a same-project fuzzy search instead.
+    if (matched && itemProject && matched.project_id && matched.project_id !== itemProject) {
+      matched = null;
+    }
     if (!matched) {
       const m = matchExistingTask(
         { title: op.title, project_id: itemProject, stage_key: op.stage_key ?? null },

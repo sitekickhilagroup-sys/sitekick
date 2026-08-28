@@ -85,6 +85,16 @@ describe('routeExtractResult', () => {
     expect(r.autoCreates).toHaveLength(0);
     expect(r.proposals[0]).toMatchObject({ type: 'task_create', project_id: null, confidence: 0.5 });
   });
+  it('existing_id living on ANOTHER project is rejected — the Landscape SM↔Rinconia bait', () => {
+    // Model attributed the item to Rinconia but handed San Marco's task id.
+    // The id must not be trusted; with no same-project match it becomes a
+    // task_create proposal for review instead of an update on the wrong board.
+    const r = routeExtractResult(
+      { ...base, tasks: [{ op: 'update', existing_id: 't1', stage_key: null, project_name: 'Rinconia', title: 'Retain landscape consultant', priority: 'normal' }] },
+      ctx(),
+    );
+    expect(r.proposals[0]).toMatchObject({ type: 'task_create', project_id: 'p2', target_task_id: null, confidence: 0.4 });
+  });
   it('hallucinated existing_id falls back to fuzzy match instead of proposing against nothing', () => {
     const r = routeExtractResult(
       { ...base, tasks: [{ op: 'update', existing_id: 'no-such-task', stage_key: null, project_name: 'San Marco', title: 'Retain civil engineer', priority: 'normal' }] },

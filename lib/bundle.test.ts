@@ -34,10 +34,11 @@ describe('bundleCommunication', () => {
 });
 
 describe('isBundleableName', () => {
-  it('accepts transcript text formats only', () => {
+  it('accepts transcript text formats, PDF included (Aug-3 summary email was a PDF)', () => {
     expect(isBundleableName('a.TXT')).toBe(true);
     expect(isBundleableName('b.docx')).toBe(true);
-    expect(isBundleableName('c.pdf')).toBe(false);
+    expect(isBundleableName('c.pdf')).toBe(true);
     expect(isBundleableName('d.xlsx')).toBe(false);
+    expect(isBundleableName('e.mp4')).toBe(false);
   });
 });

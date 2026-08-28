@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth';
 import { ingestDocument, processDocument } from '@/lib/ingest';
 import { bundleCommunication, isBundleableName } from '@/lib/bundle';
 import { docxToText } from '@/lib/docx';
+import { pdfToText } from '@/lib/pdf';
 import { parseWorkbook } from '@/lib/parse/xlsx';
 import { parseEml } from '@/lib/parse/eml';
 import { parseEmailsJsonl, dumpEmailToRaw } from '@/lib/parse/emails-jsonl';
@@ -70,12 +71,15 @@ export async function POST(req: NextRequest) {
   if (allFiles.length === 2) {
     const [a, b] = allFiles;
     if (!isBundleableName(a.name) || !isBundleableName(b.name)) {
-      return NextResponse.json({ error: 'a pair must be two transcript files (.txt / .docx)' }, { status: 400 });
+      return NextResponse.json({ error: 'a pair must be two transcript files (.txt / .docx / .pdf)' }, { status: 400 });
     }
     try {
       const toText = async (f: File) => {
         const buf = Buffer.from(await f.arrayBuffer());
-        return f.name.toLowerCase().endsWith('.docx') ? docxToText(buf) : buf.toString('utf8');
+        const n = f.name.toLowerCase();
+        if (n.endsWith('.docx')) return docxToText(buf);
+        if (n.endsWith('.pdf')) return pdfToText(buf);
+        return buf.toString('utf8');
       };
       const [textA, textB] = await Promise.all([toText(a), toText(b)]);
       const merged = bundleCommunication({ name: a.name, text: textA }, { name: b.name, text: textB });

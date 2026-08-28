@@ -35,7 +35,7 @@ export default async function UploadPage() {
   // offered. MP4 is stored and linked only — transcription is not built.
   const tabs: IntakeTab[] = [
     { id: 'email', label: t('upload.src_email'), formats: 'OLM · ZIP · EML · JSONL', accept: '.olm,.zip,.eml,.jsonl' },
-    { id: 'meeting', label: t('upload.src_rec'), formats: 'MP4 · TXT · DOCX', accept: '.mp4,.txt,.docx' },
+    { id: 'meeting', label: t('upload.src_rec'), formats: 'MP4 · TXT · DOCX · PDF', accept: '.mp4,.txt,.docx,.pdf' },
     { id: 'document', label: t('upload.src_doc'), formats: 'PDF · XLSX · XLS · DOCX · CSV', accept: '.pdf,.xlsx,.xls,.docx,.csv' },
     { id: 'sheet', label: t('upload.src_sheet'), formats: t('upload.src_sheet_sub'), accept: '' },
   ];

@@ -41,9 +41,10 @@ export function bundleCommunication(a: BundlePart, b: BundlePart): string {
   ].join('\n');
 }
 
-/** Files the bundle path accepts — the transcript/summary formats the
- *  /api/upload text branch already understands. */
+/** Files the bundle path accepts. PDFs count: real summary emails arrive as
+ *  PDF exports (the Aug-3 pair) — the route extracts their text via
+ *  lib/pdf.ts. A single PDF on its own still goes to the invoice agent. */
 export function isBundleableName(name: string): boolean {
   const n = name.toLowerCase();
-  return n.endsWith('.txt') || n.endsWith('.docx');
+  return n.endsWith('.txt') || n.endsWith('.docx') || n.endsWith('.pdf');
 }
