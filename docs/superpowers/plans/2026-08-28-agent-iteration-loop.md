@@ -139,6 +139,36 @@ review); two stage misjudgments (Carlos kickoff → construction, AM civil
 → bidding) — iteration-2 learning material; vendor quotes need a home
 that isn't vendor_hours.
 
+## Iteration 1.7 — re-upload identity + duplicate suppression (`cec2c08`, deployed)
+
+Dor: "re-upload the same file — do we know? same file with additions — do
+we take only the additions?"
+
+- **Migration 0021** (applied + ledgered; 0018/0019 also backfilled into
+  supabase_migrations.schema_migrations — 0015-0017 are intentionally
+  unapplied, 0020 belongs to the profile session): `documents.content_hash`.
+  ingestDocument dedups on external_id then content_hash. Route hashes the
+  extracted text (bundle = merged text; PDFs/sheets/mp4 = bytes). PROBE
+  passed: Aug-3 bundle content under invented filenames → `deduped:true`,
+  nothing written.
+- **filterDuplicateProposals** (three passes): exact keys → token-overlap
+  fuzzy (blockers/decisions/relationships/creates, 0.6) → task-update
+  facts-equal rule (due/status equal, owner/waiting only CONFLICT blocks,
+  0.6 text overlap). A moved date, a done status, a different owner always
+  pass. Plus: a create with ≥0.65 same-project title containment against an
+  open task becomes a 0.5 task_update proposal — never a duplicate task
+  (run 3 created "Retain civil engineer for grading at San Marco" beside
+  the existing SM civil task; deleted, guard added).
+- **Measured** on repeated re-processing of the Aug-3 bundle:
+  skipped 2 → 6 → 15 → 25, kept 8 genuine fact-deltas, 0 duplicate tasks.
+- Cleanup: the test-run proposal surplus (runs 3-6) marked ignored — Noa's
+  queue remains the 10:10 set of 37.
+
+Answer to the question: identical file (same name or renamed) → caught at
+ingest, agent never runs. Extended file → new document, agent runs on all
+of it, but items land as updates on existing tasks, re-asserted claims are
+suppressed, and only genuine additions/changed facts reach the inbox.
+
 ## Iteration 2 — planned, NOT started
 
 - Sub-stage mapping: the 45 substage_templates (5 phases) into the prompt;
