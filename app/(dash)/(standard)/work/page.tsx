@@ -12,10 +12,12 @@ import { WorkTableRow } from '@/components/work/work-table-row';
 import { WORK_COLS } from '@/components/work/work-cols';
 import { AddAction } from '@/components/work/add-action';
 import { ReopenButton } from '@/components/work/reopen-button';
+import { PrioritiesRefresh } from '@/components/work/priorities-refresh';
 import { DuplicateReview, type DupPairSide, type DupPairView, type DuplicateReviewLabels } from '@/components/work/duplicate-review';
+import { projectColor } from '@/lib/project-color';
 import type { RelationRow } from '@/components/work/relation-editor';
 import type { TaskEditorOptions } from '@/components/work/task-editor';
-import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relationship, SubstageTemplate, Task, Vendor, Workstream } from '@/lib/types';
+import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relationship, SubstageTemplate, Task, TaskRank, Vendor, Workstream } from '@/lib/types';
 import { fmtDate } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -68,6 +70,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // value is harmless on its own (no row matches, nothing highlights).
   const rawSubstage = typeof sp.substage === 'string' ? sp.substage : '';
   const spTask = typeof sp.task === 'string' ? sp.task : '';
+  // Brief §2: category filter — everything / project work / administrative.
+  const rawCat = typeof sp.cat === 'string' ? sp.cat : '';
+  const cat: 'all' | 'project' | 'admin' = rawCat === 'project' || rawCat === 'admin' ? rawCat : 'all';
 
   const supabase = await supabaseServer();
   // Relationships ride the same batch (table is small — filter in memory
@@ -99,6 +104,18 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   const tasks = (tasksQ.data ?? []) as Task[];
   const closedTasks = (closedQ.data ?? []) as Task[];
+
+  // Latest AI prioritization run (0022) — the suggestion layer: per-project
+  // and cross-project ranks plus a grounded reason per task. Two small
+  // queries; absent (no run yet) everything below falls back to the
+  // deterministic engine exactly as before.
+  const { data: latestRunRow } = await supabase.from('priority_runs')
+    .select('id,created_at').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  const { data: prioRows } = latestRunRow
+    ? await supabase.from('task_priorities').select('*').eq('run_id', latestRunRow.id)
+    : { data: [] as TaskRank[] };
+  const aiByTask = new Map(((prioRows ?? []) as TaskRank[]).map((r) => [r.task_id, r]));
+  const aiRunAt: string | null = latestRunRow?.created_at ?? null;
   // Full relationship set — needed both here (excluding pairs Noa already
   // told apart via 'unrelated' — see lib/dedup.ts's findDuplicatePairs) and
   // later for unlocksFor's blocks-edge lookup.
@@ -229,28 +246,79 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // above, so this only ever narrows to a real (possibly empty) result —
   // never blanks the table because of a bad id — and a legitimately empty
   // result still gets the existing isEmpty/work.empty explanation below.
-  const filtered = spSubstage ? viewTasks.filter((t) => t.substage_template_id === spSubstage) : viewTasks;
+  const substageFiltered = spSubstage ? viewTasks.filter((t) => t.substage_template_id === spSubstage) : viewTasks;
+  // Brief §2: the category filter narrows what renders; tab counts above stay
+  // whole-register so the numbers keep meaning "everything open".
+  const filtered = cat === 'all' ? substageFiltered : substageFiltered.filter((t) => (t.category ?? 'project') === cat);
+  // Administrative work renders in its own block (separate rectangles), even
+  // when attributed to a project — hidden entirely only by cat=project.
+  const adminTasks = cat === 'project' ? [] : filtered.filter((t) => (t.category ?? 'project') === 'admin');
+  const projectWorkTasks = cat === 'admin' ? [] : filtered.filter((t) => (t.category ?? 'project') !== 'admin');
   const scoreOf = (task: Task) => scoreTask(task, { today });
 
-  const groups = new Map<string | null, Task[]>();
-  for (const task of filtered) {
-    const list = groups.get(task.project_id);
-    if (list) list.push(task);
-    else groups.set(task.project_id, [task]);
-  }
-  // Today orders its project sections by the client's standing business
-  // priority (Blair > San Marco > Rinconia > Alta Mesa), General last —
-  // not by score. Every other view keeps the existing max-score ordering.
+  const buildGroups = (list: Task[]) => {
+    const m = new Map<string | null, Task[]>();
+    for (const task of list) {
+      const g = m.get(task.project_id);
+      if (g) g.push(task); else m.set(task.project_id, [task]);
+    }
+    return m;
+  };
+  const groups = buildGroups(projectWorkTasks);
+  const adminGroups = [...buildGroups(adminTasks).entries()];
+  // Today orders its project sections by urgency: with an AI run present, the
+  // project whose top task is most urgent comes first (Dor: "which project
+  // has the most urgent task") — manual pins count as rank 0 so Noa's own
+  // order still leads. Without a run, the standing business priority
+  // (Blair > San Marco > Rinconia > Alta Mesa) applies as before. Every
+  // other view keeps the existing max-score ordering.
+  const aiRank = (t: Task) => (t.manual_priority != null ? 0 : aiByTask.get(t.id)?.global_rank ?? 9999);
   const orderedGroups = [...groups.entries()];
   if (view === 'today') {
-    const rankOf = (pid: string | null) => (pid ? businessRankByProject.get(pid) ?? Infinity : Infinity);
-    orderedGroups.sort((a, b) => rankOf(a[0]) - rankOf(b[0]));
-    // Intra-group order already reflects rankToday's impact/due weighting —
-    // re-sorting here with the plain score would silently undo that.
+    if (aiByTask.size > 0) {
+      const minRank = (list: Task[]) => Math.min(...list.map(aiRank));
+      orderedGroups.sort((a, b) => minRank(a[1]) - minRank(b[1]));
+      // Inside a project: pins first (her explicit order), then the agent's
+      // project_rank via global order, then rankToday's own sequence.
+      for (const [, list] of orderedGroups) {
+        list.sort((a, b) => {
+          const ma = a.manual_priority ?? Infinity;
+          const mb = b.manual_priority ?? Infinity;
+          if (ma !== mb) return ma - mb;
+          return aiRank(a) - aiRank(b);
+        });
+      }
+      adminGroups.sort((a, b) => Math.min(...a[1].map(aiRank)) - Math.min(...b[1].map(aiRank)));
+      for (const [, list] of adminGroups) list.sort((a, b) => aiRank(a) - aiRank(b));
+    } else {
+      const rankOf = (pid: string | null) => (pid ? businessRankByProject.get(pid) ?? Infinity : Infinity);
+      orderedGroups.sort((a, b) => rankOf(a[0]) - rankOf(b[0]));
+      adminGroups.sort((a, b) => rankOf(a[0]) - rankOf(b[0]));
+      // Intra-group order already reflects rankToday's impact/due weighting —
+      // re-sorting here with the plain score would silently undo that.
+    }
   } else {
     orderedGroups.sort((a, b) => Math.max(...b[1].map(scoreOf)) - Math.max(...a[1].map(scoreOf)));
     for (const [, list] of orderedGroups) list.sort((a, b) => scoreOf(b) - scoreOf(a));
+    adminGroups.sort((a, b) => Math.max(...b[1].map(scoreOf)) - Math.max(...a[1].map(scoreOf)));
+    for (const [, list] of adminGroups) list.sort((a, b) => scoreOf(b) - scoreOf(a));
   }
+
+  // Cross-project "most urgent now" strip (Dor: "which tasks are most urgent"
+  // across ALL projects): the top of the latest run over currently-open
+  // tasks, regardless of which view section they land in.
+  const topAcross = view === 'today' && aiByTask.size > 0
+    ? tasks
+      .filter((t) => aiByTask.has(t.id) && (!t.snoozed_until || t.snoozed_until <= today))
+      .sort((a, b) => aiByTask.get(a.id)!.global_rank - aiByTask.get(b.id)!.global_rank)
+      .slice(0, 5)
+      .map((t) => ({
+        task: t,
+        ai: aiByTask.get(t.id)!,
+        color: projectColor(t.project_id),
+        name: t.project_id ? projectNames.get(t.project_id) ?? null : null,
+      }))
+    : [];
 
   const isEmpty = view === 'completed'
     ? closedTasks.length === 0
@@ -293,7 +361,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // otherwise print e.g. Blair 01, 02, 07 / San Marco 03, 04 reading down
   // the page — a real number that no longer reads as a clean sequence.
   const rankById = view === 'today'
-    ? new Map(orderedGroups.flatMap(([, list]) => list).map((task, i) => [task.id, i + 1]))
+    ? new Map([...orderedGroups, ...adminGroups].flatMap(([, list]) => list).map((task, i) => [task.id, i + 1]))
     : null;
   const openIds = new Set(tasks.map((task) => task.id));
   const unlocksFor = (taskId: string): string[] =>
@@ -305,6 +373,10 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
       .slice(0, 3);
   const whyNowFor = (task: Task): string | null => {
     const parts: string[] = [];
+    // The agent's grounded one-liner leads when a run exists — it's the
+    // "Claude explains" half of the brief's propose-and-explain loop.
+    const ai = aiByTask.get(task.id);
+    if (ai?.reason) parts.push(ai.reason);
     // Impact (0013) opens the line when classified — the "documented reason"
     // the QA checklist wants for why this task outranks (or yields to) a sibling.
     if (task.process_impact) parts.push(t('work.why.impact.' + task.process_impact));
@@ -368,7 +440,11 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     'impact.external_gate': t('work.why.impact.external_gate'),
     'impact.not_blocking': t('work.why.impact.not_blocking'),
     'impact.verify': t('work.why.impact.verify'),
+    category: t('work.category'),
+    'category.project': t('work.cat_project'),
+    'category.admin': t('work.cat_admin'),
     whyNow: t('work.why_now'),
+    urgencyNow: t('work.urgency.now'),
     unlocks: t('work.unlocks'),
     details: t('work.details'),
     evidence: t('work.evidence'),
@@ -468,6 +544,70 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     errorReason: t('work.dup_error_reason'),
   };
 
+  // One project section — shared by the main (project-work) list and the
+  // separate administrative block (brief §2's "separate rectangles"). Border
+  // and count badge carry the project's identity color (Dor: the red circle
+  // stopped meaning anything once every project was blocked).
+  const renderGroupSection = ([projectId, groupTasks]: [string | null, Task[]]) => {
+    const project = projectId ? projectById.get(projectId) : null;
+    const phaseLabel = project?.current_phase_key ? phaseLabelByKey.get(project.current_phase_key) : null;
+    const color = projectColor(projectId);
+    return (
+      <section key={projectId ?? 'none'} className="rounded-[14px] border bg-sk-salmon-surface p-3.5" style={{ borderColor: color.border }}>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
+          <h2 className="flex items-center gap-2 text-[13px] font-[650] leading-[1.25] text-sk-ink">
+            <span aria-hidden="true" className="h-2.5 w-2.5 flex-none rounded-full" style={{ background: color.solid }} />
+            {project?.name ?? t('common.general')}
+          </h2>
+          {(phaseLabel || project?.city_case) && (
+            <span className="text-[10px] leading-[1.35] text-sk-muted">
+              {phaseLabel}
+              {phaseLabel && project?.city_case ? ' · ' : ''}
+              {project?.city_case && <span className="font-mono">{project.city_case}</span>}
+            </span>
+          )}
+          <span className="ms-auto rounded-[6px] px-2 py-1 text-[10px] font-[650] leading-none" style={{ background: color.soft, color: color.text }}>
+            {groupTasks.length === 1
+              ? t('work.tasks_today_one')
+              : t('work.tasks_today_other').replace('{n}', `⁨${groupTasks.length}⁩`)}
+          </span>
+        </div>
+        {/* QA item 04 (Rotem): overflow stays visible so VerbMenu's desktop
+            dropdown never clips at the card border. */}
+        <div className="mt-2 rounded-[10px] border border-line bg-sk-surface">
+          <div className={`hidden ${WORK_COLS} gap-x-4 rounded-t-[9px] border-b border-line bg-sk-surface-header px-3 py-2 text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted lg:grid`}>
+            <span>{t('work.col_what')}</span>
+            <span>{t('work.col_phase')}</span>
+            <span>{t('work.col_owner')}</span>
+            <span>{t('work.col_due')}</span>
+            <span className="text-end">{t('work.col_status')}</span>
+          </div>
+          <ul>
+            {groupTasks.map((task) => (
+              <WorkTableRow
+                key={task.id}
+                task={task}
+                labels={rowLabels}
+                today={today}
+                rank={rankById?.get(task.id)}
+                urgency={aiByTask.get(task.id)?.urgency}
+                whyNow={whyNowFor(task)}
+                unlocks={unlocksFor(task.id)}
+                relations={relationsFor(task.id)}
+                taskOptions={taskOptionsFor(task)}
+                editorOptions={editorOptions}
+                phaseLabel={phaseLabelFor(task)}
+                stageLabel={stageLabelFor(task)}
+                highlight={!!spTask && task.id === spTask}
+                projectHref={task.project_id ? `/projects/${task.project_id}` : null}
+              />
+            ))}
+          </ul>
+        </div>
+      </section>
+    );
+  };
+
   return (
     <div className="sk-page mx-auto w-full max-w-[1060px] space-y-4 px-2 pb-16 sm:px-4">
       {/* register-hero (centered) + the Add-action button. */}
@@ -547,8 +687,78 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[10px] bg-sk-surface-soft px-4 py-2.5">
           <span className="text-[13px] font-[650] text-sk-ink">{activeTab.label}</span>
           <span className="text-[11px] leading-[1.5] text-sk-muted">{blockingBreakdown ?? activeTab.sub}</span>
+          {/* Brief §2: everything / project work / administrative. */}
+          {view !== 'completed' && (
+            <span className="flex items-center gap-1">
+              {(['all', 'project', 'admin'] as const).map((k) => (
+                <Link
+                  key={k}
+                  href={`/work?view=${view}${k === 'all' ? '' : `&cat=${k}`}`}
+                  aria-current={cat === k ? 'page' : undefined}
+                  className={`min-h-6 rounded-full border px-2.5 py-0.5 text-[10px] font-[650] ${
+                    cat === k ? 'border-sage-line bg-sage-soft text-sage' : 'border-line bg-card text-ink2 hover:border-sage-line'
+                  }`}
+                >
+                  {t(`work.cat_${k}`)}
+                </Link>
+              ))}
+            </span>
+          )}
           <span className="ms-auto text-[11px] leading-[1.5] text-sk-muted">{t('work.one_record')}</span>
         </div>
+      )}
+
+      {/* Cross-project urgency strip (brief §3–4 + Dor's ask): the agent's
+          top-5 across every project, each with its project color and the
+          reason it leads — plus the on-demand re-rank. */}
+      {view === 'today' && (
+        <section className="rounded-[14px] border border-sage-line bg-sk-surface p-3.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-sk-ink">{t('work.ai_top')}</h2>
+            <span className="text-[10px] leading-[1.4] text-sk-muted">
+              {aiRunAt ? t('work.ai_updated').replace('{when}', fmtDate(aiRunAt.slice(0, 10))) : t('work.ai_none')}
+            </span>
+            <span className="ms-auto">
+              <PrioritiesRefresh labels={{
+                refresh: t('work.ai_refresh'),
+                running: t('work.ai_running'),
+                done: t('work.ai_done'),
+                error: t('common.error_save'),
+              }} />
+            </span>
+          </div>
+          {topAcross.length > 0 && (
+            <ol className="mt-2.5 space-y-1.5">
+              {topAcross.map(({ task, ai, color, name }, i) => {
+                const rendered = rankById?.has(task.id) ?? false;
+                const href = rendered ? `#task-${task.id}` : `/work?view=all&task=${task.id}#task-${task.id}`;
+                const chip = ai.urgency === 'now' ? 'bg-coral-soft text-coral'
+                  : ai.urgency === 'high' ? 'bg-apricot-soft text-apricot'
+                    : ai.urgency === 'medium' ? 'bg-mist-soft text-mist' : 'bg-inset text-ink3';
+                return (
+                  <li key={task.id}>
+                    <Link href={href} className="flex min-h-11 items-center gap-3 rounded-[10px] border border-line bg-card px-3 py-2 hover:border-sage-line">
+                      <span className="font-mono text-[12px] font-[650] text-sk-muted">{String(i + 1).padStart(2, '0')}</span>
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="flex items-center gap-1.5">
+                          <span aria-hidden="true" className="h-2 w-2 flex-none rounded-full" style={{ background: color.solid }} />
+                          <span className="truncate text-[9px] font-bold uppercase tracking-[0.08em]" style={{ color: color.text }}>
+                            {name ?? t('common.general')}
+                          </span>
+                        </span>
+                        <span className="truncate text-[12px] font-[650] text-sk-ink">{task.title}</span>
+                        {ai.reason && <span className="truncate text-[10px] leading-[1.4] text-sk-muted">{ai.reason}</span>}
+                      </span>
+                      <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.04em] ${chip}`}>
+                        {t(`work.urgency.${ai.urgency}`)}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
       )}
 
       {view === 'blocking' && blockers.length > 0 && (
@@ -667,68 +877,21 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
           ))}
         </ul>
       ) : (
-        orderedGroups.map(([projectId, groupTasks]) => {
-          const project = projectId ? projectById.get(projectId) : null;
-          const phaseLabel = project?.current_phase_key ? phaseLabelByKey.get(project.current_phase_key) : null;
-          return (
-            // Spec §7-§8: each project is its own bordered section on a warm
-            // salmon tint, with a compact count badge.
-            <section key={projectId ?? 'none'} className="rounded-[14px] border border-sk-salmon-border bg-sk-salmon-surface p-3.5">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-1">
-                <h2 className="text-[13px] font-[650] leading-[1.25] text-sk-ink">
-                  {project?.name ?? t('common.general')}
-                </h2>
-                {(phaseLabel || project?.city_case) && (
-                  <span className="text-[10px] leading-[1.35] text-sk-muted">
-                    {phaseLabel}
-                    {phaseLabel && project?.city_case ? ' · ' : ''}
-                    {project?.city_case && <span className="font-mono">{project.city_case}</span>}
-                  </span>
-                )}
-                <span className="ms-auto rounded-[6px] bg-coral-soft px-2 py-1 text-[10px] font-[650] leading-none text-coral">
-                  {groupTasks.length === 1
-                    ? t('work.tasks_today_one')
-                    : t('work.tasks_today_other').replace('{n}', `⁨${groupTasks.length}⁩`)}
-                </span>
+        <>
+          {orderedGroups.map(renderGroupSection)}
+          {/* Brief §2: administrative tasks get their own rectangles, apart
+              from project work — visible on "all", alone on cat=admin,
+              hidden (not deleted) on cat=project. */}
+          {adminGroups.length > 0 && (
+            <section className="rounded-[16px] border border-line bg-sk-surface-soft p-3">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1 pb-2">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-sk-ink">{t('work.admin_section')}</h2>
+                <span className="text-[10px] leading-[1.4] text-sk-muted">{t('work.admin_section_sub')}</span>
               </div>
-              {/* QA item 04 (Rotem): overflow-hidden here clipped VerbMenu's
-                  desktop dropdown (sm:absolute top-full) at the card border —
-                  a row near the card bottom showed only the first few verbs.
-                  The clip existed only to tuck the header strip's background
-                  into the rounded corners, so the header rounds itself
-                  instead and the container stays overflow-visible. */}
-              <div className="mt-2 rounded-[10px] border border-line bg-sk-surface">
-                <div className={`hidden ${WORK_COLS} gap-x-4 rounded-t-[9px] border-b border-line bg-sk-surface-header px-3 py-2 text-[9px] font-bold uppercase tracking-[0.08em] text-sk-muted lg:grid`}>
-                  <span>{t('work.col_what')}</span>
-                  <span>{t('work.col_phase')}</span>
-                  <span>{t('work.col_owner')}</span>
-                  <span>{t('work.col_due')}</span>
-                  <span className="text-end">{t('work.col_status')}</span>
-                </div>
-                <ul>
-                  {groupTasks.map((task) => (
-                    <WorkTableRow
-                      key={task.id}
-                      task={task}
-                      labels={rowLabels}
-                      today={today}
-                      rank={rankById?.get(task.id)}
-                      whyNow={whyNowFor(task)}
-                      unlocks={unlocksFor(task.id)}
-                      relations={relationsFor(task.id)}
-                      taskOptions={taskOptionsFor(task)}
-                      editorOptions={editorOptions}
-                      phaseLabel={phaseLabelFor(task)}
-                      stageLabel={stageLabelFor(task)}
-                      highlight={!!spTask && task.id === spTask}
-                      projectHref={task.project_id ? `/projects/${task.project_id}` : null}
-                    />
-                  ))}
-                </ul>
-              </div>
+              <div className="space-y-3">{adminGroups.map(renderGroupSection)}</div>
             </section>
-          );
-        })
+          )}
+        </>
       )}
     </div>
   );

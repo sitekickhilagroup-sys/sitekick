@@ -201,7 +201,8 @@ const mk = (over: Partial<Task> & { id: string }): Task => ({
   planned: false, follow_up_date: null, check_back_on: null, source: null,
   last_touched: '2026-08-26', created_at: '', manual_priority: null, snoozed_until: null,
   process_impact: null, merged_into: null, merged_at: null, merged_by: null,
-  latest_note: null, substage_template_id: null, workstream_id: null, ...over,
+  latest_note: null, substage_template_id: null, workstream_id: null,
+  category: 'project', ...over,
 });
 
 test('today: two per project in business order; blockers beat finance rows', () => {

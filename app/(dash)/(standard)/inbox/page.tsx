@@ -29,14 +29,20 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
   // this round touched this file, so no reviewer saw it.
   const [proposalsQ, projectsQ, phasesQ, stageMapQ, substageTemplatesQ] = await Promise.all([
     supabase.from('agent_proposals').select('*').order('created_at', { ascending: false }).limit(200),
-    supabase.from('projects').select('id,name,current_phase_key'),
+    supabase.from('projects').select('id,name,current_phase_key,active'),
     supabase.from('phases').select('*'),
     supabase.from('stage_phase_map').select('*'),
     supabase.from('substage_templates').select('id,phase_key,name'),
   ]);
 
   let proposals = (proposalsQ.data ?? []) as AgentProposal[];
-  const projectRows = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name' | 'current_phase_key'>[];
+  const projectRows = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name' | 'current_phase_key' | 'active'>[];
+  // Drawer attribution select: active projects only — filing new work under
+  // a parked project would just hide it.
+  const projectOptions = projectRows
+    .filter((p) => p.active !== false)
+    .map((p) => ({ id: p.id, name: p.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const names = new Map(projectRows.map((p) => [p.id, p.name]));
   const projectPhaseById = new Map(projectRows.map((p) => [p.id, p.current_phase_key]));
   const phaseLabelByKey = new Map(((phasesQ.data ?? []) as Phase[]).map((ph) => [ph.key as string, ph.label]));
@@ -98,6 +104,7 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
       : task ? 'update_existing' : 'new_task';
     return {
       id: p.id,
+      projectId: p.project_id,
       projectName: p.project_id ? names.get(p.project_id) ?? null : null,
       title: p.title ?? (asText(p.payload.title) || t(`inbox.type.${p.type}`)),
       phase,
@@ -128,6 +135,11 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
   const labels: Record<string, string> = {
     needs: t('review.f_pending'), unsure: t('review.f_unsure'), approved: t('review.f_approved'),
     ignored: t('review.f_ignored'), wrong: t('review.f_wrong'), history: t('review.f_all'),
+    auto: t('review.state_auto'),
+    selectAll: t('review.select_all'), selectedN: t('review.selected_n'),
+    bulkApprove: t('review.bulk_approve'), bulkIgnore: t('review.bulk_ignore'),
+    triageNow: t('review.triage_now'), triageDone: t('review.triage_done'),
+    fProject: t('common.project'), projectLearnHint: t('review.project_learn_hint'),
     match: t('review.match'), possibleDup: t('review.possible_dup'), noMatch: t('review.no_match'),
     general: t('common.general'), close: t('common.close'), error: t('common.error_save'),
     emptyTitle: t('review.empty_title'), emptySub: t('review.empty_sub'),
@@ -167,7 +179,7 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
           <Link href="/inbox" className="font-semibold text-sage hover:underline">{t('inbox.show_all')}</Link>
         </p>
       )}
-      <ReviewBoard rows={rows} labels={labels} />
+      <ReviewBoard rows={rows} projects={projectOptions} labels={labels} />
     </div>
   );
 }

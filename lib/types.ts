@@ -145,6 +145,35 @@ export interface Task {
   substage_template_id: string | null;
   /** 0015 — parallel workstream this task is classified under, if any. */
   workstream_id: string | null;
+  /** 0022 — brief §2: administrative work is classified separately from
+   *  project work, even when attributed to a project. */
+  category: 'project' | 'admin';
+}
+
+// AI prioritization (0022, brief §3–4): one run = one suggested ordering,
+// per project and across projects, each placement with a grounded reason.
+// Suggestion layer only — manual_priority always wins at render time.
+// (Named TaskRank, not TaskPriority — that name is taken by the legacy
+// critical/high/normal union above.)
+export type TaskUrgency = 'now' | 'high' | 'medium' | 'low';
+
+export interface PriorityRun {
+  id: string;
+  created_at: string;
+  model: string | null;
+  scope: string;
+  note: string | null;
+}
+
+export interface TaskRank {
+  run_id: string;
+  task_id: string;
+  project_id: string | null;
+  global_rank: number;
+  project_rank: number;
+  score: number;
+  urgency: TaskUrgency;
+  reason: string;
 }
 
 export interface Blocker {

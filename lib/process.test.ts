@@ -20,7 +20,7 @@ function task(over: Partial<Task> & { id: string }): Task {
     source: null, last_touched: '2026-08-20', created_at: '2026-08-20T00:00:00Z',
     manual_priority: null, snoozed_until: null, process_impact: null,
     merged_into: null, merged_at: null, merged_by: null, latest_note: null,
-    substage_template_id: null, workstream_id: null,
+    substage_template_id: null, workstream_id: null, category: 'project',
     ...over,
   };
 }

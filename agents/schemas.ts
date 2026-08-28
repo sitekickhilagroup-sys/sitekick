@@ -25,6 +25,11 @@ export const TaskOpSchema = z.object({
   // Required-nullable like project_name: on a 47K-char bundle the model
   // skipped every optional stage_key; forcing the field forces the choice.
   stage_key: PhaseKey.nullable(),
+  // Brief §2 (2026-08-29): administrative work (invoices, payroll, bank/mail
+  // access, bookkeeping, legal-ops) is classified separately from project
+  // work even when it belongs to a project. Required-nullable like
+  // stage_key — forcing the field forces the choice.
+  category: z.enum(['project', 'admin']).nullable(),
   priority: z.enum(['critical', 'high', 'normal']).default('normal'),
   planned: z.boolean().optional(),
   follow_up_date: z.string().optional(),
@@ -119,6 +124,24 @@ export const InvoiceParseSchema = z.object({
 });
 
 export type InvoiceParse = z.infer<typeof InvoiceParseSchema>;
+
+// prioritize-tasks output contract (forced-tool JSON) — one score + tier +
+// grounded reason per open task (agents/prioritize-tasks.ts). Ranks are
+// DERIVED from scores deterministically on our side; the model never emits
+// rank integers directly (they drift and collide).
+export const PrioritizedTaskSchema = z.object({
+  id: z.string().min(1),
+  score: z.number().min(0).max(100),
+  urgency: z.enum(['now', 'high', 'medium', 'low']),
+  // One tight sentence grounded in the task's own facts — shown on My Work.
+  reason: z.string().min(1),
+});
+
+export const PrioritizeResultSchema = z.object({
+  tasks: z.array(PrioritizedTaskSchema),
+});
+
+export type PrioritizeResult = z.infer<typeof PrioritizeResultSchema>;
 
 // infer-phase output contract (forced-tool JSON) — one pass of the iterative
 // phase-inference loop (agents/infer-phase.ts).

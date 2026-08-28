@@ -1,10 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type Anthropic from '@anthropic-ai/sdk';
 import { runStructured } from '../lib/claude.ts';
-import type { Project, Task } from '../lib/types.ts';
+import type { AgentProposal, Project, Task } from '../lib/types.ts';
 import { ExtractResultSchema, type ExtractResult } from './schemas.ts';
 import { routeExtractResult, filterDuplicateProposals, type ProposalIdentity } from '../lib/proposals.ts';
 import { logActivity } from '../lib/state-writer.ts';
+import { loadTriageContext, matchAttribution, runAutoTriage } from '../lib/auto-triage.ts';
 
 const SYSTEM = `You are the operations chief-of-staff for Hilla Group, an LA real-estate developer.
 You read one communication (email or meeting transcript) and extract operational state.
@@ -85,6 +86,18 @@ Rules:
   City accepts", "still expecting the letter", "corrections are underway")
   UPDATES the open task tracking that item — refresh its description and
   waiting_for. It is never a new task.
+- NO-ECHO RULE (review-queue flood, Aug 28: one meeting produced 58 updates,
+  most restating what the register already said): emit op="update" ONLY when
+  the communication adds at least one CONCRETE new fact for that task — a new
+  or changed date, a named owner or waited-on party, a completion, a dollar
+  amount, or genuinely new substance for the description. A sentence that
+  merely re-mentions the task ("X is in progress", "we discussed Y") is NOT
+  an update — emit nothing for it.
+- category: 'admin' for administrative work — invoices and payments, payroll,
+  bank/mailbox/access setup, bookkeeping, insurance paperwork, legal-ops and
+  corporate filings — even when it belongs to a project. 'project' for
+  development work on the property itself (design, consultants, city process,
+  construction). Genuinely unclear = null.
 - planned=false marks unplanned/reactive work (Hebrew: balatam).
 - priority="critical" means BLOCKING: this item STOPS a phase or sub-stage
   from progressing until resolved (agent bug #4: chasing an invoice, updating
@@ -170,6 +183,11 @@ export interface ApplySummary {
   /** Proposals dropped because an identical one already sits in the inbox
    *  (or was already accepted) — re-uploads must not double the queue. */
   proposals_skipped?: number;
+  /** Auto-triage outcomes on this document's proposals — applied without
+   *  review (safe enrichments / learned-accepted classes) and auto-ignored
+   *  (learned-rejected classes). */
+  auto_applied?: number;
+  auto_ignored?: number;
 }
 
 // Server-side reconciliation: even if the model said "create", a strong match
@@ -215,12 +233,27 @@ export async function applyExtractResult(
     console.log(`[extract-comms] ${skipped} duplicate proposal(s) skipped for doc ${docId}`);
   }
 
+  // Learned attribution (review_rules): an item with no property evidence
+  // gets the project a human previously filed the same vendor/subject under.
+  // It STAYS a review proposal — pre-attributed, not auto-written — per the
+  // brief's "no automatic change without control".
+  const { rules: attributionRules } = await loadTriageContext(admin);
+  for (const pr of proposals) {
+    if (pr.project_id) continue;
+    const rule = matchAttribution(`${pr.title ?? ''} ${pr.evidence ?? ''}`, attributionRules);
+    if (rule) {
+      pr.project_id = rule.project_id;
+      pr.reasoning = `${pr.reasoning} · auto-attributed by learned rule`;
+    }
+  }
+
   for (const { op, project_id } of autoCreates) {
     const { data, error } = await admin.from('tasks').insert({
       project_id, document_id: docId, title: op.title,
       description: op.description ?? null, owner: op.owner ?? null,
       waiting_for: op.waiting_for ?? null, due: op.due ?? null,
       stage_key: op.stage_key ?? null, priority: op.priority ?? 'normal',
+      category: op.category ?? 'project',
       status: 'open', planned: op.planned ?? true,
       follow_up_date: op.follow_up_date ?? null, source: 'extract-comms',
     }).select('id').single();
@@ -229,8 +262,9 @@ export async function applyExtractResult(
     summary.tasks_created++;
   }
 
+  const insertedProposalIds: string[] = [];
   for (const pr of proposals) {
-    const { error } = await admin.from('agent_proposals').insert({
+    const { data, error } = await admin.from('agent_proposals').insert({
       document_id: docId, project_id: pr.project_id, type: pr.type,
       payload: pr.payload, target_task_id: pr.target_task_id,
       confidence: pr.confidence, reasoning: pr.reasoning,
@@ -239,9 +273,22 @@ export async function applyExtractResult(
       // inbox showed proposals with no quote — nothing to approve or reject
       // against. routeExtractResult now carries the model's verbatim quote.
       evidence_excerpt: pr.evidence ?? null, state: 'pending',
-    });
+    }).select('id').single();
     if (error) { console.error('[extract-comms] insert failed:', error.message); continue; }
+    if (data) insertedProposalIds.push(data.id as string);
     summary.proposals = (summary.proposals ?? 0) + 1;
+  }
+
+  // Auto-triage the rows this document just produced: safe enrichments and
+  // learned-accepted classes apply immediately (state 'auto_applied', full
+  // audit trail); learned-rejected classes leave the queue as 'ignored'.
+  // Only genuinely judgment-needing suggestions stay pending.
+  if (insertedProposalIds.length) {
+    const { data: insertedRows } = await admin.from('agent_proposals')
+      .select('*').in('id', insertedProposalIds);
+    const triage = await runAutoTriage(admin, (insertedRows ?? []) as AgentProposal[], { today: ctx.today });
+    if (triage.applied) summary.auto_applied = triage.applied;
+    if (triage.ignored) summary.auto_ignored = triage.ignored;
   }
 
   for (const dr of result.drafts) {

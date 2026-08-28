@@ -22,6 +22,9 @@ interface Props {
   today?: string;
   /** Today view's clear numeric rank (spec §ז). */
   rank?: number;
+  /** AI urgency tier from the latest prioritization run (0022) — tints the
+   *  rank number so "act now" reads at a glance. */
+  urgency?: 'now' | 'high' | 'medium' | 'low';
   /** Derived "why this ranks now" one-liner (spec §ט). */
   whyNow?: string | null;
   /** Titles of open tasks this one verifiably blocks (spec §ט). */
@@ -44,7 +47,7 @@ interface Props {
 // Her My Work table row: What must move | Phase / sub-stage | Owner /
 // waiting on | Due | Status & update — with an explicit Details toggle.
 // Below lg everything stacks; the columns only exist on wide screens.
-export function WorkTableRow({ task, labels, relations, taskOptions, editorOptions, today, rank, whyNow, unlocks, phaseLabel, stageLabel, projectHref, highlight }: Props) {
+export function WorkTableRow({ task, labels, relations, taskOptions, editorOptions, today, rank, urgency, whyNow, unlocks, phaseLabel, stageLabel, projectHref, highlight }: Props) {
   const [open, setOpen] = useState(false);
   const dueState = task.due && today
     ? task.due < today ? 'overdue' : task.due === today ? 'now' : 'future'
@@ -99,9 +102,16 @@ export function WorkTableRow({ task, labels, relations, taskOptions, editorOptio
             )}
             <span className="flex items-baseline gap-2">
               {rank != null && (
-                <span className="font-mono text-[11px] font-medium text-sage">{String(rank).padStart(2, '0')}</span>
+                <span className={`font-mono text-[11px] font-medium ${
+                  urgency === 'now' ? 'text-coral' : urgency === 'high' ? 'text-apricot' : 'text-sage'
+                }`}>{String(rank).padStart(2, '0')}</span>
               )}
               <span className="min-w-0 text-[11px] font-[650] leading-[1.4] text-sk-ink">{task.title}</span>
+              {urgency === 'now' && (
+                <span className="whitespace-nowrap rounded-full bg-coral-soft px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.04em] text-coral">
+                  {labels.urgencyNow}
+                </span>
+              )}
             </span>
             {task.latest_note && (
               <span className="mt-0.5 block text-[10px] leading-[1.4] text-sk-muted">“{task.latest_note}”</span>

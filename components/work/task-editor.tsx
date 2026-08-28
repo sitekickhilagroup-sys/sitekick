@@ -83,6 +83,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
   const [substageId, setSubstageId] = useState(task.substage_template_id ?? '');
   const [workstreamId, setWorkstreamId] = useState(task.workstream_id ?? '');
   const [impact, setImpact] = useState<ProcessImpact | ''>(task.process_impact ?? '');
+  const [category, setCategory] = useState<'project' | 'admin'>(task.category ?? 'project');
   const [failed, setFailed] = useState(false);
   const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
   const [pending, start] = useTransition();
@@ -140,6 +141,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
     if (substageId !== (task.substage_template_id ?? '')) patch.substage_template_id = substageId || null;
     if (workstreamId !== (task.workstream_id ?? '')) patch.workstream_id = workstreamId || null;
     if (impact !== (task.process_impact ?? '')) patch.process_impact = (impact || null) as ProcessImpact | null;
+    if (category !== (task.category ?? 'project')) patch.category = category;
     if (Object.keys(patch).length === 0) { onClose(); return; }
 
     const res = await updateTaskDetails(task.id, patch);
@@ -253,6 +255,15 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
             className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9">
             <option value="">—</option>
             {IMPACTS.map((v) => <option key={v} value={v}>{labels['impact.' + v]}</option>)}
+          </select>
+        </label>
+
+        <label className="block text-xs text-ink2">
+          <span className="mb-0.5 block text-[10px] font-medium text-ink3">{labels.category}</span>
+          <select value={category} onChange={(e) => setCategory(e.target.value as 'project' | 'admin')}
+            className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9">
+            <option value="project">{labels['category.project']}</option>
+            <option value="admin">{labels['category.admin']}</option>
           </select>
         </label>
 

@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { applyProposal, logActivity } from '@/lib/state-writer';
+import { attributionTokens, runAutoTriage } from '@/lib/auto-triage';
 import type { AgentProposal, ChangeType, Task } from '@/lib/types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -19,6 +20,9 @@ export interface ReviewEdits {
   due?: string;
   changeType?: ChangeType;
   resultNote?: string;
+  /** Drawer project select — the human attribution for an item the agent
+   *  couldn't place (or a correction of a wrong placement). '' = General. */
+  projectId?: string;
 }
 
 export interface ReviewResult {
@@ -80,6 +84,10 @@ export async function decideProposal(
   if (!data) return { error: 'proposal not found' };
   const p = data as AgentProposal;
 
+  // Human attribution from the drawer beats the agent's guess everywhere
+  // below ('' means General/no project, undefined means untouched).
+  const chosenProject = edits.projectId !== undefined ? (edits.projectId || null) : p.project_id;
+
   const patch: Record<string, unknown> = {
     decided_by: decision === 'pending' ? null : actor,
     decided_at: decision === 'pending' ? null : new Date().toISOString(),
@@ -87,6 +95,7 @@ export async function decideProposal(
   if (edits.title !== undefined) patch.title = clean(edits.title);
   if (edits.resultNote !== undefined) patch.result_note = clean(edits.resultNote);
   if (edits.changeType) patch.change_type = edits.changeType;
+  if (edits.projectId !== undefined && chosenProject !== p.project_id) patch.project_id = chosenProject;
 
   if (decision !== 'approved') {
     patch.state = decision === 'pending' ? 'pending' : decision;
@@ -107,13 +116,14 @@ export async function decideProposal(
   if (changeType === 'new_task') {
     if (!title) return { error: 'a new task needs a title' };
     const { data: created, error } = await admin.from('tasks').insert({
-      project_id: p.project_id,
+      project_id: chosenProject,
       document_id: p.document_id,
       title,
       description: note,
       owner,
       due,
       stage_key: typeof p.payload.stage_key === 'string' ? p.payload.stage_key : null,
+      category: p.payload.category === 'admin' ? 'admin' : 'project',
       status: 'open',
       source: 'agent review',
       last_touched: today,
@@ -131,13 +141,14 @@ export async function decideProposal(
     if (!title) return { error: 'a new task needs a title' };
     if (!p.target_task_id) return { error: 'linking needs an existing task' };
     const { data: created, error } = await admin.from('tasks').insert({
-      project_id: p.project_id,
+      project_id: chosenProject,
       document_id: p.document_id,
       title,
       description: note,
       owner,
       due,
       stage_key: typeof p.payload.stage_key === 'string' ? p.payload.stage_key : null,
+      category: p.payload.category === 'admin' ? 'admin' : 'project',
       status: 'open',
       source: 'agent review',
       last_touched: today,
@@ -145,7 +156,7 @@ export async function decideProposal(
     if (error) return { error: error.message };
 
     const { error: relError } = await admin.from('relationships').insert({
-      project_id: p.project_id,
+      project_id: chosenProject,
       from_task_id: p.target_task_id,
       to_task_id: created.id,
       type: 'blocks',
@@ -191,8 +202,45 @@ export async function decideProposal(
   patch.change_type = changeType;
   const { error: pErr } = await admin.from('agent_proposals').update(patch).eq('id', id);
   if (pErr) return { error: pErr.message };
+
+  // LEARNING (attribution): the agent couldn't place this item; the human
+  // just did. The item's distinctive tokens become a durable rule, and the
+  // next communication from the same vendor/subject arrives pre-attributed
+  // (agents/extract-comms.ts applies rules at ingest).
+  if (!p.project_id && chosenProject && title) {
+    const tokens = attributionTokens(title);
+    if (tokens.length >= 2) {
+      await admin.from('review_rules').insert({
+        kind: 'attribute_project',
+        match: { tokens },
+        outcome: { project_id: chosenProject },
+        learned_from: p.id,
+      });
+      await logActivity(admin, {
+        entity_type: 'review_rule', entity_id: p.id, actor,
+        action: 'learn:attribute_project', after: { tokens, project_id: chosenProject },
+      });
+    }
+  }
+
   revalidateReview();
   return { ok: true, undoId, message: changeType };
+}
+
+/** Inbox "Auto-triage now" — one sweep of the whole pending backlog through
+ *  lib/auto-triage (the same classifier ingest runs). Returns what moved so
+ *  the UI can say "applied 58, ignored 12, 20 left". */
+export async function autoTriagePending(): Promise<
+  { ok: true; applied: number; ignored: number; kept: number; errors: number } | { error: string }
+> {
+  await requireUser();
+  const admin = supabaseAdmin();
+  const { data } = await admin.from('agent_proposals')
+    .select('*').eq('state', 'pending')
+    .order('created_at', { ascending: true }).limit(500);
+  const summary = await runAutoTriage(admin, (data ?? []) as AgentProposal[], { today: laToday() });
+  revalidateReview();
+  return { ok: true, ...summary };
 }
 
 export interface FeedItem {

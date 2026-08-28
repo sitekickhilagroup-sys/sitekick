@@ -9,8 +9,8 @@ import type { Task } from '../lib/types';
 const canned = {
   project_name: '2361-2367 San Marco',
   tasks: [
-    { op: 'update', existing_id: 'task-1', project_name: '2361-2367 San Marco', stage_key: null, title: 'Retain Surveyor (Updated Survey / Topo)', waiting_for: 'Refael', priority: 'critical' },
-    { op: 'create', project_name: '2361-2367 San Marco', title: 'Order soils report addendum', owner: 'Noa', due: '2026-08-28', priority: 'normal', stage_key: 'plan_check' },
+    { op: 'update', existing_id: 'task-1', project_name: '2361-2367 San Marco', stage_key: null, category: null, title: 'Retain Surveyor (Updated Survey / Topo)', waiting_for: 'Refael', priority: 'critical' },
+    { op: 'create', project_name: '2361-2367 San Marco', title: 'Order soils report addendum', owner: 'Noa', due: '2026-08-28', priority: 'normal', stage_key: 'plan_check', category: 'project' },
   ],
   blockers: [
     // evidence is required as of Noa round 3 (agent bug #3) — a blocker claim
@@ -44,6 +44,7 @@ function fakeAdmin(calls: Array<{ table: string; op: string; payload?: unknown }
       select: () => chain,
       eq: () => chain,
       in: () => chain,
+      not: () => chain,
       order: () => chain,
       limit: () => chain,
       single: async () => ({ data: { id: 'row-1' }, error: null }),
@@ -132,7 +133,7 @@ describe('applyExtractResult', () => {
     const admin = fakeAdmin(calls);
     const result = ExtractResultSchema.parse({
       ...canned,
-      tasks: [{ op: 'create', project_name: '2361-2367 San Marco', stage_key: null, title: 'Retain surveyor updated survey topo', priority: 'normal' }],
+      tasks: [{ op: 'create', project_name: '2361-2367 San Marco', stage_key: null, category: null, title: 'Retain surveyor updated survey topo', priority: 'normal' }],
       blockers: [], decisions: [], drafts: [], vendor_hours: [],
     });
     const openTasks = [
@@ -164,8 +165,8 @@ describe('applyExtractResult', () => {
       ...canned,
       project_name: null,
       tasks: [
-        { op: 'create', project_name: '2361-2367 San Marco', title: 'Respond to Hold Letter', priority: 'normal', stage_key: 'planning' },
-        { op: 'create', project_name: '2650 Rinconia', title: 'Pay City intake invoice', priority: 'critical', stage_key: 'plan_check' },
+        { op: 'create', project_name: '2361-2367 San Marco', title: 'Respond to Hold Letter', priority: 'normal', stage_key: 'planning', category: 'project' },
+        { op: 'create', project_name: '2650 Rinconia', title: 'Pay City intake invoice', priority: 'critical', stage_key: 'plan_check', category: 'admin' },
       ],
       blockers: [], decisions: [], drafts: [], vendor_hours: [],
     });
@@ -191,7 +192,7 @@ describe('applyExtractResult', () => {
     const result = ExtractResultSchema.parse({
       ...canned,
       project_name: null,
-      tasks: [{ op: 'create', project_name: null, stage_key: null, title: 'Pay all outstanding invoices', priority: 'normal' }],
+      tasks: [{ op: 'create', project_name: null, stage_key: null, category: 'admin', title: 'Pay all outstanding invoices', priority: 'normal' }],
       blockers: [], decisions: [], drafts: [], vendor_hours: [],
     });
     const summary = await applyExtractResult(admin, 'doc1', result, {

@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
+import { autoTriagePending, decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
 import type { ChangeType, ProposalState } from '@/lib/types';
 import { fmtDate } from '@/lib/format';
 
 export interface ReviewRow {
   id: string;
+  projectId: string | null;
   projectName: string | null;
   title: string;
   phase: string;
@@ -30,6 +31,9 @@ const FILTERS: { key: string; labelKey: string }[] = [
   { key: 'pending', labelKey: 'needs' },
   { key: 'not_sure', labelKey: 'unsure' },
   { key: 'accepted', labelKey: 'approved' },
+  // Auto-triage outcomes get their own shelf — what the system did on its
+  // own must stay inspectable (and undoable via Restore), never buried.
+  { key: 'auto_applied', labelKey: 'auto' },
   { key: 'ignored', labelKey: 'ignored' },
   { key: 'rejected', labelKey: 'wrong' },
   { key: 'all', labelKey: 'history' },
@@ -55,12 +59,20 @@ const stateTone = (s: ProposalState) =>
         : s === 'ignored' ? 'bg-inset text-ink3'
           : 'bg-mist-soft text-mist';
 
-export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Record<string, string> }) {
+export function ReviewBoard({ rows, projects, labels }: {
+  rows: ReviewRow[];
+  /** Active projects for the drawer's attribution select. */
+  projects: { id: string; name: string }[];
+  labels: Record<string, string>;
+}) {
   const [filter, setFilter] = useState('pending');
   const [selected, setSelected] = useState<ReviewRow | null>(null);
   const [toast, setToast] = useState<{ text: string; undoId: string | null } | null>(null);
   const [failed, setFailed] = useState(false);
   const [pending, start] = useTransition();
+  // Bulk selection (pending filter only) — clearing 100+ rows one drawer at
+  // a time is exactly the pain this screen was drowning in.
+  const [checked, setChecked] = useState<Set<string>>(new Set());
 
   // Drawer edits live here so the buttons send what Noa actually sees.
   const [title, setTitle] = useState('');
@@ -68,6 +80,7 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
   const [due, setDue] = useState('');
   const [treatment, setTreatment] = useState<ChangeType>('new_task');
   const [note, setNote] = useState('');
+  const [projectId, setProjectId] = useState('');
 
   const open = (row: ReviewRow) => {
     setSelected(row);
@@ -76,6 +89,7 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
     setDue(/^\d{4}-\d{2}-\d{2}$/.test(row.due) ? row.due : '');
     setTreatment(row.changeType);
     setNote(row.resultNote);
+    setProjectId(row.projectId ?? '');
     setFailed(false);
   };
 
@@ -104,6 +118,7 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
         title, owner, due,
         changeType: override?.changeType ?? treatment,
         resultNote: note,
+        projectId,
       });
       if ('error' in res) { setFailed(true); return; }
       setSelected(null);
@@ -114,6 +129,40 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
   const undo = (undoId: string) => start(async () => {
     const res = await undoProposalDecision(undoId);
     setToast({ text: 'error' in res ? labels.undoFailed : labels.undone, undoId: null });
+  });
+
+  // Bulk decide: each row keeps its own stored treatment/state — no drawer
+  // edits ride along, so what applies is exactly what the list showed.
+  const bulkDecide = (decision: ReviewDecision) => {
+    const ids = [...checked];
+    if (!ids.length) return;
+    start(async () => {
+      let ok = 0;
+      for (const id of ids) {
+        const res = await decideProposal(id, decision, {});
+        if (!('error' in res)) ok++;
+      }
+      setChecked(new Set());
+      setToast({ text: `${labels[`done.${decision}`] ?? ''} · ${ok}/${ids.length}`, undoId: null });
+    });
+  };
+
+  const triageNow = () => start(async () => {
+    const res = await autoTriagePending();
+    if ('error' in res) { setToast({ text: labels.error, undoId: null }); return; }
+    setToast({
+      text: labels.triageDone
+        .replace('{applied}', String(res.applied))
+        .replace('{ignored}', String(res.ignored))
+        .replace('{kept}', String(res.kept)),
+      undoId: null,
+    });
+  });
+
+  const toggle = (id: string) => setChecked((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
   });
 
   return (
@@ -138,6 +187,44 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
         </aside>
 
         <section className="rounded-(--radius-card) border border-line bg-card">
+          {filter === 'pending' && visible.length > 0 && (
+            // Bulk bar: select-all, one-click clears, and the auto-triage
+            // sweep — the queue must be dismissable in minutes, not sessions.
+            <div className="flex flex-wrap items-center gap-2 border-b border-line bg-inset/60 px-3.5 py-2.5">
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-ink2">
+                <input
+                  type="checkbox"
+                  checked={checked.size > 0 && checked.size === visible.length}
+                  onChange={() => setChecked(checked.size === visible.length ? new Set() : new Set(visible.map((r) => r.id)))}
+                  className="h-4 w-4 accent-(--color-sage)"
+                />
+                {labels.selectAll}
+              </label>
+              {checked.size > 0 && (
+                <>
+                  <span className="text-xs font-semibold text-ink">{labels.selectedN.replace('{n}', String(checked.size))}</span>
+                  <button
+                    type="button" disabled={pending} onClick={() => bulkDecide('approved')}
+                    className="min-h-11 cursor-pointer rounded-[9px] bg-sage px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {labels.bulkApprove}
+                  </button>
+                  <button
+                    type="button" disabled={pending} onClick={() => bulkDecide('ignored')}
+                    className="min-h-11 cursor-pointer rounded-[9px] border border-line px-3 py-1.5 text-xs text-ink2 disabled:opacity-50"
+                  >
+                    {labels.bulkIgnore}
+                  </button>
+                </>
+              )}
+              <button
+                type="button" disabled={pending} onClick={triageNow}
+                className="ms-auto min-h-11 cursor-pointer rounded-[9px] border border-sage-line bg-sage-soft px-3 py-1.5 text-xs font-semibold text-sage disabled:opacity-50"
+              >
+                {labels.triageNow}
+              </button>
+            </div>
+          )}
           {visible.length === 0 ? (
             <div className="p-8 text-center">
               <p className="font-serif text-lg text-ink">{labels.emptyTitle}</p>
@@ -146,7 +233,18 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
           ) : (
             <ul>
               {visible.map((r) => (
-                <li key={r.id} className="border-t border-line first:border-t-0">
+                <li key={r.id} className="flex items-stretch border-t border-line first:border-t-0">
+                  {filter === 'pending' && (
+                    <label className="flex cursor-pointer items-center ps-3.5">
+                      <input
+                        type="checkbox"
+                        checked={checked.has(r.id)}
+                        onChange={() => toggle(r.id)}
+                        aria-label={r.title}
+                        className="h-4 w-4 accent-(--color-sage)"
+                      />
+                    </label>
+                  )}
                   <button
                     type="button"
                     onClick={() => open(r)}
@@ -296,6 +394,25 @@ export function ReviewBoard({ rows, labels }: { rows: ReviewRow[]; labels: Recor
                   onChange={(e) => setTitle(e.target.value)}
                   className="mt-1 min-h-11 w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
                 />
+              </label>
+
+              <label className="block">
+                <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fProject}</span>
+                <select
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  className="mt-1 min-h-11 w-full cursor-pointer rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
+                >
+                  <option value="">{labels.general}</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {/* The learning hook, said out loud: filing an unattributed
+                    item teaches the system where this vendor/subject lives. */}
+                {!selected.projectId && (
+                  <span className="mt-1 block text-[10px] text-ink3">{labels.projectLearnHint}</span>
+                )}
               </label>
 
               <div className="grid gap-3 sm:grid-cols-2">

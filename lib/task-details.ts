@@ -15,13 +15,15 @@ import type { PhaseKey, Task } from './types';
 // lib/process.ts. A task's phase is owned implicitly through
 // substage_template_id instead — see resolveTaskPhaseKey below.
 export const DETAIL_KEYS = ['owner', 'waiting_for', 'due', 'project_id',
-  'substage_template_id', 'workstream_id', 'process_impact'] as const;
+  'substage_template_id', 'workstream_id', 'process_impact', 'category'] as const;
 
 export interface TaskDetailsPatch {
   owner?: string | null; waiting_for?: string | null; due?: string | null;
   project_id?: string | null;
   substage_template_id?: string | null; workstream_id?: string | null;
   process_impact?: Task['process_impact'];
+  /** 0022 (brief §2): project work vs administrative. */
+  category?: Task['category'];
 }
 
 // Mirrors the ProcessImpact union in ./types. Kept as its own runtime array
@@ -53,6 +55,11 @@ export function buildDetailsPatch(patch: TaskDetailsPatch): { clean: Record<stri
   if (clean.due != null && !DATE_RE.test(String(clean.due))) return { error: 'invalid date' };
   if (clean.process_impact != null && !PROCESS_IMPACTS.includes(clean.process_impact as NonNullable<Task['process_impact']>)) {
     return { error: 'invalid impact' };
+  }
+  // category is NOT NULL with a default in 0022 — a patch may set it but
+  // never null it out.
+  if ('category' in clean && clean.category !== 'project' && clean.category !== 'admin') {
+    return { error: 'invalid category' };
   }
   if (Object.keys(clean).length === 0) return { error: 'empty patch' };
   return { clean };
