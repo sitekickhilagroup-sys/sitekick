@@ -60,22 +60,18 @@ export async function AppHeader() {
       {/* Spec §1: taller, cleaner header. Contents are unchanged — More pages
           keep every utility, only the proportions move. */}
       <div className="mx-auto flex h-16 max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:gap-8">
-        {/* Both marks: our Sitekick stones + the real Hilla Group logo
-            (asset from her demo), with her HILLA GROUP/Sitekick lockup. */}
+        {/* Both marks: our Sitekick stones + the real Hilla Group H mark,
+            with her HILLA GROUP/Sitekick lockup. The mark is cropped from her
+            demo's square logo (text layers dropped — the lockup already says
+            Hilla Group) and drawn via CSS mask so it inherits the ink token
+            in both themes instead of sitting in a white box. */}
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <Logo size={26} />
           <span className="leading-tight">
             <span className="block text-[8px] font-bold uppercase tracking-[0.22em] text-sage">Hilla Group</span>
             <span className="mt-0.5 block font-serif text-base font-semibold text-ink">Sitekick</span>
           </span>
-          {/* Square mark (450×444) — small on tablet, near full header
-              height on desktop, where there is room for it to read. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/hilla-group-logo.png"
-            alt="Hilla Group"
-            className="ms-1 hidden h-8 w-auto sm:block lg:h-10"
-          />
+          <span aria-hidden className="hilla-mark ms-1.5 hidden h-8 sm:block lg:h-9" />
         </Link>
         <NavLinks links={links} more={moreLinks} moreLabel={t('nav.more')} />
         <div className="ms-auto flex items-center gap-1 lg:ms-0 lg:gap-2">
