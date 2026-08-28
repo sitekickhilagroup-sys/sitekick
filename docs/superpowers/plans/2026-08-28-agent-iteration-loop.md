@@ -169,6 +169,18 @@ ingest, agent never runs. Extended file → new document, agent runs on all
 of it, but items land as updates on existing tasks, re-asserted claims are
 suppressed, and only genuine additions/changed facts reach the inbox.
 
+## Round B — upload plan for the other agents (materials from Noa)
+
+Shareable plan: https://claude.ai/code/artifact/f3e29b08-db7e-4f96-ba43-c618a352e7e1
+Eight packages, each item measures one rule: invoice PDFs (incl. a contract
++ a renamed re-upload), single .eml emails (property / vendor-only /
+case-number / follow-up / deadline / general), more meeting pairs, the
+updated invoice tracker, the ops task tracker (ONLY after owner-column
+canonization), pasted updates (auto-attach / review / multi-project error),
+one MP4 (stored-only, known gap), OLM stays parked for an offline path.
+Iteration 2 is queued as a background-task chip (task_415584de) so it is
+not forgotten while round B runs.
+
 ## Iteration 2 — planned, NOT started
 
 - Sub-stage mapping: the 45 substage_templates (5 phases) into the prompt;
