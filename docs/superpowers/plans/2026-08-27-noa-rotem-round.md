@@ -63,6 +63,7 @@ Shipped (all in 4f9830e, migration 0019 applied to prod):
 - Data: Blair + 'Design / Engineering' workstream (plan_check).
 
 Open / deferred:
-- Hard-delete of the 2 cancelled PREMISE rows — needs Dor (classifier).
+- ~~Hard-delete of the 2 cancelled PREMISE rows~~ — done 2026-08-28 on Dor's
+  explicit instruction (both rows deleted, 0 PREMISE test rows remain).
 - Structured dependencies (depends_on is free text by design for now).
 - Noa's per-substage explanations she typed into notes stay as-is.
