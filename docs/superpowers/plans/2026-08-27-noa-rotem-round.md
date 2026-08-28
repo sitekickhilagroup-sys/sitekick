@@ -35,3 +35,34 @@ Full pre-change backup: session scratchpad `invoices-backup-2026-08-27.json` (10
 
 - Noa: https://claude.ai/code/artifact/f91435db-174d-42f1-b864-8b8defcbc04f
 - Rotem: https://claude.ai/code/artifact/b7e72651-8ac6-4d91-8aca-0a26c73d0247
+
+## Round 3 (2026-08-28) — commit 4f9830e
+
+Inputs: Rotem's QA docx (all 27 items pass; 2 leftovers) + Noa's
+sitekickreport.html (15 items: 3 critical, 4 structure, 6 agent, 3 asks).
+
+Shipped (all in 4f9830e, migration 0019 applied to prod):
+- Reopen: /work "Completed" tab (last 100 closed, done+dropped) + reopenTask
+  with undo. VerbMenu: 350ms double-click guard + armed confirm on
+  completed/not_applicable.
+- Sub-stages: upcoming instance stays visible with note (bank bounce fixed);
+  manual reorder arrows (project_substages.position, ±5 between ×10 library
+  slots, computed server-side via computeSubstageMove); depends_on field +
+  list line; done chip solid green; add-substage input on every phase's bank
+  (Bidding gap); sub-stage eyebrow above titles in My Work.
+- Invoices: status 'cancelled' (enum 0019) — off-chain, out of open totals.
+  PREMISE INV-100A + ABC set to cancelled (hard DELETE blocked by permission
+  classifier; cancel achieves Rotem's intent, rows auditable). Header back
+  to 35 / $86,037.76.
+- Agents: attribution from property evidence only (vendor never attributes;
+  city_case now in the prompt's project list); blocking = stops-a-stage;
+  task titles are actions, never stage names; waiting_for from this
+  project's text only; evidence quotes REQUIRED on blocker/deadline/
+  relationship claims and carried to evidence_excerpt (was hardcoded null);
+  in-batch create dedupe (triple-LID class).
+- Data: Blair + 'Design / Engineering' workstream (plan_check).
+
+Open / deferred:
+- Hard-delete of the 2 cancelled PREMISE rows — needs Dor (classifier).
+- Structured dependencies (depends_on is free text by design for now).
+- Noa's per-substage explanations she typed into notes stay as-is.
