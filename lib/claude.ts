@@ -58,14 +58,23 @@ export async function runStructured<T>(opts: RunStructuredOptions<T>): Promise<T
 
   let messages = [...opts.messages];
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await client.messages.create({
+    const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: MODELS[opts.job],
       max_tokens: opts.maxTokens ?? 16000,
       system: opts.system,
       messages,
       tools: [tool],
       tool_choice: { type: 'tool', name: opts.toolName },
-    });
+    };
+    // Large max_tokens budgets make the SDK refuse non-streaming calls
+    // ("Streaming is required for operations that may take longer than 10
+    // minutes" — this silently killed the first prioritization cron run).
+    // Stream when the client supports it; the plain create path stays for
+    // test fakes that only implement messages.create.
+    const streamFn = (client.messages as unknown as { stream?: unknown }).stream;
+    const response = typeof streamFn === 'function'
+      ? await client.messages.stream(params).finalMessage()
+      : await client.messages.create(params);
 
     const toolUse = response.content.find(
       (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === opts.toolName,
