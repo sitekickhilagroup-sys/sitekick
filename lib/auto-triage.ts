@@ -332,10 +332,21 @@ export async function runAutoTriage(
     summary.ignored++;
   };
 
-  // In-batch duplicate collapse (provable): same identity key as the ingest
-  // dedup uses. The batch arrives oldest-first from the sweep, so the older
-  // row survives and later re-assertions fold into it.
+  // Duplicate collapse (provable): same identity key as the ingest dedup
+  // uses. Seeded with claims already accepted/auto-applied — a pending row
+  // re-asserting a claim the team already took is settled, not open. The
+  // batch itself arrives oldest-first from the sweep, so among pending twins
+  // the older survives.
   const seenKeys = new Set<string>();
+  const { data: settled } = await admin.from('agent_proposals')
+    .select('type,project_id,target_task_id,payload')
+    .in('state', ['accepted', 'auto_applied'])
+    .order('decided_at', { ascending: false })
+    .limit(500);
+  for (const e of (settled ?? []) as ProposalIdentity[]) {
+    const k = proposalKey(e);
+    if (k) seenKeys.add(k);
+  }
 
   for (const p of proposals) {
     if (p.state !== 'pending') { summary.kept++; continue; }
@@ -343,7 +354,7 @@ export async function runAutoTriage(
     const key = proposalKey(p as ProposalIdentity);
     if (key) {
       if (seenKeys.has(key)) {
-        await ignore(p, 'duplicate of another pending suggestion (same identity)', proposalClass(p));
+        await ignore(p, 'duplicate of a claim already pending or already accepted (same identity)', proposalClass(p));
         continue;
       }
       seenKeys.add(key);
@@ -354,13 +365,46 @@ export async function runAutoTriage(
     if (verdict.action === 'review') { summary.kept++; continue; }
 
     if (verdict.action === 'auto_apply') {
-      const applied = await applyProposal(admin, p, TRIAGE_ACTOR, today, { agentApply: true });
-      if ('error' in applied) {
-        // Application failed (target vanished, match failed) — the row stays
-        // pending; a human still sees it. Loud in the log, silent nowhere.
-        console.error('[auto-triage] apply failed:', p.id, applied.error);
-        summary.errors++;
-        continue;
+      if (p.type === 'task_create') {
+        // A learned-accepted creation still needs a home: attribution is a
+        // human act (or a learned rule applied at ingest) — never defaulted
+        // to General here. Without a project the row waits for a person.
+        if (!p.project_id) { summary.kept++; continue; }
+        const pay = p.payload as Record<string, unknown>;
+        const str = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null);
+        const { data: created, error } = await admin.from('tasks').insert({
+          project_id: p.project_id,
+          document_id: p.document_id,
+          title: str(pay.title) ?? str(p.title) ?? 'Untitled',
+          description: str(pay.description),
+          owner: str(pay.owner),
+          waiting_for: str(pay.waiting_for),
+          due: str(pay.due),
+          stage_key: str(pay.stage_key),
+          priority: pay.priority === 'critical' || pay.priority === 'high' ? pay.priority : 'normal',
+          category: pay.category === 'admin' ? 'admin' : 'project',
+          status: 'open',
+          source: 'agent:auto-triage',
+          last_touched: today,
+        }).select('id').single();
+        if (error || !created) {
+          console.error('[auto-triage] create failed:', p.id, error?.message);
+          summary.errors++;
+          continue;
+        }
+        await logActivity(admin, {
+          entity_type: 'task', entity_id: created.id, actor: TRIAGE_ACTOR,
+          action: 'create', after: { proposal_id: p.id, reason: verdict.reason },
+        });
+      } else {
+        const applied = await applyProposal(admin, p, TRIAGE_ACTOR, today, { agentApply: true });
+        if ('error' in applied) {
+          // Application failed (target vanished, match failed) — the row stays
+          // pending; a human still sees it. Loud in the log, silent nowhere.
+          console.error('[auto-triage] apply failed:', p.id, applied.error);
+          summary.errors++;
+          continue;
+        }
       }
       await admin.from('agent_proposals').update({
         state: 'auto_applied',

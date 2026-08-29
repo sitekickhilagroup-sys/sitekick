@@ -178,21 +178,29 @@ describe('attribution rules', () => {
   });
 });
 
-describe('runAutoTriage — in-batch duplicate collapse', () => {
-  function fakeAdmin(calls: Array<{ table: string; op: string; payload?: unknown }>): SupabaseClient {
+describe('runAutoTriage — provable duplicates and learned creates', () => {
+  function fakeAdmin(
+    calls: Array<{ table: string; op: string; payload?: unknown }>,
+    settled: unknown[] = [],
+    history: unknown[] = [],
+  ): SupabaseClient {
     const make = (table: string) => {
+      let wantsSettled = false;
       const chain = {
         insert: (payload: unknown) => { calls.push({ table, op: 'insert', payload }); return chain; },
         update: (payload: unknown) => { calls.push({ table, op: 'update', payload }); return chain; },
         select: () => chain,
         eq: () => chain,
-        in: () => chain,
+        // The settled-claims query is the only one filtering with .in(...) on
+        // agent_proposals — route it to the settled fixture.
+        in: () => { if (table === 'agent_proposals') wantsSettled = true; return chain; },
         not: () => chain,
         order: () => chain,
         limit: () => chain,
         single: async () => ({ data: { id: 'row-1' }, error: null }),
         maybeSingle: async () => ({ data: null, error: null }),
-        then: (resolve: (v: { data: unknown; error: null }) => void) => resolve({ data: [], error: null }),
+        then: (resolve: (v: { data: unknown; error: null }) => void) =>
+          resolve({ data: table === 'agent_proposals' ? (wantsSettled ? settled : history) : [], error: null }),
       };
       return chain;
     };
@@ -217,5 +225,40 @@ describe('runAutoTriage — in-batch duplicate collapse', () => {
     expect(out.applied).toBe(1);   // attributed decision — structural default
     expect(out.ignored).toBe(1);   // same proposalKey — provable duplicate
     expect(out.kept).toBe(0);
+  });
+
+  it('a pending row re-asserting an already-accepted claim folds as settled', async () => {
+    const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
+    const out = await runAutoTriage(fakeAdmin(calls, [
+      { type: 'decision_create', project_id: 'p-blair', target_task_id: null, payload: { title: 'Adopt not-to-exceed clauses' } },
+    ]), [proposal({ id: 'rerun' })], { today: '2026-08-29' });
+    expect(out.ignored).toBe(1);
+    expect(out.applied).toBe(0);
+  });
+
+  it('a learned-accepted task_create creates the task when attributed — and waits for a human when not', async () => {
+    const history = Array.from({ length: 6 }, () => ({
+      type: 'task_create', reasoning: 'no project evidence in the text — needs human attribution',
+      state: 'accepted', decided_by: 'noa@x.com', payload: {},
+    }));
+    const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
+    const out = await runAutoTriage(fakeAdmin(calls, [], history), [
+      proposal({
+        id: 'attributed', type: 'task_create', project_id: 'p-blair',
+        reasoning: 'no project evidence in the text — needs human attribution',
+        title: 'Order Blair survey', payload: { title: 'Order Blair survey' },
+      }),
+      proposal({
+        id: 'orphan', type: 'task_create', project_id: null,
+        reasoning: 'no project evidence in the text — needs human attribution',
+        title: 'Mystery item', payload: { title: 'Mystery item' },
+      }),
+    ], { today: '2026-08-29' });
+    expect(out.applied).toBe(1);
+    expect(out.kept).toBe(1); // no home → no defaulting into General, a human files it
+    expect(out.errors).toBe(0);
+    const taskInserts = calls.filter((c) => c.table === 'tasks' && c.op === 'insert');
+    expect(taskInserts).toHaveLength(1);
+    expect(taskInserts[0].payload).toMatchObject({ project_id: 'p-blair', title: 'Order Blair survey', source: 'agent:auto-triage' });
   });
 });
