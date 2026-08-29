@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { PortfolioEntry } from '@/lib/queries';
+import { projectColor } from '@/lib/project-color';
 import { fmtDate } from '@/lib/format';
 
 export interface AccordionLabels {
@@ -69,11 +70,11 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
       ? 'bg-coral-soft text-coral'
       : riskState === 'waiting' ? 'bg-mist-soft text-mist' : 'bg-sage-soft text-sage';
 
-  // Her .health-dot semantics on the trigger.
-  const dotClass =
-    riskState === 'on_hold' || riskState === 'at_risk' ? 'bg-coral shadow-[0_0_0_4px_var(--color-coral-soft)]'
-    : riskState === 'waiting' ? 'bg-mist shadow-[0_0_0_4px_var(--color-mist-soft)]'
-    : 'bg-sage shadow-[0_0_0_4px_var(--color-sage-soft)]';
+  // Identity dot, not health (Dor, 2026-08-29): with every project blocked,
+  // a red health dot carried zero signal — the dot is now the project's own
+  // stable color, matching My Work's sections and the urgency strip. Risk
+  // state still reads in the chip on the right.
+  const color = projectColor(project.id);
 
   return (
     <article className={`overflow-hidden rounded-[12px] border transition-colors ${
@@ -84,7 +85,11 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
         className="grid cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto_22px] items-center gap-3 px-4 py-3 sm:grid-cols-[16px_minmax(0,1fr)_110px_auto_22px]"
         onClick={() => setOpen((v) => !v)}
       >
-        <span aria-hidden="true" className={`h-2 w-2 rounded-full ${dotClass}`} />
+        <span
+          aria-hidden="true"
+          className="h-2 w-2 rounded-full"
+          style={{ background: color.solid, boxShadow: `0 0 0 4px ${color.soft}` }}
+        />
         <h3 className="min-w-0">
           <Link
             href={`/projects/${project.id}`}

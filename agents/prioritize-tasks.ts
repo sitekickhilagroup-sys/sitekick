@@ -23,7 +23,7 @@ You receive every OPEN task (grouped by project) plus each project's phase, acti
 Score every task 0-100 for "how urgent is it to act on this TODAY", assign an urgency tier, and give ONE short reason grounded in that task's own facts.
 
 Ranking factors, in rough weight order:
-1. HARD DEADLINES — permit/plan-check expirations, city appointment dates, payment due dates. Overdue or ≤7 days out dominates everything.
+1. HARD DEADLINES — permit/plan-check expirations, city appointment dates, payment due dates. Overdue or ≤7 days out dominates everything. A dated commitment inside the next 48 hours outranks ANY undated blocker, however severe — an undated blocker is still there the day after tomorrow; a missed filing fee is not. Among "now" items, earlier hard date first.
 2. BLOCKS THE PROCESS — the task stops a phase/sub-stage from advancing (process_impact primary_blocker/workstream_blocker, or it feeds an active blocker's release).
 3. FINANCIAL / LEGAL RISK — claims, disputed payments, expiring extensions, penalties, anything with a dollar amount and a counterparty.
 4. UNBLOCKS OTHERS — completing it releases other listed tasks (dependencies).
