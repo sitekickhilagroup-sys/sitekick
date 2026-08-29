@@ -2,8 +2,10 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { getOverviewData } from '@/lib/queries';
+import { supabaseServer } from '@/lib/supabase/server';
 import { IntelligenceTabs } from '@/components/overview/intelligence-tabs';
 import { ProjectAccordion } from '@/components/portfolio/project-accordion';
+import type { TaskRank } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +22,26 @@ export default async function OverviewPage() {
   // migration 0007 lands the column.
   const activePortfolio = data.portfolio.filter((e) => e.project.active !== false);
   const inactivePortfolio = data.portfolio.filter((e) => e.project.active === false);
+
+  // Dor 8/29: the map orders by urgency — the project whose top task ranks
+  // highest in the latest AI run comes first, the same rule My Work's
+  // sections follow. No run yet = the existing order stands.
+  const supabase = await supabaseServer();
+  const { data: latestRun } = await supabase.from('priority_runs')
+    .select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (latestRun) {
+    const { data: prioRows } = await supabase.from('task_priorities')
+      .select('project_id,global_rank').eq('run_id', latestRun.id);
+    const minRank = new Map<string, number>();
+    for (const r of (prioRows ?? []) as Pick<TaskRank, 'project_id' | 'global_rank'>[]) {
+      if (!r.project_id) continue;
+      minRank.set(r.project_id, Math.min(minRank.get(r.project_id) ?? Infinity, r.global_rank));
+    }
+    if (minRank.size > 0) {
+      activePortfolio.sort((a, b) =>
+        (minRank.get(a.project.id) ?? Infinity) - (minRank.get(b.project.id) ?? Infinity));
+    }
+  }
 
   // Her RANKED ATTENTION panel: the top ranked actions with what they unlock.
   const ranked = data.actions.slice(0, 4);

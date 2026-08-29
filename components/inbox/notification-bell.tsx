@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState, useTransition } from 'react';
-import { decideProposal, pendingProposalFeed, type FeedItem } from '@/app/actions/proposals';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { decideProposal, pendingProposalCount, pendingProposalFeed, type FeedItem } from '@/app/actions/proposals';
 
 const SEEN_KEY = 'sitekick-last-preview';
 
@@ -14,14 +14,18 @@ const SEEN_KEY = 'sitekick-last-preview';
  */
 export function NotificationBell({ labels }: { labels: Record<string, string> }) {
   const [items, setItems] = useState<FeedItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<FeedItem | null>(null);
   const [pending, start] = useTransition();
 
   const load = useCallback(async () => {
     try {
-      const next = await pendingProposalFeed();
+      // The feed is capped at 8 rows; the badge shows the TRUE pending count
+      // (Dor 8/29: "why 8?" — because 13 were waiting and the cap lied).
+      const [next, count] = await Promise.all([pendingProposalFeed(), pendingProposalCount()]);
       setItems(next);
+      setTotal(count);
       const first = next[0];
       if (first && window.localStorage.getItem(SEEN_KEY) !== first.id) {
         setPreview(first);
@@ -38,6 +42,28 @@ export function NotificationBell({ labels }: { labels: Record<string, string> })
     return () => window.clearInterval(timer);
   }, [load]);
 
+  // Dor 8/29: the panel would not close once opened. Same contract as the
+  // nav's More menu — Escape and any click outside dismiss both the list
+  // panel and the preview toast.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open && !preview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setOpen(false); setPreview(null); }
+    };
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false); setPreview(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onDown);
+    };
+  }, [open, preview]);
+
   const ignore = (item: FeedItem) => start(async () => {
     await decideProposal(item.id, 'ignored');
     setPreview(null);
@@ -48,18 +74,18 @@ export function NotificationBell({ labels }: { labels: Record<string, string> })
   const latest = items[0];
 
   return (
-    <div className="relative">
+    <div ref={wrapRef} className="relative">
       <button
         type="button"
         onClick={() => { setOpen((v) => !v); setPreview(null); }}
-        aria-label={labels.aria.replace('{n}', String(items.length))}
+        aria-label={labels.aria.replace('{n}', String(total))}
         aria-expanded={open}
         className="relative flex min-h-11 min-w-11 items-center justify-center rounded-full text-ink3 hover:text-ink sm:min-h-9 sm:min-w-9"
       >
         <span aria-hidden="true" className="text-base">🔔</span>
-        {items.length > 0 && (
+        {total > 0 && (
           <b className="absolute end-0.5 top-0.5 rounded-full bg-coral px-1.5 py-px text-[9px] font-bold text-white">
-            {items.length}
+            {total}
           </b>
         )}
       </button>
@@ -121,7 +147,7 @@ export function NotificationBell({ labels }: { labels: Record<string, string> })
         <aside className="fixed inset-x-3 top-16 z-50 origin-top rounded-(--radius-card) border border-line bg-card/95 p-4 shadow-card backdrop-blur-md reduce-transparency:bg-card reduce-transparency:backdrop-filter-none motion-safe:animate-sk-pop sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-72">
           <header className="flex items-baseline justify-between gap-2 border-b border-line pb-2">
             <strong className="font-serif text-sm text-ink">{labels.title}</strong>
-            <span className="text-[10px] text-ink3">{labels.waiting.replace('{n}', String(items.length))}</span>
+            <span className="text-[10px] text-ink3">{labels.waiting.replace('{n}', String(total))}</span>
           </header>
           {latest ? (
             <div className="mt-2">

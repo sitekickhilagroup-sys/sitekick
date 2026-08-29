@@ -112,6 +112,14 @@ export function WorkTableRow({ task, labels, relations, taskOptions, editorOptio
                   {labels.urgencyNow}
                 </span>
               )}
+              {/* Brief §2 (Dor 8/29): administrative work must be tellable
+                  from project work at a glance — project rows stay quiet,
+                  admin rows carry the tag. */}
+              {task.category === 'admin' && (
+                <span className="whitespace-nowrap rounded-full bg-apricot-soft px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.04em] text-apricot">
+                  {labels['category.admin']}
+                </span>
+              )}
             </span>
             {task.latest_note && (
               <span className="mt-0.5 block text-[10px] leading-[1.4] text-sk-muted">“{task.latest_note}”</span>

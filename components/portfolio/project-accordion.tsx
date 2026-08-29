@@ -81,8 +81,11 @@ export function ProjectAccordion({ entry, defaultOpen, labels }: Props) {
       open ? 'border-sage-line bg-card shadow-card' : 'border-line bg-card2/50'
     }`}>
       {/* Her .project-drop-trigger grid: dot | name+case | position | state chip | ± */}
+      {/* Fixed-width position + state columns (Dor 8/29: the auto-sized
+          chip made "Current position" start at a different x every row —
+          the whole right side reads as one straight column now). */}
       <div
-        className="grid cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto_22px] items-center gap-3 px-4 py-3 sm:grid-cols-[16px_minmax(0,1fr)_110px_auto_22px]"
+        className="grid cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto_22px] items-center gap-3 px-4 py-3 sm:grid-cols-[16px_minmax(0,1fr)_120px_150px_22px]"
         onClick={() => setOpen((v) => !v)}
       >
         <span

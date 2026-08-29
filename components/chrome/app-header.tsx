@@ -27,11 +27,14 @@ export async function AppHeader() {
   const initial = (profile?.display_name ?? user.email ?? '?').slice(0, 1).toUpperCase();
 
   // Her top bar shows the open-task count on My Work — head count only.
+  // Same treatment for the review inbox (Dor 8/29): the number of
+  // suggestions waiting for a HUMAN rides the nav, so the queue is visible
+  // without opening the bell.
   const supabase = await supabaseServer();
-  const { count: openCount } = await supabase
-    .from('tasks')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'open');
+  const [{ count: openCount }, { count: pendingCount }] = await Promise.all([
+    supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+    supabase.from('agent_proposals').select('id', { count: 'exact', head: true }).eq('state', 'pending'),
+  ]);
 
   // Spec §א: only the five core work areas stay primary; everything else
   // lives under "More" so the top nav never crowds or clips.
@@ -45,7 +48,7 @@ export async function AppHeader() {
     { href: '/weekly', label: t('nav.weekly') },
   ];
   const moreLinks = [
-    { href: '/inbox', label: t('nav.inbox') },
+    { href: '/inbox', label: t('nav.inbox'), badge: pendingCount ?? undefined },
     { href: '/drafts', label: t('nav.drafts') },
     { href: '/digest', label: t('nav.digest') },
     { href: '/directory', label: t('nav.directory') },

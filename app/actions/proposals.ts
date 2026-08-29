@@ -258,7 +258,17 @@ export interface FeedItem {
 /**
  * What the header bell shows: the few suggestions still waiting, with the
  * duplicate they may collide with. Read-only, polled from the client.
+ * The list itself stays capped at 8; `pendingProposalCount` (below) gives
+ * the bell its true badge number so 13 never reads as 8.
  */
+export async function pendingProposalCount(): Promise<number> {
+  await requireUser();
+  const admin = supabaseAdmin();
+  const { count } = await admin.from('agent_proposals')
+    .select('id', { count: 'exact', head: true }).eq('state', 'pending');
+  return count ?? 0;
+}
+
 export async function pendingProposalFeed(): Promise<FeedItem[]> {
   await requireUser();
   const admin = supabaseAdmin();

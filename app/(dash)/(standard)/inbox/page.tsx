@@ -27,7 +27,12 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
   // read a different phase here than on My Work the moment it carried a
   // substage_template_id — latent until 0015 lands, and no task's diff in
   // this round touched this file, so no reviewer saw it.
-  const [proposalsQ, projectsQ, phasesQ, stageMapQ, substageTemplatesQ] = await Promise.all([
+  // Two queries, not one window: EVERY pending row always loads (a pending
+  // suggestion must never fall off the page — with 270+ history rows the old
+  // 200-newest window silently hid the entire queue while the bell kept
+  // counting it), plus the newest 200 of everything for the history shelves.
+  const [pendingQ, proposalsQ, projectsQ, phasesQ, stageMapQ, substageTemplatesQ] = await Promise.all([
+    supabase.from('agent_proposals').select('*').eq('state', 'pending').order('created_at', { ascending: false }).limit(500),
     supabase.from('agent_proposals').select('*').order('created_at', { ascending: false }).limit(200),
     supabase.from('projects').select('id,name,current_phase_key,active'),
     supabase.from('phases').select('*'),
@@ -35,7 +40,10 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     supabase.from('substage_templates').select('id,phase_key,name'),
   ]);
 
-  let proposals = (proposalsQ.data ?? []) as AgentProposal[];
+  const pendingRows = (pendingQ.data ?? []) as AgentProposal[];
+  const historyRows = (proposalsQ.data ?? []) as AgentProposal[];
+  const pendingIds = new Set(pendingRows.map((p) => p.id));
+  let proposals = [...pendingRows, ...historyRows.filter((p) => !pendingIds.has(p.id))];
   const projectRows = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name' | 'current_phase_key' | 'active'>[];
   // Drawer attribution select: active projects only — filing new work under
   // a parked project would just hide it.

@@ -44,6 +44,9 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
   }, [open]);
 
   const moreActive = (more ?? []).some((l) => isActive(l.href, pathname));
+  // A badge hidden inside a closed dropdown is no badge at all — the More
+  // trigger carries the sum (today: the review-inbox pending count).
+  const moreBadge = (more ?? []).reduce((n, l) => n + (l.badge ?? 0), 0);
 
   return (
     // Centered like her demo's top bar.
@@ -84,6 +87,11 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
             }`}
           >
             {moreLabel}
+            {moreBadge > 0 && (
+              <span className={`rounded-full px-1.5 font-mono text-[10px] ${
+                moreActive ? 'bg-sage text-white' : 'bg-card2 text-ink3'
+              }`}>{moreBadge}</span>
+            )}
             <span aria-hidden="true" className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
           </button>
           {open && (
@@ -97,11 +105,16 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
                     role="menuitem"
                     aria-current={active ? 'page' : undefined}
                     onClick={() => setOpen(false)}
-                    className={`flex min-h-9 items-center px-3.5 text-sm ${
+                    className={`flex min-h-9 items-center gap-1.5 px-3.5 text-sm ${
                       active ? 'font-medium text-sage' : 'text-ink2 hover:bg-card2 hover:text-ink'
                     }`}
                   >
                     {l.label}
+                    {l.badge != null && l.badge > 0 && (
+                      <span className={`rounded-full px-1.5 font-mono text-[10px] ${
+                        active ? 'bg-sage text-white' : 'bg-card2 text-ink3'
+                      }`}>{l.badge}</span>
+                    )}
                   </Link>
                 );
               })}
