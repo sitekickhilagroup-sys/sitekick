@@ -142,6 +142,10 @@ export interface ExtractContext {
    *  the attribution rules above need it in the project list. */
   projects: (Pick<Project, 'id' | 'name'> & { city_case?: string | null })[];
   openTasks: Task[];
+  /** Learning at the source: suggestion titles the TEAM (humans, never
+   *  agents) rejected or dismissed — the extractor is told not to re-assert
+   *  them. Loaded by lib/ingest.ts via loadRejectedPatterns. */
+  rejectedPatterns?: string[];
   client?: Anthropic;
 }
 
@@ -155,13 +159,16 @@ export async function extractComms(
   const taskList = ctx.openTasks
     .map((t) => `- [${t.id}] (${t.project_id}) ${t.title}${t.waiting_for ? ` — waiting: ${t.waiting_for}` : ''}${t.due ? ` — due ${t.due}` : ''}`)
     .join('\n');
+  const rejected = (ctx.rejectedPatterns ?? []).length
+    ? `REJECTED BY THE TEAM (previously suggested and explicitly dismissed by a human reviewer — do NOT re-assert these claims or close variants of them unless this communication contains clearly NEW evidence):\n${ctx.rejectedPatterns!.map((t) => `- ${t}`).join('\n')}\n\n`
+    : '';
 
   return runStructured({
     job: 'extract',
     system: SYSTEM,
     messages: [{
       role: 'user',
-      content: `PROJECTS:\n${projectList}\n\nOPEN TASKS (id, project_id, title):\n${taskList || '(none)'}\n\n${doc.project_hint ? `PROJECT HINT: ${doc.project_hint}\n\n` : ''}COMMUNICATION:\n${doc.raw_text}`,
+      content: `PROJECTS:\n${projectList}\n\nOPEN TASKS (id, project_id, title):\n${taskList || '(none)'}\n\n${rejected}${doc.project_hint ? `PROJECT HINT: ${doc.project_hint}\n\n` : ''}COMMUNICATION:\n${doc.raw_text}`,
     }],
     schema: ExtractResultSchema,
     toolName: 'report_extraction',

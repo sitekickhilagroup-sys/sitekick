@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { extractComms, applyExtractResult } from '../agents/extract-comms.ts';
 import { parseInvoice, applyInvoiceParse } from '../agents/parse-invoice.ts';
+import { loadRejectedPatterns } from './auto-triage.ts';
 import type { DocKind, DocSource, Project, Task, Vendor } from './types.ts';
 
 export interface IngestInput {
@@ -87,9 +88,12 @@ export async function processDocument(
     return applyInvoiceParse(admin, doc.id, parse, { projects });
   }
 
+  // Source-side learning: titles the team explicitly dismissed ride into the
+  // prompt so the same noise stops being produced at all.
+  const rejectedPatterns = await loadRejectedPatterns(admin);
   const result = await extractComms(
     { id: doc.id, project_hint: doc.project_hint, raw_text: doc.raw_text ?? '' },
-    { projects, openTasks },
+    { projects, openTasks, rejectedPatterns },
   );
   return applyExtractResult(admin, doc.id, result, { projects, openTasks });
 }

@@ -1,33 +1,38 @@
-// Auto-triage for the review inbox (Dor, 2026-08-29: "81 need review is too
-// many — reduce to almost nothing, and the system must learn from every
-// human review").
+// Auto-triage for the review inbox (Dor, 2026-08-29: "reduce to almost
+// nothing — no guessing, learning only").
 //
-// Two mechanisms, layered:
+// Every reduction here is either PROVABLE or LEARNED — never an LLM's
+// judgment call:
 //
 //  1. LEARNED CLASS THRESHOLDS — every proposal belongs to a class
-//     (type × reasoning family). Human decisions on that class move its
-//     acceptance stats; once a class has enough history, ≥85% acceptance
-//     auto-applies it and ≥85% rejection/ignoring auto-ignores it. This is
-//     recomputed from agent_proposals on every run, so each review Noa does
-//     immediately tunes the next batch — no separate training step. Agent
-//     decisions (decided_by 'agent:…') are excluded so the loop can never
-//     feed itself.
+//     (type × reasoning family × payload shape). Human decisions on that
+//     class move its acceptance stats; once a class has enough history,
+//     ≥85% acceptance auto-applies it and ≥85% rejection/ignoring
+//     auto-ignores it. Payload shape makes the classes fine-grained: a
+//     due-date move, a completion, an owner change and a plain enrichment
+//     learn separately — so when Noa keeps accepting due-moves, due-moves
+//     start applying themselves, without anyone guessing. Recomputed from
+//     agent_proposals on every run; agent decisions (decided_by 'agent:…')
+//     are excluded so the loop can never feed itself.
 //
-//  2. SAFE-DELTA DEFAULTS — before any history exists, a narrow set of
-//     structurally additive suggestions auto-applies: an id-matched task
+//  2. SAFE-DELTA DEFAULT — before any history exists, an id-matched task
 //     update that only ENRICHES (fills empty fields, refreshes description /
-//     waiting_for) and a project-attributed decision log entry. Anything that
-//     CONFLICTS with current state (moves an existing due date, flips owner,
-//     escalates to critical, closes a task) stays for human review, exactly
-//     per the brief: no destructive change without approval.
+//     waiting_for) auto-applies, plus attributed decision log entries.
+//     Anything that CHANGES established data waits for a human until the
+//     class earns its threshold.
 //
-// Numbers from production on 2026-08-28: 113 pending, of which 58 were
-// id-matched enrichment updates that Noa historically accepts ~87% of the
-// time — the class this file exists to clear.
+//  3. PROVABLE NO-OPS — deterministic checks against current state, zero
+//     judgment: an update that asserts only what the register already says;
+//     a completion for a task that is already closed; a pending duplicate of
+//     another pending proposal (same identity key the ingest dedup uses).
+//     These leave the queue as 'ignored' with the proof in result_note.
+//
+// Production numbers: 113 pending on 8/28; the first rule sweep cleared 59.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { applyProposal, logActivity } from './state-writer.ts';
 import { tokenize } from './dedup.ts';
+import { proposalKey, type ProposalIdentity } from './proposals.ts';
 import type { AgentProposal, Task } from './types.ts';
 
 export type TriageAction = 'auto_apply' | 'auto_ignore' | 'review';
@@ -54,8 +59,23 @@ function reasoningFamily(reasoning: string | null): string {
   return 'other';
 }
 
-export function proposalClass(p: Pick<AgentProposal, 'type' | 'reasoning'>): string {
-  return `${p.type}|${reasoningFamily(p.reasoning)}`;
+const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+/** The SHAPE of what an update asserts, from the payload alone (so it is
+ *  computable for historical rows too, where the then-current task state is
+ *  gone). Ordered by risk: the riskiest asserted field names the class. */
+export function payloadShape(type: string, payload: Record<string, unknown>): string {
+  if (type !== 'task_update' && type !== 'task_done') return '';
+  if (type === 'task_done' || s(payload.status) === 'done') return 'closes';
+  if (s(payload.priority) === 'critical') return 'escalates';
+  if (s(payload.due)) return 'dates';
+  if (s(payload.owner)) return 'owner';
+  return 'text';
+}
+
+export function proposalClass(p: Pick<AgentProposal, 'type' | 'reasoning'> & { payload?: Record<string, unknown> }): string {
+  const shape = payloadShape(p.type, p.payload ?? {});
+  return `${p.type}|${reasoningFamily(p.reasoning)}${shape ? `|${shape}` : ''}`;
 }
 
 export interface ClassStats {
@@ -70,6 +90,7 @@ export interface HistoryRow {
   reasoning: string | null;
   state: string;
   decided_by: string | null;
+  payload?: Record<string, unknown> | null;
 }
 
 /** Only human decisions teach. auto_applied rows and anything decided by an
@@ -81,12 +102,12 @@ export function computeClassStats(history: HistoryRow[]): Map<string, ClassStats
   for (const h of history) {
     if (!h.decided_by || h.decided_by.startsWith('agent:')) continue;
     if (h.state !== 'accepted' && h.state !== 'rejected' && h.state !== 'ignored' && h.state !== 'not_sure') continue;
-    const key = proposalClass({ type: h.type as AgentProposal['type'], reasoning: h.reasoning });
-    const s = stats.get(key) ?? { n: 0, accepted: 0, negative: 0 };
-    s.n++;
-    if (h.state === 'accepted') s.accepted++;
-    if (h.state === 'rejected' || h.state === 'ignored') s.negative++;
-    stats.set(key, s);
+    const key = proposalClass({ type: h.type as AgentProposal['type'], reasoning: h.reasoning, payload: h.payload ?? {} });
+    const st = stats.get(key) ?? { n: 0, accepted: 0, negative: 0 };
+    st.n++;
+    if (h.state === 'accepted') st.accepted++;
+    if (h.state === 'rejected' || h.state === 'ignored') st.negative++;
+    stats.set(key, st);
   }
   return stats;
 }
@@ -100,16 +121,14 @@ type TriageProposal = Pick<
   'type' | 'reasoning' | 'confidence' | 'project_id' | 'target_task_id' | 'payload'
 >;
 
-type TargetTask = Pick<Task, 'due' | 'owner' | 'priority' | 'status'>;
-
-const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+type TargetTask = Pick<Task, 'due' | 'owner' | 'priority' | 'status' | 'description' | 'waiting_for'>;
 
 /** True when the update only adds/refreshes information — nothing it writes
  *  contradicts what the task already says. Mirrors exactly what
  *  applyProposal writes for task_update (description, owner, due,
  *  follow_up_date, priority, status, waiting_for). */
 export function isSafeEnrichment(payload: Record<string, unknown>, task: TargetTask): boolean {
-  if (s(payload.status) === 'done') return false;                         // closing needs a human
+  if (s(payload.status) === 'done') return false;                         // closing needs a human (or a learned class)
   const due = s(payload.due);
   if (due && task.due && due !== task.due) return false;                  // moves a real date
   const owner = s(payload.owner);
@@ -118,26 +137,48 @@ export function isSafeEnrichment(payload: Record<string, unknown>, task: TargetT
   return true;
 }
 
+/** PROVABLE no-op: every field the update asserts is either empty or exactly
+ *  what the task already says, and there is no new text. Applying it would
+ *  change nothing — pure echo, deterministically ignorable. */
+export function isNoOpUpdate(payload: Record<string, unknown>, task: TargetTask): boolean {
+  const sameOr = (v: string, cur: string | null) => !v || v.toLowerCase() === (cur ?? '').trim().toLowerCase();
+  if (s(payload.status) === 'done') return false; // a completion is never a no-op against an open task
+  if (!sameOr(s(payload.due), task.due)) return false;
+  if (!sameOr(s(payload.owner), task.owner)) return false;
+  if (!sameOr(s(payload.waiting_for), task.waiting_for)) return false;
+  if (s(payload.priority) === 'critical' && task.priority !== 'critical') return false;
+  const desc = s(payload.description);
+  const hasNewText = !!desc && desc.toLowerCase() !== (task.description ?? '').trim().toLowerCase();
+  return !hasNewText;
+}
+
 export function classifyProposal(
   p: TriageProposal,
   targetTask: TargetTask | null,
   stats: Map<string, ClassStats>,
 ): TriageVerdict {
   const classKey = proposalClass(p);
+  const pay = p.payload ?? {};
 
-  // Learned thresholds first — in BOTH directions they beat the defaults, so
-  // a class the defaults would auto-apply stops auto-applying the moment Noa
-  // starts rejecting it, and vice versa.
+  // PROVABLE no-ops first — no judgment involved, only comparison.
+  if ((p.type === 'task_update' || p.type === 'task_done') && targetTask) {
+    if (targetTask.status !== 'open' && (p.type === 'task_done' || s(pay.status) === 'done')) {
+      return { action: 'auto_ignore', reason: 'moot: the target task is already closed', classKey };
+    }
+    if (p.type === 'task_update' && targetTask.status === 'open' && isNoOpUpdate(pay, targetTask)) {
+      return { action: 'auto_ignore', reason: 'no-op: asserts only what the register already says', classKey };
+    }
+  }
+
+  // Learned thresholds — in BOTH directions they beat the defaults, so a
+  // class the defaults would auto-apply stops auto-applying the moment Noa
+  // starts rejecting it, and a class she keeps accepting (due-moves,
+  // completions) earns auto-apply without anyone guessing.
   const st = stats.get(classKey);
   if (st && st.n >= MIN_CLASS_N) {
     if (st.accepted / st.n >= AUTO_APPLY_RATE) {
-      // Even a learned auto-apply never overrides the structural safety rail
-      // on updates: a conflicting delta still goes to review.
-      if (p.type === 'task_update' || p.type === 'task_done') {
-        if (targetTask && targetTask.status === 'open' && isSafeEnrichment(p.payload, targetTask)) {
-          return { action: 'auto_apply', reason: `learned: ${st.accepted}/${st.n} of this class accepted`, classKey };
-        }
-        return { action: 'review', reason: 'learned-accept class but delta conflicts with current task', classKey };
+      if ((p.type === 'task_update' || p.type === 'task_done') && (!targetTask || targetTask.status !== 'open')) {
+        return { action: 'review', reason: 'learned-accept class but the target task is not open', classKey };
       }
       return { action: 'auto_apply', reason: `learned: ${st.accepted}/${st.n} of this class accepted`, classKey };
     }
@@ -146,10 +187,10 @@ export function classifyProposal(
     }
   }
 
-  // Structural defaults.
+  // Structural default: additive-only writes.
   if (p.type === 'task_update' && reasoningFamily(p.reasoning) === 'matched_id'
     && p.confidence >= 0.75 && p.target_task_id && targetTask && targetTask.status === 'open'
-    && isSafeEnrichment(p.payload, targetTask)) {
+    && isSafeEnrichment(pay, targetTask)) {
     return { action: 'auto_apply', reason: 'id-matched enrichment — adds information, changes nothing established', classKey };
   }
   if (p.type === 'decision_create' && p.project_id && p.confidence >= 0.6) {
@@ -194,6 +235,34 @@ export function matchAttribution(
   return best;
 }
 
+// ── Rejected-pattern memory (learning at the source) ────────────────────────
+// Titles the team explicitly rejected/ignored ride into the extract prompt
+// as "do not re-assert" — the agent stops producing them at all, instead of
+// the queue filtering them after the fact.
+
+export async function loadRejectedPatterns(admin: SupabaseClient, limit = 15): Promise<string[]> {
+  const { data } = await admin.from('agent_proposals')
+    .select('title,decided_by,state')
+    .in('state', ['rejected', 'ignored'])
+    .not('decided_by', 'is', null)
+    .order('decided_at', { ascending: false })
+    .limit(60);
+  const rows = (data ?? []) as { title: string | null; decided_by: string | null; state: string }[];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of rows) {
+    // Human rejections only — bulk agent ignores must not teach the
+    // extractor to stop reporting real information.
+    if (!r.decided_by || r.decided_by.startsWith('agent:')) continue;
+    const t = (r.title ?? '').trim();
+    if (!t || seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase());
+    out.push(t);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 // ── Runner ──────────────────────────────────────────────────────────────────
 
 export interface TriageSummary {
@@ -210,7 +279,7 @@ export async function loadTriageContext(admin: SupabaseClient): Promise<{
 }> {
   const [historyQ, rulesQ] = await Promise.all([
     admin.from('agent_proposals')
-      .select('type,reasoning,state,decided_by')
+      .select('type,reasoning,state,decided_by,payload')
       .not('decided_at', 'is', null)
       .order('decided_at', { ascending: false })
       .limit(500),
@@ -228,9 +297,10 @@ export async function loadTriageContext(admin: SupabaseClient): Promise<{
 
 /**
  * Triage a batch of PENDING proposal rows already in the database: apply the
- * auto-appliable, ignore the auto-ignorable, leave the rest for humans. Used
- * both at ingest time (on the rows a document just produced) and by the
- * sweep over the existing backlog.
+ * auto-appliable, ignore the provably-ignorable, leave the rest for humans.
+ * Used both at ingest time (on the rows a document just produced) and by the
+ * sweep over the existing backlog. Also collapses duplicates WITHIN the
+ * batch: two pending rows asserting the same identity keep only the older.
  */
 export async function runAutoTriage(
   admin: SupabaseClient,
@@ -244,18 +314,47 @@ export async function runAutoTriage(
 
   const targetIds = [...new Set(proposals.map((p) => p.target_task_id).filter((x): x is string => !!x))];
   const { data: targets } = targetIds.length
-    ? await admin.from('tasks').select('id,due,owner,priority,status').in('id', targetIds)
+    ? await admin.from('tasks').select('id,due,owner,priority,status,description,waiting_for').in('id', targetIds)
     : { data: [] };
   const targetById = new Map(((targets ?? []) as (TargetTask & { id: string })[]).map((t) => [t.id, t]));
 
+  const ignore = async (p: AgentProposal, reason: string, classKey: string) => {
+    await admin.from('agent_proposals').update({
+      state: 'ignored',
+      decided_by: TRIAGE_ACTOR,
+      decided_at: new Date().toISOString(),
+      result_note: reason,
+    }).eq('id', p.id);
+    await logActivity(admin, {
+      entity_type: 'proposal', entity_id: p.id, actor: TRIAGE_ACTOR,
+      action: 'auto_ignore', after: { class: classKey, reason },
+    });
+    summary.ignored++;
+  };
+
+  // In-batch duplicate collapse (provable): same identity key as the ingest
+  // dedup uses. The batch arrives oldest-first from the sweep, so the older
+  // row survives and later re-assertions fold into it.
+  const seenKeys = new Set<string>();
+
   for (const p of proposals) {
     if (p.state !== 'pending') { summary.kept++; continue; }
+
+    const key = proposalKey(p as ProposalIdentity);
+    if (key) {
+      if (seenKeys.has(key)) {
+        await ignore(p, 'duplicate of another pending suggestion (same identity)', proposalClass(p));
+        continue;
+      }
+      seenKeys.add(key);
+    }
+
     const target = p.target_task_id ? targetById.get(p.target_task_id) ?? null : null;
     const verdict = classifyProposal(p, target, stats);
     if (verdict.action === 'review') { summary.kept++; continue; }
 
     if (verdict.action === 'auto_apply') {
-      const applied = await applyProposal(admin, p, TRIAGE_ACTOR, today);
+      const applied = await applyProposal(admin, p, TRIAGE_ACTOR, today, { agentApply: true });
       if ('error' in applied) {
         // Application failed (target vanished, match failed) — the row stays
         // pending; a human still sees it. Loud in the log, silent nowhere.
@@ -275,18 +374,31 @@ export async function runAutoTriage(
       });
       summary.applied++;
     } else {
-      await admin.from('agent_proposals').update({
-        state: 'ignored',
-        decided_by: TRIAGE_ACTOR,
-        decided_at: new Date().toISOString(),
-        result_note: verdict.reason,
-      }).eq('id', p.id);
-      await logActivity(admin, {
-        entity_type: 'proposal', entity_id: p.id, actor: TRIAGE_ACTOR,
-        action: 'auto_ignore', after: { class: verdict.classKey, reason: verdict.reason },
-      });
-      summary.ignored++;
+      await ignore(p, verdict.reason, verdict.classKey);
     }
   }
   return summary;
+}
+
+/** The sweep entry point: rule pass over the whole pending backlog, with the
+ *  before/after count so callers can report the reduction honestly. */
+export interface FullTriageSummary extends TriageSummary {
+  pendingBefore: number;
+  pendingAfter: number;
+}
+
+export async function runFullTriage(
+  admin: SupabaseClient,
+  opts?: { today?: string },
+): Promise<FullTriageSummary> {
+  const fetchPending = async (): Promise<AgentProposal[]> => {
+    const { data } = await admin.from('agent_proposals')
+      .select('*').eq('state', 'pending')
+      .order('created_at', { ascending: true }).limit(500);
+    return (data ?? []) as AgentProposal[];
+  };
+  const before = await fetchPending();
+  const pass = await runAutoTriage(admin, before, opts);
+  const after = await fetchPending();
+  return { ...pass, pendingBefore: before.length, pendingAfter: after.length };
 }

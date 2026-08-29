@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { applyProposal, logActivity } from '@/lib/state-writer';
-import { attributionTokens, runAutoTriage } from '@/lib/auto-triage';
+import { attributionTokens, runFullTriage } from '@/lib/auto-triage';
 import type { AgentProposal, ChangeType, Task } from '@/lib/types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -228,19 +228,22 @@ export async function decideProposal(
 }
 
 /** Inbox "Auto-triage now" — one sweep of the whole pending backlog through
- *  lib/auto-triage (the same classifier ingest runs). Returns what moved so
- *  the UI can say "applied 58, ignored 12, 20 left". */
+ *  the deterministic + learned rules. Returns what moved so the UI can say
+ *  "applied 58, ignored 12, 20 left". */
 export async function autoTriagePending(): Promise<
   { ok: true; applied: number; ignored: number; kept: number; errors: number } | { error: string }
 > {
   await requireUser();
   const admin = supabaseAdmin();
-  const { data } = await admin.from('agent_proposals')
-    .select('*').eq('state', 'pending')
-    .order('created_at', { ascending: true }).limit(500);
-  const summary = await runAutoTriage(admin, (data ?? []) as AgentProposal[], { today: laToday() });
+  const full = await runFullTriage(admin, { today: laToday() });
   revalidateReview();
-  return { ok: true, ...summary };
+  return {
+    ok: true,
+    applied: full.applied,
+    ignored: full.ignored,
+    kept: full.pendingAfter,
+    errors: full.errors,
+  };
 }
 
 export interface FeedItem {

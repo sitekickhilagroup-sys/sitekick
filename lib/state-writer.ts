@@ -23,6 +23,12 @@ export async function applyProposal(
   p: AgentProposal,
   actor: string,
   today: string,
+  // agentApply: the write comes from auto-triage, not a human decision. The
+  // only behavioral difference is relationships: an agent-applied edge is
+  // recorded UNVERIFIED (verified_by null), so it renders as a suggestion and
+  // never feeds the ranking's verified-only "unlocks" bonus until a human
+  // confirms it.
+  opts?: { agentApply?: boolean },
 ): Promise<{ ok: true } | { error: string }> {
   const pay = p.payload as Record<string, unknown>;
   if (p.type === 'task_update' || p.type === 'task_done') {
@@ -103,8 +109,8 @@ export async function applyProposal(
       reason: pay.reason ?? null,
       confidence: p.confidence,
       evidence_document_id: p.document_id,
-      verified_by: actor,
-      verified_at: new Date().toISOString(),
+      verified_by: opts?.agentApply ? null : actor,
+      verified_at: opts?.agentApply ? null : new Date().toISOString(),
     }, { onConflict: 'from_task_id,to_task_id' }).select('id').single();
     if (error) return { error: error.message };
     await logActivity(admin, { entity_type: 'relationship', entity_id: data.id, actor, action: 'accept:relationship_create', after: pay });
