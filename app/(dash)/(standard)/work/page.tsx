@@ -240,16 +240,19 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     projects: editorProjectOptions, phases: phaseOptions, substages: substageOptions, workstreams: workstreamOptions,
   };
 
-  const viewTasks = view === 'completed' ? [] : computeView(tasks, view, today, todayCtx);
+  // Brief §2: the category filter applies BEFORE the view computation (Dor
+  // 8/29: cat=admin on Today showed nothing — it used to narrow Today's
+  // already-picked top-8, where admin work rarely ranks; now Today ranks the
+  // top of the CHOSEN category). Tab counts above stay whole-register so the
+  // numbers keep meaning "everything open".
+  const catTasks = cat === 'all' ? tasks : tasks.filter((t) => (t.category ?? 'project') === cat);
+  const viewTasks = view === 'completed' ? [] : computeView(catTasks, view, today, todayCtx);
   // ?substage= (the process page's "View all (n)" deep link) narrows
   // whichever view is active down to that one sub-stage's tasks. Validated
   // above, so this only ever narrows to a real (possibly empty) result —
   // never blanks the table because of a bad id — and a legitimately empty
   // result still gets the existing isEmpty/work.empty explanation below.
-  const substageFiltered = spSubstage ? viewTasks.filter((t) => t.substage_template_id === spSubstage) : viewTasks;
-  // Brief §2: the category filter narrows what renders; tab counts above stay
-  // whole-register so the numbers keep meaning "everything open".
-  const filtered = cat === 'all' ? substageFiltered : substageFiltered.filter((t) => (t.category ?? 'project') === cat);
+  const filtered = spSubstage ? viewTasks.filter((t) => t.substage_template_id === spSubstage) : viewTasks;
   // Administrative work renders in its own block (separate rectangles), even
   // when attributed to a project — hidden entirely only by cat=project.
   const adminTasks = cat === 'project' ? [] : filtered.filter((t) => (t.category ?? 'project') === 'admin');
