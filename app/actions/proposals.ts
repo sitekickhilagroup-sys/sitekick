@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { applyProposal, logActivity } from '@/lib/state-writer';
 import { attributionTokens, runFullTriage } from '@/lib/auto-triage';
+import { defaultTreatment } from '@/lib/review-treatments';
 import type { AgentProposal, ChangeType, Task } from '@/lib/types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -106,14 +107,24 @@ export async function decideProposal(
     return { ok: true, undoId: null, message: decision };
   }
 
-  const changeType: ChangeType = edits.changeType ?? p.change_type ?? (p.target_task_id ? 'update_existing' : 'new_task');
+  const changeType: ChangeType = edits.changeType ?? p.change_type ?? defaultTreatment(p.type, !!p.target_task_id);
   const note = clean(edits.resultNote) ?? p.result_note ?? p.evidence_excerpt;
   const title = clean(edits.title) ?? p.title ?? (typeof p.payload.title === 'string' ? p.payload.title : null);
   const due = edits.due && DATE_RE.test(edits.due.trim()) ? edits.due.trim() : null;
   const owner = clean(edits.owner);
   let undoId: string | null = null;
 
-  if (changeType === 'new_task') {
+  if (changeType === 'apply_as_stated') {
+    // Not a task edit. A blocker, a relationship, a decision, a due date or
+    // a phase — applyProposal is the one writer that knows which. The drawer
+    // used to fall through to the task branches below, so approving
+    // "Mailer fee payment blocks Schedule ZAD hearing" created a task by
+    // that name instead of the link it describes.
+    // No undo id: undoProposalDecision restores task snapshots only, and an
+    // Undo that quietly left the blocker standing would be a lie.
+    const applied = await applyProposal(admin, p, actor, today);
+    if ('error' in applied) return applied;
+  } else if (changeType === 'new_task') {
     if (!title) return { error: 'a new task needs a title' };
     const { data: created, error } = await admin.from('tasks').insert({
       project_id: chosenProject,

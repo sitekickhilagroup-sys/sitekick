@@ -335,7 +335,11 @@ export type ChangeType =
   // drawer was missing: the two items are genuinely different work in one
   // chain, so both survive and a relationship records the dependency.
   // 'keep_open' leaves both records and links nothing.
-  | 'merge_duplicate' | 'keep_both_linked' | 'keep_open' | 'information_only';
+  // 'apply_as_stated' is the only treatment that is not a task edit: it
+  // hands the proposal to applyProposal, which writes the blocker,
+  // relationship, decision, due date or phase the proposal actually is.
+  | 'merge_duplicate' | 'keep_both_linked' | 'keep_open' | 'information_only'
+  | 'apply_as_stated';
 
 export interface AgentProposal {
   id: string;

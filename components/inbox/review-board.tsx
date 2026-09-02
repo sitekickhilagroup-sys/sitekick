@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { autoTriagePending, decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
-import type { ChangeType, ProposalState } from '@/lib/types';
+import type { ChangeType, ProposalState, ProposalType } from '@/lib/types';
+import { treatmentsFor } from '@/lib/review-treatments';
 import { fmtDate } from '@/lib/format';
 
 export interface ReviewRow {
   id: string;
+  type: ProposalType;
   projectId: string | null;
   projectName: string | null;
   title: string;
@@ -39,13 +41,6 @@ const FILTERS: { key: string; labelKey: string }[] = [
   { key: 'all', labelKey: 'history' },
 ];
 
-const TREATMENTS: ChangeType[] = [
-  'new_task', 'update_existing', 'complete_existing', 'merge_duplicate',
-  // The corrections doc asks for this and the drawer did not offer it: keep
-  // both records and record the dependency between them.
-  'keep_both_linked', 'keep_open', 'information_only',
-];
-
 // Her confidence chip: colour is the claim's strength, never the decision.
 const confTone = (c: string) =>
   c === 'High' ? 'bg-sage-soft text-sage'
@@ -68,7 +63,7 @@ export function ReviewBoard({ rows, projects, labels }: {
   const [filter, setFilter] = useState('pending');
   const [selected, setSelected] = useState<ReviewRow | null>(null);
   const [toast, setToast] = useState<{ text: string; undoId: string | null } | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const [pending, start] = useTransition();
   // Bulk selection (pending filter only) — clearing 100+ rows one drawer at
   // a time is exactly the pain this screen was drowning in.
@@ -87,10 +82,11 @@ export function ReviewBoard({ rows, projects, labels }: {
     setTitle(row.title);
     setOwner(row.owner);
     setDue(/^\d{4}-\d{2}-\d{2}$/.test(row.due) ? row.due : '');
-    setTreatment(row.changeType);
+    const allowed = treatmentsFor(row.type, !!row.matched);
+    setTreatment(allowed.includes(row.changeType) ? row.changeType : 'new_task');
     setNote(row.resultNote);
     setProjectId(row.projectId ?? '');
-    setFailed(false);
+    setFailure(null);
   };
 
   useEffect(() => {
@@ -113,14 +109,14 @@ export function ReviewBoard({ rows, projects, labels }: {
   const decide = (decision: ReviewDecision, override?: { changeType?: ChangeType }) => {
     if (!selected) return;
     start(async () => {
-      setFailed(false);
+      setFailure(null);
       const res = await decideProposal(selected.id, decision, {
         title, owner, due,
         changeType: override?.changeType ?? treatment,
         resultNote: note,
         projectId,
       });
-      if ('error' in res) { setFailed(true); return; }
+      if ('error' in res) { setFailure(res.error); return; }
       setSelected(null);
       setToast({ text: labels[`done.${decision}`] ?? labels['done.approved'], undoId: res.undoId });
     });
@@ -381,10 +377,13 @@ export function ReviewBoard({ rows, projects, labels }: {
                   aria-label={labels.treatment}
                   className="mt-2 min-h-11 w-full cursor-pointer rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none"
                 >
-                  {TREATMENTS.map((t) => (
+                  {treatmentsFor(selected.type, !!selected.matched).map((t) => (
                     <option key={t} value={t}>{labels[`ct.${t}`]}</option>
                   ))}
                 </select>
+                {treatment === 'apply_as_stated'
+                  ? <p className="mt-1.5 text-[10px] text-ink3">{labels[`effect.${selected.type}`] ?? ''}</p>
+                  : !selected.matched && <p className="mt-1.5 text-[10px] text-ink3">{labels.noMatch}</p>}
               </section>
 
               <label className="block">
@@ -453,7 +452,7 @@ export function ReviewBoard({ rows, projects, labels }: {
                   className="mt-1 w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
                 />
               </label>
-              {failed && <p role="alert" className="text-xs text-coral">{labels.error}</p>}
+              {failure && <p role="alert" className="text-xs text-coral">{labels.errorReason.replace('{reason}', failure)}</p>}
             </div>
 
             <footer className="flex flex-wrap items-center gap-2 border-t border-line px-5 py-4">

@@ -4,6 +4,7 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { resolveTaskPhaseKey, resolveTaskSubstageLabel } from '@/lib/task-details';
 import { ReviewBoard, type ReviewRow } from '@/components/inbox/review-board';
+import { defaultTreatment } from '@/lib/review-treatments';
 import type { AgentProposal, ChangeType, Phase, PhaseKey, Project, Task } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -107,11 +108,12 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     const substage = proposedStageKey
       ? prettyStage(proposedStageKey)
       : task ? taskSubstageLabel(task) : '';
-    const defaultChange: ChangeType = p.type === 'task_done'
-      ? 'complete_existing'
-      : task ? 'update_existing' : 'new_task';
+    // One source of truth with the drawer and decideProposal: a proposal
+    // never opens on a treatment the server would only have to refuse.
+    const defaultChange: ChangeType = defaultTreatment(p.type, !!task);
     return {
       id: p.id,
+      type: p.type,
       projectId: p.project_id,
       projectName: p.project_id ? names.get(p.project_id) ?? null : null,
       title: p.title ?? (asText(p.payload.title) || t(`inbox.type.${p.type}`)),
@@ -150,6 +152,7 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     fProject: t('common.project'), projectLearnHint: t('review.project_learn_hint'),
     match: t('review.match'), possibleDup: t('review.possible_dup'), noMatch: t('review.no_match'),
     general: t('common.general'), close: t('common.close'), error: t('common.error_save'),
+    errorReason: t('common.error_save_reason'),
     emptyTitle: t('review.empty_title'), emptySub: t('review.empty_sub'),
     kicker: t('inbox.title'),
     dupFound: t('review.dup_found'), likelyMatch: t('review.likely_match'), reviewHere: t('review.review_here'),
@@ -165,6 +168,12 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     'ct.complete_existing': t('review.ct.complete_existing'), 'ct.merge_duplicate': t('review.ct.merge_duplicate'),
     'ct.keep_both_linked': t('review.ct.keep_both_linked'),
     'ct.keep_open': t('review.ct.keep_open'), 'ct.information_only': t('review.ct.information_only'),
+    'ct.apply_as_stated': t('review.ct.apply_as_stated'),
+    'effect.blocker_create': t('review.effect.blocker_create'),
+    'effect.relationship_create': t('review.effect.relationship_create'),
+    'effect.deadline_update': t('review.effect.deadline_update'),
+    'effect.decision_create': t('review.effect.decision_create'),
+    'effect.phase_set': t('review.effect.phase_set'),
     'state.pending': t('review.f_pending'), 'state.accepted': t('review.f_approved'),
     'state.auto_applied': t('review.state_auto'), 'state.rejected': t('review.f_wrong'),
     'state.ignored': t('review.f_ignored'), 'state.not_sure': t('review.f_unsure'),
