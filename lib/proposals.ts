@@ -51,6 +51,12 @@ export interface RouteContext {
   /** Document-level project, when the whole communication is one project. */
   defaultProjectId?: string | null;
   openTasks: Task[];
+  /** Whether a brand-new task may be written directly (autoCreates) or must go
+   *  to the review queue. False for untrusted sources — forwarded/polled email,
+   *  whose body is attacker-controllable — so injected "create" ops become
+   *  proposals a human sees, never silent live tasks. Defaults true (trusted
+   *  staff uploads/transcripts keep the existing one-step create). */
+  allowAutoCreate?: boolean;
 }
 
 function norm(v: unknown): string {
@@ -191,6 +197,7 @@ export function routeExtractResult(
   const autoCreates: RoutedCreate[] = [];
   const proposals: ProposalDraft[] = [];
   const batchKeys = new Set<string>();
+  const allowAutoCreate = ctx.allowAutoCreate ?? true;
   const resolve = (name: string | null | undefined): string | null =>
     ctx.resolveProject(name) ?? ctx.defaultProjectId ?? null;
 
@@ -275,8 +282,22 @@ export function routeExtractResult(
         continue;
       }
     }
-    if (itemProject) {
+    if (itemProject && allowAutoCreate) {
       autoCreates.push({ op, project_id: itemProject });
+    } else if (itemProject) {
+      // Attributed, but from an untrusted source (forwarded/polled email): the
+      // create keeps its project but lands in the review queue instead of
+      // writing a live task. Closes the "injected email → silent task" path;
+      // auto-triage may still auto-apply it, but only via a learned class.
+      proposals.push({
+        type: 'task_create',
+        project_id: itemProject,
+        payload: op as unknown as Record<string, unknown>,
+        target_task_id: null,
+        confidence: 0.5,
+        reasoning: 'new task from an untrusted source — needs review',
+        title: op.title,
+      });
     } else {
       // No property evidence for this item. It used to be discarded with the
       // whole document; now it waits in the review inbox for attribution.
@@ -297,8 +318,11 @@ export function routeExtractResult(
     proposals.push({ type: 'blocker_create', project_id: resolve(b.project_name), payload: b, target_task_id: null, confidence: 0.7, reasoning: 'new blocker asserted by communication', title: b.what, evidence: b.evidence });
   }
   for (const d of result.decisions) {
-    if (!d.title.trim()) continue;
-    proposals.push({ type: 'decision_create', project_id: resolve(d.project_name), payload: d, target_task_id: null, confidence: 0.7, reasoning: 'decision asserted by communication', title: d.title, evidence: d.detail ?? null });
+    // Same evidence gate as blockers/deadlines/relationships: a decision with
+    // no verbatim quote never reaches the queue (and the schema now requires
+    // one). The quote itself is the evidence, not the model's free-text detail.
+    if (!d.title.trim() || !d.evidence.trim()) continue;
+    proposals.push({ type: 'decision_create', project_id: resolve(d.project_name), payload: d, target_task_id: null, confidence: 0.7, reasoning: 'decision asserted by communication', title: d.title, evidence: d.evidence });
   }
   for (const du of result.deadline_updates) {
     if (!du.task_match.trim() || !du.evidence.trim()) continue;

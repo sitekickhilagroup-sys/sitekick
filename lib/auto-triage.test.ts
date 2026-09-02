@@ -183,6 +183,7 @@ describe('runAutoTriage — provable duplicates and learned creates', () => {
     calls: Array<{ table: string; op: string; payload?: unknown }>,
     settled: unknown[] = [],
     history: unknown[] = [],
+    docs: unknown[] = [],
   ): SupabaseClient {
     const make = (table: string) => {
       let wantsSettled = false;
@@ -200,7 +201,7 @@ describe('runAutoTriage — provable duplicates and learned creates', () => {
         single: async () => ({ data: { id: 'row-1' }, error: null }),
         maybeSingle: async () => ({ data: null, error: null }),
         then: (resolve: (v: { data: unknown; error: null }) => void) =>
-          resolve({ data: table === 'agent_proposals' ? (wantsSettled ? settled : history) : [], error: null }),
+          resolve({ data: table === 'agent_proposals' ? (wantsSettled ? settled : history) : table === 'documents' ? docs : [], error: null }),
       };
       return chain;
     };
@@ -234,6 +235,31 @@ describe('runAutoTriage — provable duplicates and learned creates', () => {
     ]), [proposal({ id: 'rerun' })], { today: '2026-08-29' });
     expect(out.ignored).toBe(1);
     expect(out.applied).toBe(0);
+  });
+
+  it('an untrusted-source (email) auto_apply is downgraded to review, never applied', async () => {
+    const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
+    // The same attributed decision that auto-applies above — but its document
+    // is a forwarded email. Injected content must not silently write.
+    const out = await runAutoTriage(
+      fakeAdmin(calls, [], [], [{ id: 'd1', source: 'forward' }]),
+      [proposal({ id: 'from-email', document_id: 'd1' })],
+      { today: '2026-08-29' },
+    );
+    expect(out.applied).toBe(0);
+    expect(out.kept).toBe(1);
+    expect(calls.filter((c) => c.table === 'decisions' && c.op === 'insert')).toHaveLength(0);
+  });
+
+  it('a trusted-source (upload) proposal still auto-applies', async () => {
+    const calls: Array<{ table: string; op: string; payload?: unknown }> = [];
+    const out = await runAutoTriage(
+      fakeAdmin(calls, [], [], [{ id: 'd2', source: 'upload' }]),
+      [proposal({ id: 'from-upload', document_id: 'd2' })],
+      { today: '2026-08-29' },
+    );
+    expect(out.applied).toBe(1);
+    expect(out.kept).toBe(0);
   });
 
   it('a learned-accepted task_create creates the task when attributed — and waits for a human when not', async () => {

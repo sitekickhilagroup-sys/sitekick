@@ -95,5 +95,11 @@ export async function processDocument(
     { id: doc.id, project_hint: doc.project_hint, raw_text: doc.raw_text ?? '' },
     { projects, openTasks, rejectedPatterns },
   );
-  return applyExtractResult(admin, doc.id, result, { projects, openTasks });
+  // Trust boundary: email (forwarded, polled, or an uploaded archive of
+  // external mail) is attacker-controllable content — its new tasks go to the
+  // review queue, never a direct live insert. Staff-authored transcripts/notes
+  // (kind !== 'email') keep the existing one-step auto-create.
+  return applyExtractResult(admin, doc.id, result, {
+    projects, openTasks, allowAutoCreate: doc.kind !== 'email',
+  });
 }

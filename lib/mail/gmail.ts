@@ -59,7 +59,9 @@ export async function run(admin: SupabaseClient): Promise<{ processed: number } 
     if (!msgRes.ok) continue;
     const msg = (await msgRes.json()) as { id: string; payload: GmailPart & { headers: GmailHeader[] } };
     const h = (name: string) => msg.payload.headers.find((x) => x.name.toLowerCase() === name)?.value ?? '';
-    const text = findPlainText(msg.payload) ?? '';
+    // Cap untrusted body length before it becomes an LLM prompt (same 30k as
+    // lib/parse/eml.ts; the poller feeds processDocument uncapped otherwise).
+    const text = (findPlainText(msg.payload) ?? '').slice(0, 30000);
     const raw = `From: ${h('from')}\nTo: ${h('to')}\nDate: ${h('date')}\nSubject: ${h('subject')}\n\n${text}`;
 
     const { documentId, deduped } = await ingestDocument(admin, {

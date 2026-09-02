@@ -125,8 +125,8 @@ Rules:
 - vendor_hours: when a vendor states hour estimates or hours worked, capture them.
 - deadline_updates: when a date for known work changed, record task_match (title words), new_due (YYYY-MM-DD), evidence (quote).
 - relationships: when the text EXPLICITLY states one work item cannot proceed until another completes, emit type="blocks" with from_match (the blocking task's title words) and to_match (the blocked task). Helpful-but-not-stopping = "supports". Independent tracks mentioned together = "parallel". NEVER infer blocks from co-occurrence in the same email or meeting — when plausible but unproven use type="needs_verification".
-- EVERY blocker, deadline update and relationship must carry a short verbatim
-  quote from the communication as evidence (agent bug #3: reviewers got
+- EVERY blocker, decision, deadline update and relationship must carry a short
+  verbatim quote from the communication as evidence (agent bug #3: reviewers got
   proposals with no stage, no owner, no date and no quote — nothing to judge).
   If you cannot quote the text for a claim, do not emit the claim.
 - Dates: YYYY-MM-DD. Never invent facts not in the text.
@@ -206,7 +206,7 @@ export async function applyExtractResult(
   admin: SupabaseClient,
   docId: string,
   result: ExtractResult,
-  ctx: { projects: Pick<Project, 'id' | 'name'>[]; openTasks: Task[]; today?: string },
+  ctx: { projects: Pick<Project, 'id' | 'name'>[]; openTasks: Task[]; today?: string; allowAutoCreate?: boolean },
 ): Promise<ApplySummary> {
   const byName = new Map(ctx.projects.map((p) => [p.name.toLowerCase(), p.id]));
   const resolveProject = (name: string | null | undefined): string | null =>
@@ -221,6 +221,8 @@ export async function applyExtractResult(
 
   const { autoCreates, proposals: routedProposals } = routeExtractResult(result, {
     resolveProject, defaultProjectId: docProjectId, openTasks: ctx.openTasks,
+    // Untrusted sources (email) route creates to review; see RouteContext.
+    allowAutoCreate: ctx.allowAutoCreate ?? true,
   });
 
   // Cross-document dedup: the same communication re-uploaded (renamed file,

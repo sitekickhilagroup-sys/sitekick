@@ -18,7 +18,27 @@ const nextConfig: NextConfig = {
     // than this one upload actually needs.
     serverActions: { bodySizeLimit: '2mb' },
   },
-  /* config options here */
+  // Security headers on every route. frame-ancestors/X-Frame-Options close the
+  // clickjacking vector: without them an attacker page can iframe /settings or
+  // /work and, because the session cookie is sameSite=lax (sent on framed GET
+  // navigations), trick a logged-in user into clicking through real one-click
+  // actions (deleteAppUser, advanceInvoice). Next's Server-Action Origin check
+  // stops CSRF but not this — the click is genuinely same-origin. HSTS forces
+  // HTTPS so the (now Secure) auth cookie can never go out in cleartext.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

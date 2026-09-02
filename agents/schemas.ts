@@ -57,6 +57,11 @@ export const DecisionOutSchema = z.object({
   title: z.string().min(1),
   detail: z.string().optional(),
   decided_at: z.string().optional(),
+  // A decision auto-commits to the permanent decisions log, so it must cite the
+  // text like every other claim type (blocker/deadline/relationship already do).
+  // Without this a fabricated "Decided: …" line in an untrusted email had no
+  // quote to audit against. min(1) — routeExtractResult drops any without it.
+  evidence: z.string().min(1),
 });
 
 export const DraftOutSchema = z.object({

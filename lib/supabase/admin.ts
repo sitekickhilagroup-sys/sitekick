@@ -1,6 +1,9 @@
+import 'server-only';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-// Service-role client. All writes go through this, server-side only.
+// Service-role client. All writes go through this, server-side only. The
+// 'server-only' import makes any accidental import from a client component a
+// build error, not just the runtime throw below.
 let cached: SupabaseClient | null = null;
 
 export function supabaseAdmin(): SupabaseClient {

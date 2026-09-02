@@ -263,10 +263,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, type: 'email_archive', stored, deduped, processed });
     }
 
-    // .txt / .docx / .csv -> transcript text
+    // .txt / .docx / .csv -> transcript text. Cap before it becomes an LLM
+    // prompt (same 30k as lib/parse/eml.ts) — the 20MB byte cap alone lets a
+    // plain-text file force a very large, billed Claude call.
     let text: string;
     if (name.endsWith('.docx')) text = await docxToText(buffer);
     else text = buffer.toString('utf8');
+    text = text.slice(0, 30000);
     const { documentId, deduped, processed } = await ingestDocument(admin, {
       kind: 'transcript', source: 'upload', raw_text: text, external_id: dedupKey,
       // Hash of the extracted TEXT, not the file bytes: a re-saved .docx with

@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { ingestDocument, processDocument } from '@/lib/ingest';
+import { safeEqual } from '@/lib/cron';
 
 export const maxDuration = 300;
+
+// Cap the untrusted body before it becomes a (billed) LLM prompt — matches the
+// 30k cap lib/parse/eml.ts already applies. This is a secret-gated but
+// session-less endpoint; without the cap a caller can force arbitrarily large,
+// repeated Claude calls.
+const MAX_EMAIL_CHARS = 30000;
 
 // Forward-address intake: Cloudflare worker / Gmail / Outlook forwarding rule
 // POSTs here with the shared secret. Works for any mailbox provider.
 export async function POST(req: NextRequest) {
   const secret = process.env.INGEST_SECRET;
-  if (!secret || req.headers.get('x-ingest-secret') !== secret) {
+  if (!secret || !safeEqual(req.headers.get('x-ingest-secret') ?? '', secret)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
@@ -32,7 +39,7 @@ export async function POST(req: NextRequest) {
     body.date ? `Date: ${body.date}` : null,
     body.subject ? `Subject: ${body.subject}` : null,
     '',
-    body.text ?? '',
+    (body.text ?? '').slice(0, MAX_EMAIL_CHARS),
   ].filter((l) => l !== null).join('\n');
 
   const { documentId, deduped } = await ingestDocument(admin, {

@@ -61,9 +61,11 @@ export async function run(admin: SupabaseClient): Promise<{ processed: number } 
 
   let processed = 0;
   for (const msg of list.value ?? []) {
-    const bodyText = msg.body?.contentType === 'html'
+    // Cap untrusted body length before it becomes an LLM prompt (same 30k as
+    // lib/parse/eml.ts; the poller feeds processDocument uncapped otherwise).
+    const bodyText = (msg.body?.contentType === 'html'
       ? stripHtml(msg.body.content ?? '')
-      : (msg.body?.content ?? msg.bodyPreview ?? '');
+      : (msg.body?.content ?? msg.bodyPreview ?? '')).slice(0, 30000);
     const raw = `From: ${msg.from?.emailAddress?.name ?? ''} <${msg.from?.emailAddress?.address ?? ''}>\nDate: ${msg.receivedDateTime ?? ''}\nSubject: ${msg.subject ?? ''}\n\n${bodyText}`;
 
     const { documentId, deduped } = await ingestDocument(admin, {

@@ -17,7 +17,7 @@ const canned = {
     // must quote the communication it came from.
     { project_name: '2361-2367 San Marco', what: 'Grading plan has no engineer', blocked_by: 'Mid-Cities MSA refusal', blocks_phase: 'plan_check', downstream: ['plan_check'], evidence: 'Mid-Cities declined the MSA, so the grading plan has no engineer' },
   ],
-  decisions: [{ project_name: '2361-2367 San Marco', title: 'Proceed with Crest for entitlements' }],
+  decisions: [{ project_name: '2361-2367 San Marco', title: 'Proceed with Crest for entitlements', evidence: 'we will proceed with Crest for the entitlements work' }],
   drafts: [{ subject: 'MSA decision needed', body: 'Refael — decision needed this week.', re_blocker_index: 0 }],
   vendor_hours: [{ project_name: '2361-2367 San Marco', vendor_name: 'KGS Structural', hours: 12, rate: 180 }],
   deadline_updates: [],

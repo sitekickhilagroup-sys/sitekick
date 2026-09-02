@@ -18,16 +18,26 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Ship the session cookie as Secure in production so a stray HTTP hop
+      // (SSL-strip, pre-HSTS first visit) can't carry it in cleartext. Left
+      // off in dev so http://localhost login still works.
+      cookieOptions: { secure: process.env.NODE_ENV === 'production' },
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        // @supabase/ssr hands setAll a second arg of anti-cache response
+        // headers (Cache-Control: private, no-store, …). Dropping it — as the
+        // one-param version did — means the response that carries a refreshed
+        // session Set-Cookie is cacheable; put a CDN in front and one user's
+        // token can be served to another. Copy them onto the response.
+        setAll(cookiesToSet, headers) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options),
           );
+          for (const [k, v] of Object.entries(headers ?? {})) response.headers.set(k, v);
         },
       },
     },

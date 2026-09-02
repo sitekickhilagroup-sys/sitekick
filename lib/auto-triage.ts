@@ -318,6 +318,23 @@ export async function runAutoTriage(
     : { data: [] };
   const targetById = new Map(((targets ?? []) as (TargetTask & { id: string })[]).map((t) => [t.id, t]));
 
+  // Trust boundary for auto-APPLY. Proposals extracted from untrusted email
+  // (forwarded / polled) may still be auto-IGNORED — dedup, no-ops and
+  // learned-rejects only shrink the queue — but any auto_apply is downgraded to
+  // human review, so injected email content can never silently write (close a
+  // task, move a due date, commit a decision) even once a class has matured.
+  // Proposals with no document_id (tests, manual entry) and trusted sources
+  // (upload / sheets / zimas / manual) keep full auto-apply.
+  const UNTRUSTED_SOURCES = new Set(['forward', 'gmail', 'outlook']);
+  const docIds = [...new Set(proposals.map((p) => p.document_id).filter((x): x is string => !!x))];
+  const sourceByDoc = new Map<string, string>();
+  if (docIds.length) {
+    const { data: docs } = await admin.from('documents').select('id,source').in('id', docIds);
+    for (const d of (docs ?? []) as { id: string; source: string }[]) sourceByDoc.set(d.id, d.source);
+  }
+  const isUntrusted = (p: AgentProposal): boolean =>
+    !!p.document_id && UNTRUSTED_SOURCES.has(sourceByDoc.get(p.document_id) ?? '');
+
   const ignore = async (p: AgentProposal, reason: string, classKey: string) => {
     await admin.from('agent_proposals').update({
       state: 'ignored',
@@ -362,6 +379,8 @@ export async function runAutoTriage(
 
     const target = p.target_task_id ? targetById.get(p.target_task_id) ?? null : null;
     const verdict = classifyProposal(p, target, stats);
+    // Untrusted source: an auto_apply becomes review; auto_ignore still runs.
+    if (verdict.action === 'auto_apply' && isUntrusted(p)) { summary.kept++; continue; }
     if (verdict.action === 'review') { summary.kept++; continue; }
 
     if (verdict.action === 'auto_apply') {

@@ -28,6 +28,18 @@ describe('routeExtractResult', () => {
     expect(r.autoCreates[0]).toMatchObject({ project_id: 'p1', op: { title: 'Order tree report' } });
     expect(r.proposals).toHaveLength(0);
   });
+  it('untrusted source (allowAutoCreate:false) routes a new create to review, not autoCreates', () => {
+    const r = routeExtractResult(
+      { ...base, tasks: [{ op: 'create', stage_key: null, category: null, project_name: 'San Marco', title: 'Order tree report', priority: 'normal' }] },
+      ctx({ allowAutoCreate: false }),
+    );
+    expect(r.autoCreates).toHaveLength(0);
+    expect(r.proposals).toHaveLength(1);
+    expect(r.proposals[0]).toMatchObject({
+      type: 'task_create', project_id: 'p1', target_task_id: null,
+      reasoning: 'new task from an untrusted source — needs review',
+    });
+  });
   it('update with existing_id becomes task_update proposal at 0.8, project taken from the matched task', () => {
     const r = routeExtractResult(
       { ...base, tasks: [{ op: 'update', existing_id: 't1', stage_key: null, category: null, project_name: null, title: 'Retain civil engineer', priority: 'normal', owner: 'Noa' }] },
@@ -122,7 +134,7 @@ describe('routeExtractResult', () => {
       {
         ...base,
         blockers: [{ project_name: 'San Marco', blocks_phase: null, what: 'CE not retained', blocked_by: 'Noa decision', evidence: 'we cannot proceed until the CE is retained' }],
-        decisions: [{ project_name: 'Rinconia', title: 'Go with waiver' }],
+        decisions: [{ project_name: 'Rinconia', title: 'Go with waiver', evidence: 'we will go with the waiver' }],
         deadline_updates: [{ project_name: 'San Marco', task_match: 'Retain civil engineer', new_due: '2026-09-01', evidence: 'email says so' }],
       },
       ctx(),
@@ -149,7 +161,8 @@ describe('routeExtractResult', () => {
         blockers: [{ project_name: null, blocks_phase: null, what: '  ', blocked_by: 'Noa', evidence: 'q' }],
         deadline_updates: [{ project_name: null, task_match: 'x', new_due: '2026-09-01', evidence: '  ' }],
         relationships: [{ project_name: null, from_match: ' ', to_match: 'y', type: 'blocks' as const, reason: 'r', evidence: 'q' }],
-        decisions: [{ project_name: null, title: '  ' }],
+        // title present but evidence whitespace — the new decision evidence gate drops it.
+        decisions: [{ project_name: null, title: 'Adopt not-to-exceed clause', evidence: '  ' }],
       },
       ctx(),
     );
