@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { buildUndoRestorePatch, verbToPatch, type WorkVerb } from '@/lib/work-verbs';
 import { logActivity } from '@/lib/state-writer';
+import { recordPriorityFeedback } from '@/lib/collect-priority-feedback';
 import { syncTaskIntoOpenReview } from '@/app/actions/weekly';
 
 const VALID_VERBS: WorkVerb[] = ['completed', 'sent_email', 'waiting', 'delayed', 'scheduled', 'not_applicable', 'note'];
@@ -28,6 +29,16 @@ export async function applyWorkVerb(taskId: string, verb: WorkVerb, input: strin
     entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id,
     action: mapped.action, before, after: verb === 'note' ? { note: input } : mapped.patch,
   });
+  // Learning V1 forward-capture: record this disposition against the ranking
+  // Noa was shown. Gated by LEARNING_COLLECT, best-effort — a collection
+  // failure must never break the verb, so it's guarded here and internally.
+  try {
+    await recordPriorityFeedback(admin, {
+      taskId, verb, sourceActivityLogId: undoId, decidedBy: user.email ?? user.id,
+    });
+  } catch (e) {
+    console.error('[priority-feedback] applyWorkVerb collect failed (non-fatal)', { taskId, verb, error: e });
+  }
   // I3: this write can land in weekly_review_items via syncTaskIntoOpenReview
   // below, so /weekly needs revalidating too (undoWorkVerb already does).
   revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
