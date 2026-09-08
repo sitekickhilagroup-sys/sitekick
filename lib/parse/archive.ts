@@ -31,22 +31,30 @@ function decodeXmlEntities(s: string): string {
     .replace(/&amp;/g, '&');
 }
 
-// OLM bodies embed raw HTML inline inside <OPFMessageCopyBody> — strip tags first,
-// same approach as eml.ts's text/html branch, then decode residual entities.
+// OLM bodies embed the HTML message ENTITY-ESCAPED inside <OPFMessageCopyBody>
+// (&lt;div&gt;…). Decode the entities FIRST so the tags become real, THEN strip
+// them — the reverse order (strip, then decode) leaves the markup as visible
+// text in the extractor's prompt.
 function cleanOlmBody(raw: string): string {
-  const stripped = raw.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
-  return decodeXmlEntities(stripped);
+  const decoded = decodeXmlEntities(raw);
+  return decoded.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
+// Every OPF tag in a real Outlook-for-Mac export carries attributes
+// (xml:space="preserve"), so each field pattern must tolerate them with [^>]* —
+// a bare `<Tag>` match silently yields a blank subject/date/sender/message-id on
+// every message, which collapses newest-first ordering and positional dedup.
 function extractOlmMessage(xml: string): ExtractedEmail {
-  const subject = matchOne(/<OPFMessageCopySubject>([\s\S]*?)<\/OPFMessageCopySubject>/, xml) ?? '';
+  const subject = decodeXmlEntities(
+    matchOne(/<OPFMessageCopySubject[^>]*>([\s\S]*?)<\/OPFMessageCopySubject>/, xml) ?? '',
+  );
   const sender = matchOne(
-    /<OPFMessageCopySenderAddress>[\s\S]*?<emailAddress[^>]*OPFContactEmailAddressAddress="([^"]+)"/,
+    /<OPFMessageCopySenderAddress[^>]*>[\s\S]*?OPFContactEmailAddressAddress="([^"]+)"/,
     xml,
   ) ?? '';
-  const date = matchOne(/<OPFMessageCopySentTime>([^<]+)</, xml);
+  const date = matchOne(/<OPFMessageCopySentTime[^>]*>([^<]+)</, xml);
   const bodyRaw = matchOne(/<OPFMessageCopyBody[^>]*>([\s\S]*?)<\/OPFMessageCopyBody>/, xml) ?? '';
-  const messageId = matchOne(/<OPFMessageCopyMessageID>([^<]+)</, xml);
+  const messageId = matchOne(/<OPFMessageCopyMessageID[^>]*>([^<]+)</, xml);
   const raw = `From: ${sender}\nDate: ${date ?? ''}\nSubject: ${subject}\n\n${cleanOlmBody(bodyRaw)}`;
   return { raw, external_id: messageId, date: date ?? null };
 }

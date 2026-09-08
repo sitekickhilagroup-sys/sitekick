@@ -42,6 +42,33 @@ describe('extractEmailsFromArchive - olm', () => {
     expect(result[0].external_id).toBe('abc-123');
   });
 
+  it('parses REAL Outlook-for-Mac shape: attributes on every tag + entity-escaped HTML body', async () => {
+    // Every OPF tag in a genuine .olm export carries xml:space="preserve", and
+    // the body is the HTML message escaped as entities. A bare-`>` pattern (the
+    // original bug) matched none of these — blank subject/date/sender/id — so
+    // this fixture must mirror the real export exactly.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<messages>
+  <OPFMessageCopySubject xml:space="preserve">Re: San Marco &amp; Rinconia</OPFMessageCopySubject>
+  <OPFMessageCopySenderAddress xml:space="preserve">
+    <emailAddress OPFContactEmailAddressAddress="rowan@bypremise.com" OPFContactEmailAddressName="Rowan" />
+  </OPFMessageCopySenderAddress>
+  <OPFMessageCopySentTime xml:space="preserve">2026-09-04T21:38:00</OPFMessageCopySentTime>
+  <OPFMessageCopyBody xml:space="preserve">&lt;html&gt;&lt;body&gt;&lt;div&gt;Sam wont negotiate on price.&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;</OPFMessageCopyBody>
+  <OPFMessageCopyMessageID xml:space="preserve">CAApT7z@mail.gmail.com</OPFMessageCopyMessageID>
+</messages>`;
+    const buffer = await buildZip({ 'Accounts/1/Messages/message_0001.xml': xml });
+    const [result] = await extractEmailsFromArchive(buffer, 'olm');
+    expect(result.raw).toContain('Subject: Re: San Marco & Rinconia');
+    expect(result.raw).toContain('From: rowan@bypremise.com');
+    expect(result.date).toBe('2026-09-04T21:38:00');
+    expect(result.external_id).toBe('CAApT7z@mail.gmail.com');
+    // body: entities decoded then tags stripped — no literal markup left
+    expect(result.raw).toContain('Sam wont negotiate on price.');
+    expect(result.raw).not.toContain('&lt;');
+    expect(result.raw).not.toContain('<div>');
+  });
+
   it('sets external_id to null when OPFMessageCopyMessageID is absent', async () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <messages>
