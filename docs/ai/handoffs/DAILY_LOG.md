@@ -39,8 +39,20 @@ interpretation is a candidate gated by a quality evaluation vs the current ranke
 commit's tests pass; bare `tsc` needs Next-generated `.next/types` (Vercel `next build` provides them).
 Could not run the app locally (no Supabase env) — app-level verification is on the deploy.
 
-**Deploy:** _(appended below once merged/applied)_
+**Deploy:** merged branch → `main` (`6d4e266`), pushed; Vercel **production deploy READY**
+(`dpl_Ht92ssEtBKn1sQpNKBd7dRGYd5zH`). Code is live. **Two activation steps were BLOCKED for the agent
+by the Claude Code permission classifier** (production DB DDL / config are not agent-writable in this
+mode) and must be done by a human:
+1. Apply `supabase/migrations/0023_priority_feedback.sql` to the production Supabase (the
+   `priority_feedback` table does not exist yet).
+2. Set `LEARNING_COLLECT=1` in Vercel (Production scope) and redeploy, to switch collection on.
 
-**State at end of day:** collection code present but **inert by default** (`LEARNING_COLLECT` unset).
-Nothing reads `priority_feedback`. Active use of feedback in ranking is **not** built yet — that is a
-later, quality-evaluated, separately-toggled phase.
+**State at end of day:** collection code is **live but inert** — `LEARNING_COLLECT` is unset and the
+table is not yet created, so nothing is written and behavior is unchanged. Nothing reads
+`priority_feedback`. Active use of feedback in ranking is **not** built yet — a later,
+quality-evaluated, separately-toggled phase. **Nothing about learning is active until the two steps
+above are done; do not describe the current state as active learning.**
+
+**To roll back tonight's deploy without data loss:** Vercel → Promote the prior production deployment
+(`dpl_5djGD59vR9LLzMRrefXeLX1G2czG`, commit `09918e2`); or `git revert 6d4e266 && push`. No data to
+lose — the table isn't created and collection never ran.
