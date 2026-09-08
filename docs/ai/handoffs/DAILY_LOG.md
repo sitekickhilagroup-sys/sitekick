@@ -47,11 +47,25 @@ mode) and must be done by a human:
    `priority_feedback` table does not exist yet).
 2. Set `LEARNING_COLLECT=1` in Vercel (Production scope) and redeploy, to switch collection on.
 
-**State at end of day:** collection code is **live but inert** — `LEARNING_COLLECT` is unset and the
-table is not yet created, so nothing is written and behavior is unchanged. Nothing reads
-`priority_feedback`. Active use of feedback in ranking is **not** built yet — a later,
-quality-evaluated, separately-toggled phase. **Nothing about learning is active until the two steps
-above are done; do not describe the current state as active learning.**
+**ACTIVATED (same day, human did the two steps):** the PO ran `0023` against production Supabase
+(table created; the `create policy` error on a re-run was harmless — it already existed) and set
+`LEARNING_COLLECT=1` (Config) on Vercel Production, then redeployed (`dpl_BHycANN…`, READY,
+`sitekick-ecru.vercel.app`). **End-to-end verified live:** a real `Waiting` action on the NOW-tier
+task "Plan Check extension exhausted…" produced the first `priority_feedback` row — event `waiting`,
+proposed_global_rank 3, proposed_urgency `now`, provenance `assumed_latest_run`, inferred_signal
+`weak_negative` @ confidence 0.2 (v1-candidate), linked to its activity_log action. Fact and
+interpretation stored separately, exactly as designed.
+
+**State at end of day:** collection is **LIVE and capturing** the five disposition verbs
+(completed/not_applicable/waiting/delayed/scheduled) from My Work. Note: it does **not** capture
+`edit:details` (the Task Editor / "Edit details…" menu item) — that is CONTEXT, by design; only the
+verb-menu dispositions above the divider are captured. **Still NOT active learning:** nothing reads
+`priority_feedback` and it does not influence any recommendation yet — that is the next, separately
+built and quality-evaluated phase. Do not describe collection as active learning.
+
+**To disable without data loss:** set `LEARNING_COLLECT=0` (or remove it) on Vercel + redeploy →
+capture stops instantly; the table and its rows remain. Full deploy rollback: promote
+`dpl_5djGD59vR9LLzMRrefXeLX1G2czG` (commit `09918e2`) or `git revert`.
 
 **To roll back tonight's deploy without data loss:** Vercel → Promote the prior production deployment
 (`dpl_5djGD59vR9LLzMRrefXeLX1G2czG`, commit `09918e2`); or `git revert 6d4e266 && push`. No data to
