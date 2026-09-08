@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { autoTriagePending, decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
 import type { ChangeType, ProposalState, ProposalType } from '@/lib/types';
 import { NEEDS_MATCH, selectableTasksFor, treatmentsFor, updateFieldsPreview } from '@/lib/review-treatments';
+import { titleSimilarity } from '@/lib/dedup';
 import { fmtDate } from '@/lib/format';
 
 export interface ReviewRow {
@@ -37,7 +38,8 @@ export interface OpenTaskOption {
   id: string;
   title: string;
   projectId: string | null;
-  hint: string;
+  phase: string;
+  substage: string;
 }
 
 const FILTERS: { key: string; labelKey: string }[] = [
@@ -107,12 +109,21 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
     setFailure(null);
   };
 
-  // Open tasks in the project the item is currently filed under — the choices
-  // for the "attach to existing task" select. Changing Project re-filters them.
-  const targetChoices = useMemo(
-    () => selectableTasksFor(openTasks, projectId || null),
-    [openTasks, projectId],
-  );
+  // Open tasks in the project the item is filed under, sorted most-likely-match
+  // first (same similarity measure as the dedup engine) — so the right task is
+  // at the top instead of buried in a long list. Changing Project re-filters.
+  const targetChoices = useMemo(() => {
+    const filtered = selectableTasksFor(openTasks, projectId || null);
+    const q = selected?.title ?? '';
+    if (!q) return filtered;
+    return [...filtered].sort((a, b) => titleSimilarity(q, b.title) - titleSimilarity(q, a.title));
+  }, [openTasks, projectId, selected]);
+
+  // When a task is attached, the Phase/Sub-stage boxes should show THAT task's
+  // location (confirming the match), not the proposal's empty one.
+  const attachedTask = targetTaskId ? openTasks.find((tk) => tk.id === targetTaskId) : undefined;
+  const shownPhase = attachedTask?.phase || selected?.phase || '';
+  const shownSubstage = attachedTask?.substage || selected?.substage || '';
 
   // "What will change" before Apply (Section 2): the exact fields this update
   // lands on the chosen task, and which task that is.
@@ -479,7 +490,7 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
                 >
                   <option value="">{labels.attachNone}</option>
                   {targetChoices.map((tk) => (
-                    <option key={tk.id} value={tk.id}>{tk.hint ? `${tk.title} — ${tk.hint}` : tk.title}</option>
+                    <option key={tk.id} value={tk.id}>{tk.substage ? `${tk.title} — ${tk.substage}` : tk.title}</option>
                   ))}
                 </select>
                 <span className="mt-1 block text-[10px] text-ink3">
@@ -490,11 +501,11 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fPhase}</span>
-                  <p className="mt-1 min-h-11 rounded-lg border border-line bg-inset px-3 py-2.5 text-sm text-ink2">{selected.phase || '—'}</p>
+                  <p className="mt-1 min-h-11 rounded-lg border border-line bg-inset px-3 py-2.5 text-sm text-ink2">{shownPhase || '—'}</p>
                 </div>
                 <div>
                   <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fSubstage}</span>
-                  <p className="mt-1 min-h-11 rounded-lg border border-line bg-inset px-3 py-2.5 text-sm text-ink2">{selected.substage || '—'}</p>
+                  <p className="mt-1 min-h-11 rounded-lg border border-line bg-inset px-3 py-2.5 text-sm text-ink2">{shownSubstage || '—'}</p>
                 </div>
                 <label className="block">
                   <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fOwner}</span>

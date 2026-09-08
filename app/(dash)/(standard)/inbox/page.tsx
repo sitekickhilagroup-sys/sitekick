@@ -156,7 +156,12 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     id: tk.id,
     title: tk.title,
     projectId: tk.project_id,
-    hint: resolveTaskSubstageLabel({
+    phase: phaseLabelForKey(resolveTaskPhaseKey({
+      substagePhaseKey: tk.substage_template_id ? phaseKeyBySubstageId.get(tk.substage_template_id) ?? null : null,
+      legacyPhaseKey: tk.stage_key ? phaseKeyByStage.get(tk.stage_key) ?? null : null,
+      projectPhaseKey: tk.project_id ? projectPhaseById.get(tk.project_id) ?? null : null,
+    })),
+    substage: resolveTaskSubstageLabel({
       substageName: tk.substage_template_id ? substageNameById.get(tk.substage_template_id) ?? null : null,
       legacyLabel: tk.stage_key ? prettyStage(tk.stage_key) : null,
     }) ?? '',

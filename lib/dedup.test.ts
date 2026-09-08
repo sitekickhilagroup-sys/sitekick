@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { decideNotDuplicateOutcome, findDuplicatePairs, matchExistingTask } from './dedup';
+import { decideNotDuplicateOutcome, findDuplicatePairs, matchExistingTask, titleSimilarity } from './dedup';
+
+describe('titleSimilarity — ranks attach-to-task candidates', () => {
+  it('scores a near-identical title higher than an unrelated one', () => {
+    const q = 'soils report from Greg blocks resubmit plan check package';
+    const close = titleSimilarity(q, 'LADBS returned the soils report — resubmit an addendum');
+    const far = titleSimilarity(q, 'Retain landscape consultant for Rinconia');
+    expect(close).toBeGreaterThan(far);
+  });
+  it('sorts a list most-likely first', () => {
+    const q = 'award structural civil engineer proposal';
+    const tasks = ['Retain interior designer', 'Award structural/civil engineer proposal to Thang Le', 'Confirm arborist status'];
+    const sorted = [...tasks].sort((a, b) => titleSimilarity(q, b) - titleSimilarity(q, a));
+    expect(sorted[0]).toBe('Award structural/civil engineer proposal to Thang Le');
+  });
+});
 import type { Task } from './types';
 
 function t(id: string, title: string, project_id: string | null = 'p1', stage_key: string | null = null): Task {

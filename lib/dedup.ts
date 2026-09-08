@@ -29,6 +29,18 @@ function containment(a: Set<string>, b: Set<string>): number {
   return inter / small.size;
 }
 
+/**
+ * How similar two task titles are, 0..1 — the same measure `matchExistingTask`
+ * ranks by (Jaccard vs. containment). Exported so the review drawer can sort its
+ * "attach to existing task" list most-likely-match first, consistently with the
+ * dedup engine. Pure.
+ */
+export function titleSimilarity(a: string, b: string): number {
+  const at = tokenize(a);
+  const bt = tokenize(b);
+  return Math.max(jaccard(at, bt), containment(at, bt) - 0.2);
+}
+
 export interface TaskCandidate {
   title: string;
   project_id: string | null;
