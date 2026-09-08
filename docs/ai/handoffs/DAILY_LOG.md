@@ -5,6 +5,24 @@ Newest entry on top. Facts only — decisions, commits, deploys, blockers.
 
 ---
 
+## 2026-09-09 — assistant redesign + review editability + fixes
+
+- **Notes assistant → global floating widget** (`ac41658`): bottom-docked on every screen (mounted in
+  `(dash)/layout`), conversational (note → recorded → assistant reflects intent, correctable). Removed
+  the separate `/notes` page + nav item. `comments` table (0024) confirmed applied in prod.
+- **Review drawer Phase & Sub-stage now editable** (`ac41658`): were read-only; now selects. Picked
+  Sub-stage applied to the task on Apply (`decideProposal` takes `edits.substageTemplateId`).
+- **My Work Edit Details: specific error** (`ac41658`): shows the real server reason (e.g. "workstream
+  and sub-stage are in different phases") instead of a generic "try again" (§1).
+- **Attach-to-task list sorted by similarity** (`ffe5b0e`, earlier today): `titleSimilarity` (dedup
+  engine's measure) — likeliest match first.
+- **Refresh priorities hang fixed** (`686e476`): `/work` had no `maxDuration`, so the on-demand
+  prioritization server action (LLM over every open task) hit the short default timeout and was killed
+  — the button hung on "Ranking…". Added `export const maxDuration = 300` (same as the digest cron).
+- All: 406/406 tests, typecheck + eslint + i18n parity clean, each shipped to prod.
+
+---
+
 ## 2026-09-08 (later) — My Work / Inbox handoff (INSTRUCTIONS_HE)
 
 Read `…/sitekick-my-work-handoff/INSTRUCTIONS_HE.md` + all 5 images. Order: reliable save →
