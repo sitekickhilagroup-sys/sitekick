@@ -8,7 +8,7 @@ import { classifyIntent, INTENT_CLASSIFIER_VERSION, isIntent, type CommentIntent
 
 export interface CommentRow {
   id: string;
-  entityType: 'task' | 'project' | 'general';
+  entityType: 'task' | 'project' | 'invoice' | 'blocker' | 'general';
   entityId: string | null;
   entityLabel: string;
   body: string;
@@ -18,7 +18,12 @@ export interface CommentRow {
   createdAt: string;
 }
 
-type EntityType = 'task' | 'project' | 'general';
+type EntityType = 'task' | 'project' | 'invoice' | 'blocker' | 'general';
+const ENTITY_TABLE: Record<Exclude<EntityType, 'general'>, string> = {
+  task: 'tasks', project: 'projects', invoice: 'invoices', blocker: 'blockers',
+};
+const isEntityType = (v: string): v is EntityType =>
+  v === 'task' || v === 'project' || v === 'invoice' || v === 'blocker' || v === 'general';
 
 /**
  * Record a note Noa wrote, linked to a task/project (or general), with a
@@ -37,16 +42,16 @@ export async function saveComment(input: {
   if (body.length > 4000) return { error: 'note too long' };
 
   const entityType = input.entityType;
+  if (!isEntityType(entityType)) return { error: 'invalid link type' };
   let entityId: string | null = input.entityId?.trim() || null;
   const admin = supabaseAdmin();
 
-  // A task/project note must point at a real one; general notes carry no id.
+  // A linked note must point at a real record; general notes carry no id.
   if (entityType === 'general') {
     entityId = null;
   } else {
-    if (!entityId) return { error: 'pick a task or project' };
-    const table = entityType === 'task' ? 'tasks' : 'projects';
-    const { data: ent } = await admin.from(table).select('id').eq('id', entityId).maybeSingle();
+    if (!entityId) return { error: 'pick an item to link to' };
+    const { data: ent } = await admin.from(ENTITY_TABLE[entityType]).select('id').eq('id', entityId).maybeSingle();
     if (!ent) return { error: `${entityType} not found` };
   }
 

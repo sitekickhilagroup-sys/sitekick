@@ -7,9 +7,13 @@ import type { CommentIntent } from '@/lib/comment-intent';
 
 const INTENTS: CommentIntent[] = ['preference', 'instruction', 'fact'];
 
+type LinkType = 'general' | 'task' | 'project' | 'invoice' | 'blocker';
+
 export interface NotesAssistantOptions {
   tasks: { id: string; label: string }[];
   projects: { id: string; label: string }[];
+  invoices: { id: string; label: string }[];
+  blockers: { id: string; label: string }[];
 }
 
 /**
@@ -26,7 +30,7 @@ export function NotesAssistant({ comments, options, labels }: {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState('');
-  const [entityType, setEntityType] = useState<'general' | 'task' | 'project'>('general');
+  const [entityType, setEntityType] = useState<LinkType>('general');
   const [entityId, setEntityId] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -39,7 +43,12 @@ export function NotesAssistant({ comments, options, labels }: {
     if (open && threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [open, comments.length]);
 
-  const entityChoices = entityType === 'task' ? options.tasks : entityType === 'project' ? options.projects : [];
+  const entityChoices =
+    entityType === 'task' ? options.tasks
+      : entityType === 'project' ? options.projects
+        : entityType === 'invoice' ? options.invoices
+          : entityType === 'blocker' ? options.blockers
+            : [];
 
   const send = () => start(async () => {
     setFailure(null);
@@ -125,12 +134,14 @@ export function NotesAssistant({ comments, options, labels }: {
             <div className="mb-2 flex gap-2">
               <select
                 value={entityType}
-                onChange={(e) => { setEntityType(e.target.value as 'general' | 'task' | 'project'); setEntityId(''); }}
+                onChange={(e) => { setEntityType(e.target.value as LinkType); setEntityId(''); }}
                 className="min-h-9 rounded-lg border border-line bg-card2 px-2 py-1 text-xs text-ink"
               >
                 <option value="general">{labels.linkGeneral}</option>
                 <option value="task">{labels.linkTask}</option>
                 <option value="project">{labels.linkProject}</option>
+                <option value="invoice">{labels.linkInvoice}</option>
+                <option value="blocker">{labels.linkBlocker}</option>
               </select>
               {entityType !== 'general' && (
                 <select

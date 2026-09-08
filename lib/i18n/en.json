@@ -16,6 +16,7 @@
   "notes.placeholder": "e.g. Generally I don't chase Crest invoices until month-end.",
   "notes.link_to": "Link to",
   "notes.link_general": "General (not a specific item)",
+  "notes.link_blocker": "Blocker",
   "notes.pick": "— pick one",
   "notes.save": "Save note",
   "notes.no_actions": "This does not complete tasks, change ranks, or send anything — it only records the note and how it was read.",
