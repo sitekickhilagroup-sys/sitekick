@@ -68,7 +68,7 @@ export async function AppHeader() {
         <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <span aria-hidden className="hilla-mark h-8" />
           <span className="leading-none">
-            <span className="block text-[15px] font-bold uppercase tracking-[0.05em] text-ink">Hilla Group</span>
+            <span className="block text-[15px] font-bold uppercase tracking-[0.05em] text-ink">Hilla <span className="text-brown">Group</span></span>
             <span className="mt-1 block text-[8px] font-bold uppercase tracking-[0.3em] text-sage">Sitekick</span>
           </span>
         </Link>

@@ -14,6 +14,7 @@
   --sage: #316C5B; --sage-soft: #DCEBE4; --sage-line: #BCD8CB;
   --mist: #416B84; --mist-soft: #EAF2F7;
   --apricot: #A96725; --apricot-soft: #FFF3DE;
+  --brown: #6B4423; --brown-soft: #F2E7DA;
   --coral: #A3483F; --coral-soft: #FBE8E5;
   --moss: #2F7A5E; --moss-soft: #DFF0E7;
   --chart1: #416B84; --chart2: #A96725;
@@ -30,6 +31,7 @@
   --sage: #7FB8A2; --sage-soft: #23372F; --sage-line: #3A5648;
   --mist: #8FB4CC; --mist-soft: #22333F;
   --apricot: #D9A05B; --apricot-soft: #3B2F1F;
+  --brown: #C79A6A; --brown-soft: #2E241A;
   --coral: #D98E83; --coral-soft: #402A27;
   --moss: #7FBB9B; --moss-soft: #24382E;
   --chart1: #6E9EC0; --chart2: #C08A4A;
@@ -126,6 +128,8 @@
   --color-mist-soft: var(--mist-soft);
   --color-apricot: var(--apricot);
   --color-apricot-soft: var(--apricot-soft);
+  --color-brown: var(--brown);
+  --color-brown-soft: var(--brown-soft);
   --color-coral: var(--coral);
   --color-coral-soft: var(--coral-soft);
   --color-moss: var(--moss);
