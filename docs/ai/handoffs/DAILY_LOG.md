@@ -23,8 +23,19 @@ target-task selection & dedup → notes/corrections as feedback.
   without a sub-stage would need one, flagged for a separate decision.
 - *Tests:* 388/388, typecheck + i18n parity clean. Live-UI check pending deploy (app can't run
   locally without Supabase env).
-- Sections 2 (Inbox target-task selector + dedup feedback) and 3 (notes/corrections as feedback):
-  designed, not yet built.
+**Section 2 — Inbox target-task selector + duplicate prevention: BUILT (commit `831e210`).**
+- *Fix:* when the agent matched no task, the drawer only offered "Create new task" → duplicates. Now
+  a human picks the target directly. `decideProposal` takes `edits.targetTaskId` (overrides the
+  agent's `target_task_id`), validated server-side (open + same project, pure `targetTaskError`),
+  persisted to the proposal as matching feedback, and used in every accept branch. Drawer gains an
+  "Attach to an existing task" select (filtered to the chosen project via pure `selectableTasksFor`);
+  picking one flips the treatment to "update existing"; changing Project drops a now-invalid target.
+  Inbox page loads open tasks + `targetTaskId` per row. Updating the same `task_id` prevents dups.
+- *Tests:* 6 new (selectableTasksFor, targetTaskError); 394/394, typecheck + eslint + i18n parity clean.
+- Section 3 (notes/corrections as feedback): designed, not yet built.
+
+Section 1 (Edit details save fix) shipped to production earlier today (`952c68b`, READY) and
+confirmed working live by the PO (Phase+Sub-stage now persists and reflects).
 
 ## 2026-09-08
 
