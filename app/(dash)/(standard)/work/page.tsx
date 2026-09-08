@@ -424,6 +424,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     'confirm.not_applicable': t('work.verb.confirm_not_applicable'),
     ...verbResultLabels(t),
     'msg.details': t('work.msg.details'),
+    'msg.phaseFollowsSubstage': t('work.msg.phase_follows_substage'),
     update: t('work.update'),
     // TaskEditor (A6): editDetails is VerbMenu's 8th item; project/general/
     // phase/substage/workstream/impact + the six impact values are the

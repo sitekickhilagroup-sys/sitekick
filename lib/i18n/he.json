@@ -777,6 +777,7 @@
   "work.msg.not_applicable": "סומן כלא רלוונטי. הסיבה נשמרת ביומן.",
   "work.msg.note": "ההערה נשמרה במשימה ומוצגת בשורה; אין שלב אישור.",
   "work.msg.details": "הפרטים עודכנו.",
+  "work.msg.phase_follows_substage": "השלב נגזר מתת-השלב — בחרו תת-שלב בשלב זה כדי להעביר את המשימה.",
   "work.msg.sync_warning": "ייתכן שזה עוד לא יופיע בסקירה השבועית.",
   "work.status.open": "פתוחה",
   "work.status.done": "הושלמה",

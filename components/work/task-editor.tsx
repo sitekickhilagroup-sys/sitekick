@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { updateTaskDetails, type TaskDetailsPatch } from '@/app/actions/tasks';
 import { undoWorkVerb } from '@/app/actions/work';
-import { resolveTaskPhaseKey } from '@/lib/task-details';
+import { editorSaveOutcome, resolveTaskPhaseKey } from '@/lib/task-details';
 import type { PhaseKey, ProcessImpact, Task } from '@/lib/types';
 import { SavedChip } from './saved-chip';
 
@@ -85,6 +85,11 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
   const [impact, setImpact] = useState<ProcessImpact | ''>(task.process_impact ?? '');
   const [category, setCategory] = useState<'project' | 'admin'>(task.category ?? 'project');
   const [failed, setFailed] = useState(false);
+  // Phase is a filter, not a persisted field — moving it alone changes nothing.
+  // When that's all the user did, we show this hint instead of closing silently
+  // (the reported "Phase didn't save" bug), so an unsupported change is never
+  // dropped without a word.
+  const [phaseHint, setPhaseHint] = useState(false);
   const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
   const [pending, start] = useTransition();
 
@@ -103,6 +108,9 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
       projectPhaseKey: initialProject?.current_phase_key ?? null,
     }) ?? '';
   });
+  // The phase the task started on — used to tell a real phase MOVE (which needs
+  // a sub-stage) from just opening the editor. Captured once; never reassigned.
+  const initialPhaseRef = useRef(phaseFilter);
 
   // Never hide a value the record actually has behind a filtered-out select:
   // the phase/project filters narrow which NEW choices are offered, but the
@@ -129,7 +137,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
     : projectChoices;
 
   const save = () => start(async () => {
-    setFailed(false);
+    setFailed(false); setPhaseHint(false);
     // Only the fields the user actually touched — sending every field back
     // (even unchanged ones) would silently revert a concurrent write, e.g. a
     // verb chip's status/waiting_for change the row hasn't re-rendered yet.
@@ -142,7 +150,15 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
     if (workstreamId !== (task.workstream_id ?? '')) patch.workstream_id = workstreamId || null;
     if (impact !== (task.process_impact ?? '')) patch.process_impact = (impact || null) as ProcessImpact | null;
     if (category !== (task.category ?? 'project')) patch.category = category;
-    if (Object.keys(patch).length === 0) { onClose(); return; }
+
+    // Phase alone changes nothing persisted — never close silently on it.
+    const outcome = editorSaveOutcome({
+      changedFieldCount: Object.keys(patch).length,
+      phaseChanged: phaseFilter !== initialPhaseRef.current,
+      phaseFilterEmpty: phaseFilter === '',
+    });
+    if (outcome === 'phase_hint') { setPhaseHint(true); return; }
+    if (outcome === 'noop') { onClose(); return; }
 
     const res = await updateTaskDetails(task.id, patch);
     if ('error' in res) { setFailed(true); return; }
@@ -228,6 +244,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
             onChange={(e) => {
               const id = e.target.value;
               setSubstageId(id);
+              setPhaseHint(false); // picking a sub-stage is how a phase move is really made
               // Keep the Phase filter honest once a real sub-stage is picked
               // — it's the sub-stage that owns the phase, not the filter.
               const picked = options.substages.find((s) => s.id === id);
@@ -270,16 +287,26 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
         {/* Smaller-items fix: was <div> — same invalid-nesting reason as the
             <span> swap above; same blockification reasoning keeps this a
             pixel-identical row. */}
-        <span className="mt-1 flex shrink-0 items-center gap-2">
-          <button type="button" disabled={pending} onClick={save}
-            className="min-h-11 rounded-full bg-sage px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 sm:min-h-7">
-            {labels.save}
-          </button>
-          <button type="button" onClick={onClose}
-            className="min-h-11 rounded-full bg-inset px-3 py-1.5 text-xs text-ink3 sm:min-h-7">
-            {labels.cancel}
-          </button>
-          {failed && <span role="alert" className="text-[10px] font-semibold text-coral">{labels.errorSave}</span>}
+        {/* Sticky footer so Save is always reachable on small windows / after
+            scrolling the fields (QA: "ensure the save button is accessible on
+            scroll"). -mx-3/px-3 lets it span the dialog's own padding. */}
+        <span className="sticky bottom-0 -mx-3 mt-1 flex shrink-0 flex-col gap-1 border-t border-line2 bg-card px-3 pt-2 pb-1">
+          <span className="flex items-center gap-2">
+            <button type="button" disabled={pending} onClick={save}
+              className="min-h-11 rounded-full bg-sage px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 sm:min-h-7">
+              {labels.save}
+            </button>
+            <button type="button" onClick={onClose}
+              className="min-h-11 rounded-full bg-inset px-3 py-1.5 text-xs text-ink3 sm:min-h-7">
+              {labels.cancel}
+            </button>
+            {failed && <span role="alert" className="text-[10px] font-semibold text-coral">{labels.errorSave}</span>}
+          </span>
+          {phaseHint && (
+            <span role="status" className="text-[10px] leading-snug text-apricot">
+              {labels['msg.phaseFollowsSubstage']}
+            </span>
+          )}
         </span>
       </span>
     </>

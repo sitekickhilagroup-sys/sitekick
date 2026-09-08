@@ -66,6 +66,28 @@ export function buildDetailsPatch(patch: TaskDetailsPatch): { clean: Record<stri
 }
 
 /**
+ * What the "Edit details" Save button should do, given how many persisted
+ * fields the user actually changed and whether they moved the (non-persisted)
+ * Phase filter. Phase is only a filter for the Sub-stage list — moving it alone
+ * changes nothing on the task, so instead of silently closing (which reads as
+ * "my change was lost", the reported bug) the editor shows a hint that phase
+ * follows the sub-stage. Pure so it can be unit-tested without rendering.
+ *  - 'save'      : real persisted fields changed → write them.
+ *  - 'phase_hint': nothing persisted changed but the user moved Phase to a
+ *                  different, non-empty phase → explain, do not close silently.
+ *  - 'noop'      : nothing meaningful changed → just close.
+ */
+export function editorSaveOutcome(input: {
+  changedFieldCount: number;
+  phaseChanged: boolean;
+  phaseFilterEmpty: boolean;
+}): 'save' | 'phase_hint' | 'noop' {
+  if (input.changedFieldCount > 0) return 'save';
+  if (input.phaseChanged && !input.phaseFilterEmpty) return 'phase_hint';
+  return 'noop';
+}
+
+/**
  * Cross-field integrity for the row that results after this patch applies —
  * not just the keys the patch touches. A field the caller left out can still
  * end up inconsistent with one it did change (project_id changes, an old

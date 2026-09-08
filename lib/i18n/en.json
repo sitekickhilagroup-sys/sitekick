@@ -777,6 +777,7 @@
   "work.msg.not_applicable": "Marked not applicable. The reason stays in the audit trail.",
   "work.msg.note": "Note saved to the task and shown on the row; nothing to review or approve.",
   "work.msg.details": "Details updated.",
+  "work.msg.phase_follows_substage": "Phase follows the sub-stage — pick a sub-stage in this phase to move the task.",
   "work.msg.sync_warning": "This may not show up on this week's review yet.",
   "work.status.open": "Open",
   "work.status.done": "Done",

@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { buildDetailsPatch, resolveTaskPhaseKey, resolveTaskSubstageLabel, validateDetailsIntegrity, type TaskDetailsPatch } from './task-details.ts';
+import { buildDetailsPatch, editorSaveOutcome, resolveTaskPhaseKey, resolveTaskSubstageLabel, validateDetailsIntegrity, type TaskDetailsPatch } from './task-details.ts';
+
+describe('editorSaveOutcome — Phase is a filter, never silently dropped', () => {
+  it('saves when real persisted fields changed', () => {
+    expect(editorSaveOutcome({ changedFieldCount: 1, phaseChanged: false, phaseFilterEmpty: false })).toBe('save');
+    expect(editorSaveOutcome({ changedFieldCount: 2, phaseChanged: true, phaseFilterEmpty: false })).toBe('save');
+  });
+  it('hints (does not close silently) when only Phase moved to a real phase', () => {
+    expect(editorSaveOutcome({ changedFieldCount: 0, phaseChanged: true, phaseFilterEmpty: false })).toBe('phase_hint');
+  });
+  it('is a plain no-op when nothing meaningful changed', () => {
+    expect(editorSaveOutcome({ changedFieldCount: 0, phaseChanged: false, phaseFilterEmpty: false })).toBe('noop');
+    // Clearing the phase filter to "—" is not a move worth a hint.
+    expect(editorSaveOutcome({ changedFieldCount: 0, phaseChanged: true, phaseFilterEmpty: true })).toBe('noop');
+  });
+});
 
 describe('buildDetailsPatch', () => {
   it('whitelists a present key and null-coalesces it', () => {
