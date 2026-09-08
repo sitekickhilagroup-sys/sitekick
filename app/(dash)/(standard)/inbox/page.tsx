@@ -165,6 +165,8 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
   const labels: Record<string, string> = {
     attachTask: t('review.attach_task'), attachNone: t('review.attach_none'),
     attachHint: t('review.attach_hint'), attachChosen: t('review.attach_chosen'),
+    pvIntro: t('review.pv_intro'), pvTitle: t('review.pv_title'),
+    pvNote: t('review.pv_note'), pvStatusDone: t('review.pv_status_done'),
     needs: t('review.f_pending'), unsure: t('review.f_unsure'), approved: t('review.f_approved'),
     ignored: t('review.f_ignored'), wrong: t('review.f_wrong'), history: t('review.f_all'),
     auto: t('review.state_auto'),

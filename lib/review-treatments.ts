@@ -39,6 +39,37 @@ export function defaultTreatment(type: ProposalType, matched: boolean): ChangeTy
   return type === 'task_done' ? 'complete_existing' : 'update_existing';
 }
 
+/** Treatments whose apply path UPDATES an existing task (vs create/link/info). */
+const UPDATE_BRANCH: ChangeType[] = ['update_existing', 'complete_existing', 'merge_duplicate', 'keep_open'];
+
+export type UpdateField = 'title' | 'owner' | 'due' | 'note' | 'status';
+
+/**
+ * Exactly which fields an Apply will change on the target task, given the
+ * drawer's current inputs — so the human sees "what will change" before Apply
+ * (handoff §2). Mirrors decideProposal's taskPatch precisely: title only on
+ * update_existing; owner/due/note whenever set; complete_existing also closes
+ * the task. Fields the human didn't fill are not listed and are never
+ * overwritten. Pure/testable.
+ */
+export function updateFieldsPreview(
+  treatment: ChangeType,
+  edits: { title?: string; owner?: string; due?: string; note?: string },
+): { field: UpdateField; value: string }[] {
+  if (!UPDATE_BRANCH.includes(treatment)) return [];
+  const title = (edits.title ?? '').trim();
+  const owner = (edits.owner ?? '').trim();
+  const due = (edits.due ?? '').trim();
+  const note = (edits.note ?? '').trim();
+  const out: { field: UpdateField; value: string }[] = [];
+  if (treatment === 'update_existing' && title) out.push({ field: 'title', value: title });
+  if (owner) out.push({ field: 'owner', value: owner });
+  if (due) out.push({ field: 'due', value: due });
+  if (note) out.push({ field: 'note', value: note });
+  if (treatment === 'complete_existing') out.push({ field: 'status', value: 'done' });
+  return out;
+}
+
 /**
  * Which open tasks the review drawer may offer as a manual target — the ones
  * in the project the human chose for this item (General = null). Lets Noa fix

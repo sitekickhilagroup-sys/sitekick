@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { defaultTreatment, selectableTasksFor, targetTaskError, treatmentsFor } from './review-treatments.ts';
+import { defaultTreatment, selectableTasksFor, targetTaskError, treatmentsFor, updateFieldsPreview } from './review-treatments.ts';
+
+describe('updateFieldsPreview — "what will change" before Apply', () => {
+  it('lists only the fields the human filled, on update_existing', () => {
+    expect(updateFieldsPreview('update_existing', { title: 'New title', owner: 'Rowan', due: '', note: '' }))
+      .toEqual([{ field: 'title', value: 'New title' }, { field: 'owner', value: 'Rowan' }]);
+  });
+  it('does not change the title on merge_duplicate', () => {
+    expect(updateFieldsPreview('merge_duplicate', { title: 'X', note: 'n' }))
+      .toEqual([{ field: 'note', value: 'n' }]);
+  });
+  it('adds status→done on complete_existing', () => {
+    expect(updateFieldsPreview('complete_existing', { note: 'done via city' }))
+      .toEqual([{ field: 'note', value: 'done via city' }, { field: 'status', value: 'done' }]);
+  });
+  it('is empty for non-update treatments (create/link/info)', () => {
+    expect(updateFieldsPreview('new_task', { title: 'X' })).toEqual([]);
+    expect(updateFieldsPreview('information_only', { note: 'n' })).toEqual([]);
+    expect(updateFieldsPreview('keep_both_linked', { title: 'X' })).toEqual([]);
+  });
+});
 
 describe('selectableTasksFor — target-task choices for the chosen project', () => {
   const tasks = [

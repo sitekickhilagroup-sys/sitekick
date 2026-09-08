@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { autoTriagePending, decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
 import type { ChangeType, ProposalState, ProposalType } from '@/lib/types';
-import { NEEDS_MATCH, selectableTasksFor, treatmentsFor } from '@/lib/review-treatments';
+import { NEEDS_MATCH, selectableTasksFor, treatmentsFor, updateFieldsPreview } from '@/lib/review-treatments';
 import { fmtDate } from '@/lib/format';
 
 export interface ReviewRow {
@@ -113,6 +113,16 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
     () => selectableTasksFor(openTasks, projectId || null),
     [openTasks, projectId],
   );
+
+  // "What will change" before Apply (Section 2): the exact fields this update
+  // lands on the chosen task, and which task that is.
+  const previewFields = updateFieldsPreview(treatment, { title, owner, due, note });
+  const targetTitle = targetTaskId
+    ? (openTasks.find((tk) => tk.id === targetTaskId)?.title ?? selected?.matched?.title ?? '')
+    : '';
+  const fieldLabel = (f: string) =>
+    f === 'title' ? labels.pvTitle : f === 'owner' ? labels.fOwner
+      : f === 'due' ? labels.fDue : f === 'note' ? labels.pvNote : labels.pvStatusDone;
 
   useEffect(() => {
     if (!toast) return;
@@ -515,6 +525,24 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
                   className="mt-1 w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
                 />
               </label>
+
+              {/* Section 2: before Apply, show which task is updated and exactly
+                  which fields change (the note is added, not overwritten). */}
+              {targetTaskId && previewFields.length > 0 && (
+                <section className="rounded-(--radius-card) border border-sage-line bg-sage-soft/40 p-3">
+                  <p className="text-[10px] font-semibold tracking-[0.1em] text-sage uppercase">
+                    {labels.pvIntro.replace('{task}', targetTitle)}
+                  </p>
+                  <ul className="mt-1.5 flex flex-col gap-0.5">
+                    {previewFields.map((f) => (
+                      <li key={f.field} className="text-[11px] text-ink2">
+                        <b className="font-semibold text-ink">{fieldLabel(f.field)}</b>
+                        {f.field === 'status' ? '' : f.field === 'note' ? `: ${f.value.slice(0, 80)}` : ` → ${f.value}`}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               {failure && <p role="alert" className="text-xs text-coral">{labels.errorReason.replace('{reason}', failure)}</p>}
             </div>
 
