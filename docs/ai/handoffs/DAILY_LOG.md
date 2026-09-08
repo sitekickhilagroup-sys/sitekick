@@ -5,6 +5,27 @@ Newest entry on top. Facts only — decisions, commits, deploys, blockers.
 
 ---
 
+## 2026-09-08 (later) — My Work / Inbox handoff (INSTRUCTIONS_HE)
+
+Read `…/sitekick-my-work-handoff/INSTRUCTIONS_HE.md` + all 5 images. Order: reliable save →
+target-task selection & dedup → notes/corrections as feedback.
+
+**Section 1 — Edit details save (priority #1): FIXED + verified.**
+- *Verified in code:* the reported "Phase → Financing didn't save" is because **Phase is a
+  non-persisted local filter** for the Sub-stage list — `tasks` has no phase column by design
+  (`lib/task-details.ts`), phase derives from `substage_template_id`. Changing only Phase made an
+  empty patch and the editor **closed silently** (`task-editor.tsx` old `save()`), reading as data
+  loss. Other fields (owner/waiting/due/project/sub-stage/workstream/impact/category) do persist —
+  confirmed live earlier (a Due edit logged `edit:details`).
+- *Fix (commit `fb8a0b1`):* pure `editorSaveOutcome()` (save | phase_hint | noop); a Phase-only move
+  now shows an inline hint instead of a silent close; success only after a real write; Save/Cancel
+  made a sticky footer (reachable on small windows). No data-model change — persisting a task phase
+  without a sub-stage would need one, flagged for a separate decision.
+- *Tests:* 388/388, typecheck + i18n parity clean. Live-UI check pending deploy (app can't run
+  locally without Supabase env).
+- Sections 2 (Inbox target-task selector + dedup feedback) and 3 (notes/corrections as feedback):
+  designed, not yet built.
+
 ## 2026-09-08
 
 **Design & audit**
