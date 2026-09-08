@@ -32,10 +32,19 @@ target-task selection & dedup → notes/corrections as feedback.
   picking one flips the treatment to "update existing"; changing Project drops a now-invalid target.
   Inbox page loads open tasks + `targetTaskId` per row. Updating the same `task_id` prevents dups.
 - *Tests:* 6 new (selectableTasksFor, targetTaskError); 394/394, typecheck + eslint + i18n parity clean.
-- Section 3 (notes/corrections as feedback): designed, not yet built.
+**Section 3 — notes/corrections as feedback: DESIGNED, decisions pending** (`SECTION3_CORRECTIONS_FEEDBACK_DESIGN.md`).
+Key finding: much of §3 already exists — extract-comms already proposes corrections and dedupes
+re-processed notes (`filterDuplicateProposals`); auto-triage already learns from review decisions;
+Section 2 already captures manual matching corrections. What's left is **agent-prompt quality**
+(risky, needs an eval — not a bug fix) and a **new chat/notes assistant** (a whole surface whose
+placement/scope is an open product question). Per AGENTS.md I did not rush a live prompt change or
+decide the chat placement. Safe first slice proposed: a regression **eval fixture** (Carlos/Blair
+note → expected proposal shape) that every future prompt change must pass. **Awaiting PO decisions:**
+(1) chat assistant scope/placement; (2) how to verify extract-comms prompt changes before live.
 
 Section 1 (Edit details save fix) shipped to production earlier today (`952c68b`, READY) and
 confirmed working live by the PO (Phase+Sub-stage now persists and reflects).
+Section 2 (inbox target-task selector) shipped (`0883938`, READY) 2026-09-08 late; live for testing.
 
 ## 2026-09-08
 
