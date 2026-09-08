@@ -38,3 +38,34 @@ export function defaultTreatment(type: ProposalType, matched: boolean): ChangeTy
   if (!matched) return 'new_task';
   return type === 'task_done' ? 'complete_existing' : 'update_existing';
 }
+
+/**
+ * Which open tasks the review drawer may offer as a manual target — the ones
+ * in the project the human chose for this item (General = null). Lets Noa fix
+ * an association the agent missed instead of being forced into "Create new
+ * task" (which duplicates). Pure so it is unit-testable.
+ */
+export function selectableTasksFor<T extends { projectId: string | null }>(
+  tasks: T[],
+  chosenProject: string | null,
+): T[] {
+  const proj = chosenProject || null;
+  return tasks.filter((task) => (task.projectId ?? null) === proj);
+}
+
+/**
+ * Server-side guard for a MANUALLY chosen target task (the human's pick beats
+ * the agent's guess, but only within these bounds): it must exist, be open,
+ * and belong to the same project the item is being filed under. Returns the
+ * error string, or null when the pick is valid. Pure — the caller does the
+ * fetch and passes the row in.
+ */
+export function targetTaskError(
+  task: { status: string; project_id: string | null } | null,
+  chosenProject: string | null,
+): string | null {
+  if (!task) return 'target task not found';
+  if (task.status !== 'open') return 'target task is not open';
+  if ((task.project_id ?? null) !== (chosenProject || null)) return 'target task belongs to a different project';
+  return null;
+}

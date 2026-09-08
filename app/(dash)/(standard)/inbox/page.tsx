@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { resolveTaskPhaseKey, resolveTaskSubstageLabel } from '@/lib/task-details';
-import { ReviewBoard, type ReviewRow } from '@/components/inbox/review-board';
+import { ReviewBoard, type OpenTaskOption, type ReviewRow } from '@/components/inbox/review-board';
 import { defaultTreatment } from '@/lib/review-treatments';
 import type { AgentProposal, ChangeType, Phase, PhaseKey, Project, Task } from '@/lib/types';
 
@@ -78,6 +78,12 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     : { data: [] };
   const taskById = new Map(((tasksData ?? []) as Task[]).map((row) => [row.id, row]));
 
+  // Section 2: every open task, so the drawer can offer a manual target when
+  // the agent matched nothing — filtered to the chosen project client-side.
+  const { data: openTasksData } = await supabase
+    .from('tasks').select('id,title,project_id,substage_template_id,stage_key')
+    .eq('status', 'open').order('last_touched', { ascending: false });
+
   const phaseLabelForKey = (key: PhaseKey | null): string => (key ? (phaseLabelByKey.get(key) ?? '') : '');
   // A task's own derived phase — same precedence as work/page.tsx's
   // phaseLabelFor: the sub-stage it's actually on wins, then the legacy
@@ -128,6 +134,7 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
       matchScore: p.match_score ?? (task ? Math.round(p.confidence * 100) : 0),
       matchReason: p.match_reason ?? p.reasoning ?? '',
       state: p.state,
+      targetTaskId: p.target_task_id ?? null,
       matched: task
         ? {
           title: task.title,
@@ -142,7 +149,22 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     };
   });
 
+  const openTasks: OpenTaskOption[] = ((openTasksData ?? []) as {
+    id: string; title: string; project_id: string | null;
+    substage_template_id: string | null; stage_key: string | null;
+  }[]).map((tk) => ({
+    id: tk.id,
+    title: tk.title,
+    projectId: tk.project_id,
+    hint: resolveTaskSubstageLabel({
+      substageName: tk.substage_template_id ? substageNameById.get(tk.substage_template_id) ?? null : null,
+      legacyLabel: tk.stage_key ? prettyStage(tk.stage_key) : null,
+    }) ?? '',
+  }));
+
   const labels: Record<string, string> = {
+    attachTask: t('review.attach_task'), attachNone: t('review.attach_none'),
+    attachHint: t('review.attach_hint'), attachChosen: t('review.attach_chosen'),
     needs: t('review.f_pending'), unsure: t('review.f_unsure'), approved: t('review.f_approved'),
     ignored: t('review.f_ignored'), wrong: t('review.f_wrong'), history: t('review.f_all'),
     auto: t('review.state_auto'),
@@ -196,7 +218,7 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
           <Link href="/inbox" className="font-semibold text-sage hover:underline">{t('inbox.show_all')}</Link>
         </p>
       )}
-      <ReviewBoard rows={rows} projects={projectOptions} labels={labels} />
+      <ReviewBoard rows={rows} projects={projectOptions} openTasks={openTasks} labels={labels} />
     </div>
   );
 }

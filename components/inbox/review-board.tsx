@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { autoTriagePending, decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
 import type { ChangeType, ProposalState, ProposalType } from '@/lib/types';
-import { treatmentsFor } from '@/lib/review-treatments';
+import { NEEDS_MATCH, selectableTasksFor, treatmentsFor } from '@/lib/review-treatments';
 import { fmtDate } from '@/lib/format';
 
 export interface ReviewRow {
@@ -23,10 +23,21 @@ export interface ReviewRow {
   matchScore: number;          // 0 when nothing matched
   matchReason: string;
   state: ProposalState;
+  /** The agent's matched task id (null when it matched nothing) — seeds the
+   *  drawer's "attach to existing task" select so the human can keep or change it. */
+  targetTaskId: string | null;
   matched: null | {
     title: string; status: string; owner: string;
     phase: string; substage: string; due: string; latestUpdate: string;
   };
+}
+
+/** One open task the drawer can attach a proposal to (Section 2). */
+export interface OpenTaskOption {
+  id: string;
+  title: string;
+  projectId: string | null;
+  hint: string;
 }
 
 const FILTERS: { key: string; labelKey: string }[] = [
@@ -54,10 +65,13 @@ const stateTone = (s: ProposalState) =>
         : s === 'ignored' ? 'bg-inset text-ink3'
           : 'bg-mist-soft text-mist';
 
-export function ReviewBoard({ rows, projects, labels }: {
+export function ReviewBoard({ rows, projects, openTasks, labels }: {
   rows: ReviewRow[];
   /** Active projects for the drawer's attribution select. */
   projects: { id: string; name: string }[];
+  /** Every open task — the drawer filters these to the chosen project for the
+   *  "attach to existing task" select (Section 2). */
+  openTasks: OpenTaskOption[];
   labels: Record<string, string>;
 }) {
   const [filter, setFilter] = useState('pending');
@@ -76,18 +90,29 @@ export function ReviewBoard({ rows, projects, labels }: {
   const [treatment, setTreatment] = useState<ChangeType>('new_task');
   const [note, setNote] = useState('');
   const [projectId, setProjectId] = useState('');
+  // Section 2: the human's target-task pick ('' = none/create new). Seeded from
+  // the agent's match so keeping it unchanged behaves exactly as before.
+  const [targetTaskId, setTargetTaskId] = useState('');
 
   const open = (row: ReviewRow) => {
     setSelected(row);
     setTitle(row.title);
     setOwner(row.owner);
     setDue(/^\d{4}-\d{2}-\d{2}$/.test(row.due) ? row.due : '');
-    const allowed = treatmentsFor(row.type, !!row.matched);
+    const allowed = treatmentsFor(row.type, !!row.targetTaskId);
     setTreatment(allowed.includes(row.changeType) ? row.changeType : 'new_task');
     setNote(row.resultNote);
     setProjectId(row.projectId ?? '');
+    setTargetTaskId(row.targetTaskId ?? '');
     setFailure(null);
   };
+
+  // Open tasks in the project the item is currently filed under — the choices
+  // for the "attach to existing task" select. Changing Project re-filters them.
+  const targetChoices = useMemo(
+    () => selectableTasksFor(openTasks, projectId || null),
+    [openTasks, projectId],
+  );
 
   useEffect(() => {
     if (!toast) return;
@@ -115,6 +140,7 @@ export function ReviewBoard({ rows, projects, labels }: {
         changeType: override?.changeType ?? treatment,
         resultNote: note,
         projectId,
+        targetTaskId: targetTaskId || null,
       });
       if ('error' in res) { setFailure(res.error); return; }
       setSelected(null);
@@ -377,13 +403,13 @@ export function ReviewBoard({ rows, projects, labels }: {
                   aria-label={labels.treatment}
                   className="mt-2 min-h-11 w-full cursor-pointer rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none"
                 >
-                  {treatmentsFor(selected.type, !!selected.matched).map((t) => (
+                  {treatmentsFor(selected.type, !!targetTaskId).map((t) => (
                     <option key={t} value={t}>{labels[`ct.${t}`]}</option>
                   ))}
                 </select>
                 {treatment === 'apply_as_stated'
                   ? <p className="mt-1.5 text-[10px] text-ink3">{labels[`effect.${selected.type}`] ?? ''}</p>
-                  : !selected.matched && <p className="mt-1.5 text-[10px] text-ink3">{labels.noMatch}</p>}
+                  : !targetTaskId && <p className="mt-1.5 text-[10px] text-ink3">{labels.noMatch}</p>}
               </section>
 
               <label className="block">
@@ -399,7 +425,16 @@ export function ReviewBoard({ rows, projects, labels }: {
                 <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fProject}</span>
                 <select
                   value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
+                  onChange={(e) => {
+                    const pid = e.target.value;
+                    setProjectId(pid);
+                    // A target task from the old project no longer belongs here —
+                    // drop it rather than let the server reject the mismatch.
+                    if (targetTaskId && !openTasks.some((tk) => tk.id === targetTaskId && (tk.projectId ?? '') === pid)) {
+                      setTargetTaskId('');
+                      if ((NEEDS_MATCH as string[]).includes(treatment)) setTreatment('new_task');
+                    }
+                  }}
                   className="mt-1 min-h-11 w-full cursor-pointer rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
                 >
                   <option value="">{labels.general}</option>
@@ -412,6 +447,34 @@ export function ReviewBoard({ rows, projects, labels }: {
                 {!selected.projectId && (
                   <span className="mt-1 block text-[10px] text-ink3">{labels.projectLearnHint}</span>
                 )}
+              </label>
+
+              {/* Section 2: attach this update to an existing task so it doesn't
+                  become a duplicate — usable even when the agent matched nothing.
+                  Picking one flips the treatment to "update existing". */}
+              <label className="block">
+                <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.attachTask}</span>
+                <select
+                  value={targetTaskId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setTargetTaskId(id);
+                    if (id && (treatment === 'new_task' || treatment === 'information_only')) {
+                      setTreatment(selected.type === 'task_done' ? 'complete_existing' : 'update_existing');
+                    } else if (!id && (NEEDS_MATCH as string[]).includes(treatment)) {
+                      setTreatment('new_task');
+                    }
+                  }}
+                  className="mt-1 min-h-11 w-full cursor-pointer rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
+                >
+                  <option value="">{labels.attachNone}</option>
+                  {targetChoices.map((tk) => (
+                    <option key={tk.id} value={tk.id}>{tk.hint ? `${tk.title} — ${tk.hint}` : tk.title}</option>
+                  ))}
+                </select>
+                <span className="mt-1 block text-[10px] text-ink3">
+                  {targetTaskId ? labels.attachChosen : labels.attachHint}
+                </span>
               </label>
 
               <div className="grid gap-3 sm:grid-cols-2">

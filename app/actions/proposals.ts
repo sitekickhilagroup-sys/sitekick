@@ -6,7 +6,7 @@ import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { applyProposal, logActivity } from '@/lib/state-writer';
 import { attributionTokens, runFullTriage } from '@/lib/auto-triage';
-import { defaultTreatment } from '@/lib/review-treatments';
+import { defaultTreatment, targetTaskError } from '@/lib/review-treatments';
 import type { AgentProposal, ChangeType, Task } from '@/lib/types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -24,6 +24,10 @@ export interface ReviewEdits {
   /** Drawer project select — the human attribution for an item the agent
    *  couldn't place (or a correction of a wrong placement). '' = General. */
   projectId?: string;
+  /** Drawer "attach to existing task" select — the human's target-task pick
+   *  when the agent matched nothing (or matched the wrong one). '' = none
+   *  (create new); undefined = untouched, keep the agent's target_task_id. */
+  targetTaskId?: string | null;
 }
 
 export interface ReviewResult {
@@ -89,6 +93,21 @@ export async function decideProposal(
   // below ('' means General/no project, undefined means untouched).
   const chosenProject = edits.projectId !== undefined ? (edits.projectId || null) : p.project_id;
 
+  // The human's target-task pick beats the agent's match — but only within
+  // bounds: a manually chosen task must exist, be open, and sit in the project
+  // this item is being filed under (Section 2 — let Noa fix an association the
+  // agent missed, without letting the client attach to anything it likes).
+  let effectiveTargetTaskId = p.target_task_id;
+  if (edits.targetTaskId !== undefined) {
+    effectiveTargetTaskId = edits.targetTaskId || null;
+    if (effectiveTargetTaskId) {
+      const { data: tt } = await admin.from('tasks')
+        .select('status,project_id').eq('id', effectiveTargetTaskId).maybeSingle();
+      const err = targetTaskError(tt as { status: string; project_id: string | null } | null, chosenProject);
+      if (err) return { error: err };
+    }
+  }
+
   const patch: Record<string, unknown> = {
     decided_by: decision === 'pending' ? null : actor,
     decided_at: decision === 'pending' ? null : new Date().toISOString(),
@@ -97,6 +116,11 @@ export async function decideProposal(
   if (edits.resultNote !== undefined) patch.result_note = clean(edits.resultNote);
   if (edits.changeType) patch.change_type = edits.changeType;
   if (edits.projectId !== undefined && chosenProject !== p.project_id) patch.project_id = chosenProject;
+  // Record the human's target pick on the proposal so a retry/undo is
+  // consistent and the choice is auditable (matching feedback).
+  if (edits.targetTaskId !== undefined && effectiveTargetTaskId !== p.target_task_id) {
+    patch.target_task_id = effectiveTargetTaskId;
+  }
 
   if (decision !== 'approved') {
     patch.state = decision === 'pending' ? 'pending' : decision;
@@ -107,7 +131,7 @@ export async function decideProposal(
     return { ok: true, undoId: null, message: decision };
   }
 
-  const changeType: ChangeType = edits.changeType ?? p.change_type ?? defaultTreatment(p.type, !!p.target_task_id);
+  const changeType: ChangeType = edits.changeType ?? p.change_type ?? defaultTreatment(p.type, !!effectiveTargetTaskId);
   const note = clean(edits.resultNote) ?? p.result_note ?? p.evidence_excerpt;
   const title = clean(edits.title) ?? p.title ?? (typeof p.payload.title === 'string' ? p.payload.title : null);
   const due = edits.due && DATE_RE.test(edits.due.trim()) ? edits.due.trim() : null;
@@ -150,7 +174,7 @@ export async function decideProposal(
     // these must not be merged into a single task — both records survive and
     // the dependency is recorded instead.
     if (!title) return { error: 'a new task needs a title' };
-    if (!p.target_task_id) return { error: 'linking needs an existing task' };
+    if (!effectiveTargetTaskId) return { error: 'linking needs an existing task' };
     const { data: created, error } = await admin.from('tasks').insert({
       project_id: chosenProject,
       document_id: p.document_id,
@@ -168,7 +192,7 @@ export async function decideProposal(
 
     const { error: relError } = await admin.from('relationships').insert({
       project_id: chosenProject,
-      from_task_id: p.target_task_id,
+      from_task_id: effectiveTargetTaskId,
       to_task_id: created.id,
       type: 'blocks',
       reason: note,
@@ -183,7 +207,7 @@ export async function decideProposal(
     undoId = await logActivity(admin, {
       entity_type: 'task', entity_id: created.id, actor,
       action: 'review:keep_both_linked',
-      after: { proposal_id: id, created: true, linked_to: p.target_task_id },
+      after: { proposal_id: id, created: true, linked_to: effectiveTargetTaskId },
     });
   } else if (changeType === 'information_only') {
     undoId = await logActivity(admin, {
@@ -191,8 +215,8 @@ export async function decideProposal(
       action: 'review:information_only', after: { proposal_id: id, note },
     });
   } else {
-    if (!p.target_task_id) return { error: 'this treatment needs an existing task' };
-    const { data: beforeRow } = await admin.from('tasks').select('*').eq('id', p.target_task_id).maybeSingle();
+    if (!effectiveTargetTaskId) return { error: 'this treatment needs an existing task' };
+    const { data: beforeRow } = await admin.from('tasks').select('*').eq('id', effectiveTargetTaskId).maybeSingle();
     const before = (beforeRow ?? null) as Task | null;
     if (!before) return { error: 'the matched task no longer exists' };
     const taskPatch: Record<string, unknown> = { last_touched: today, document_id: p.document_id ?? before.document_id };
@@ -201,10 +225,10 @@ export async function decideProposal(
     if (due) taskPatch.due = due;
     if (note) taskPatch.description = note;
     if (changeType === 'complete_existing') taskPatch.status = 'done';
-    const { error } = await admin.from('tasks').update(taskPatch).eq('id', p.target_task_id);
+    const { error } = await admin.from('tasks').update(taskPatch).eq('id', effectiveTargetTaskId);
     if (error) return { error: error.message };
     undoId = await logActivity(admin, {
-      entity_type: 'task', entity_id: p.target_task_id, actor,
+      entity_type: 'task', entity_id: effectiveTargetTaskId, actor,
       action: `review:${changeType}`, before, after: { ...taskPatch, proposal_id: id },
     });
   }

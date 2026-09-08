@@ -1,5 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { defaultTreatment, treatmentsFor } from './review-treatments.ts';
+import { defaultTreatment, selectableTasksFor, targetTaskError, treatmentsFor } from './review-treatments.ts';
+
+describe('selectableTasksFor — target-task choices for the chosen project', () => {
+  const tasks = [
+    { id: 'a', projectId: 'p1' },
+    { id: 'b', projectId: 'p2' },
+    { id: 'c', projectId: null },
+  ];
+  it('filters to the chosen project', () => {
+    expect(selectableTasksFor(tasks, 'p1').map((t) => t.id)).toEqual(['a']);
+  });
+  it('treats "" and null as General', () => {
+    expect(selectableTasksFor(tasks, '').map((t) => t.id)).toEqual(['c']);
+    expect(selectableTasksFor(tasks, null).map((t) => t.id)).toEqual(['c']);
+  });
+});
+
+describe('targetTaskError — server guard for a manual target pick', () => {
+  it('accepts an open task in the same project', () => {
+    expect(targetTaskError({ status: 'open', project_id: 'p1' }, 'p1')).toBeNull();
+    expect(targetTaskError({ status: 'open', project_id: null }, '')).toBeNull();
+  });
+  it('rejects a missing task', () => {
+    expect(targetTaskError(null, 'p1')).toBe('target task not found');
+  });
+  it('rejects a task that is not open', () => {
+    expect(targetTaskError({ status: 'done', project_id: 'p1' }, 'p1')).toBe('target task is not open');
+  });
+  it('rejects a task in a different project', () => {
+    expect(targetTaskError({ status: 'open', project_id: 'p2' }, 'p1')).toBe('target task belongs to a different project');
+  });
+});
 
 describe('treatmentsFor', () => {
   it('drops every task-rewriting treatment when nothing matched', () => {
