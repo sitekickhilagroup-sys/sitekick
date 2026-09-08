@@ -21,6 +21,12 @@ import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relation
 import { fmtDate } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
+// "Refresh priorities" is a server action invoked from this page — it runs the
+// full prioritization agent (an LLM pass over every open task), the same core
+// the digest cron runs with maxDuration=300. Without this, the action inherits
+// the short default function timeout and is killed mid-run, so the button hangs
+// on "Ranking…" forever. Give it the same 5-minute budget as the cron.
+export const maxDuration = 300;
 
 // 'completed' (Noa round 3, request #3): recently-closed records with a
 // Reopen control — the missing way back after the undo toast expires.
