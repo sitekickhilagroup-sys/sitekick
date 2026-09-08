@@ -87,7 +87,7 @@ export async function markPairNotDuplicate(
   taskId2: string,
   reason: string,
 ): Promise<{ error: string; conflictType?: RelationshipType } | { ok: true }> {
-  await requireUser();
+  const user = await requireUser();
   if (!taskId1 || !taskId2) return { error: 'missing task' };
   if (taskId1 === taskId2) return { error: 'a task cannot depend on itself' };
   const admin = supabaseAdmin();
@@ -101,7 +101,18 @@ export async function markPairNotDuplicate(
   const outcome = decideNotDuplicateOutcome((data ?? []) as Pick<Relationship, 'type'>[]);
   if (outcome.kind === 'blocked') return { error: 'already recorded', conflictType: outcome.conflictType };
   if (outcome.kind === 'noop') return { ok: true as const };
-  return saveRelationship(taskId1, taskId2, 'unrelated', reason);
+  const result = await saveRelationship(taskId1, taskId2, 'unrelated', reason);
+  if ('ok' in result) {
+    // Audit-coverage (learning map §F/§B8): saveRelationship logs the write as
+    // 'save' (type=unrelated); this records the distinct SEMANTIC verdict for
+    // the matching agent — "these two are genuinely distinct" — as its own,
+    // filterable action, on the noop/blocked paths above it is deliberately absent.
+    await logActivity(admin, {
+      entity_type: 'task', entity_id: taskId1, actor: user.email ?? user.id,
+      action: 'not_duplicate', after: { other_task_id: taskId2, reason },
+    });
+  }
+  return result;
 }
 
 export async function deleteRelationship(id: string) {
