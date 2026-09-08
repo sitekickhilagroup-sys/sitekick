@@ -39,8 +39,17 @@ Section 2 already captures manual matching corrections. What's left is **agent-p
 (risky, needs an eval — not a bug fix) and a **new chat/notes assistant** (a whole surface whose
 placement/scope is an open product question). Per AGENTS.md I did not rush a live prompt change or
 decide the chat placement. Safe first slice proposed: a regression **eval fixture** (Carlos/Blair
-note → expected proposal shape) that every future prompt change must pass. **Awaiting PO decisions:**
-(1) chat assistant scope/placement; (2) how to verify extract-comms prompt changes before live.
+note → expected proposal shape) that every future prompt change must pass. **PO decided (2026-09-09):**
+(1) build a **global** notes assistant; (2) **defer** extract-comms prompt changes.
+
+**Section 3 — global notes assistant: BUILT (commit `ccccfdd`).** A `/notes` page (under More): Noa
+writes a note in her own words, links it to a task/project (or general), the system reads its intent
+(preference / instruction / fact) via a transparent, correctable keyword classifier, and records it.
+**No business actions in v1.** New append-only `comments` table (`0024`, fact separate from
+interpretation, `created_by` = real author). Deploy-safe before the migration (missing table → empty
+list, never a crash). 8 new tests; 400/400, typecheck + eslint + i18n parity clean. **Needs the PO to
+apply migration `0024_comments.sql` to prod + no flag needed (no behaviour change).** Deferred:
+extract-comms prompt quality (revisit with an eval later).
 
 Section 1 (Edit details save fix) shipped to production earlier today (`952c68b`, READY) and
 confirmed working live by the PO (Phase+Sub-stage now persists and reflects).
