@@ -84,7 +84,10 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
   const [workstreamId, setWorkstreamId] = useState(task.workstream_id ?? '');
   const [impact, setImpact] = useState<ProcessImpact | ''>(task.process_impact ?? '');
   const [category, setCategory] = useState<'project' | 'admin'>(task.category ?? 'project');
-  const [failed, setFailed] = useState(false);
+  // The specific server reason (e.g. "workstream and sub-stage are in different
+  // phases") — shown instead of a generic "try again", so an invalid combination
+  // reads as a clear, fixable error (handoff §1).
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Phase is a filter, not a persisted field — moving it alone changes nothing.
   // When that's all the user did, we show this hint instead of closing silently
   // (the reported "Phase didn't save" bug), so an unsupported change is never
@@ -137,7 +140,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
     : projectChoices;
 
   const save = () => start(async () => {
-    setFailed(false); setPhaseHint(false);
+    setErrorMsg(null); setPhaseHint(false);
     // Only the fields the user actually touched — sending every field back
     // (even unchanged ones) would silently revert a concurrent write, e.g. a
     // verb chip's status/waiting_for change the row hasn't re-rendered yet.
@@ -161,7 +164,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
     if (outcome === 'noop') { onClose(); return; }
 
     const res = await updateTaskDetails(task.id, patch);
-    if ('error' in res) { setFailed(true); return; }
+    if ('error' in res) { setErrorMsg(res.error); return; }
     // C3: same reasoning as VerbMenu's run() — the edit itself always
     // succeeded here, so a weekly-sync hiccup (res.syncWarning) rides along
     // on the same chip rather than reading as a failed save.
@@ -173,7 +176,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
   const undo = () => start(async () => {
     if (!result?.undoId) { onClose(); return; }
     const res = await undoWorkVerb(result.undoId);
-    if ('error' in res) { setFailed(true); return; }
+    if ('error' in res) { setErrorMsg(res.error ?? labels.errorSave); return; }
     onClose();
   });
 
@@ -300,7 +303,7 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
               className="min-h-11 rounded-full bg-inset px-3 py-1.5 text-xs text-ink3 sm:min-h-7">
               {labels.cancel}
             </button>
-            {failed && <span role="alert" className="text-[10px] font-semibold text-coral">{labels.errorSave}</span>}
+            {errorMsg && <span role="alert" className="text-[10px] font-semibold text-coral">{errorMsg}</span>}
           </span>
           {phaseHint && (
             <span role="status" className="text-[10px] leading-snug text-apricot">

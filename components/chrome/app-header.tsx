@@ -49,7 +49,6 @@ export async function AppHeader() {
   ];
   const moreLinks = [
     { href: '/inbox', label: t('nav.inbox'), badge: pendingCount ?? undefined },
-    { href: '/notes', label: t('nav.notes') },
     { href: '/drafts', label: t('nav.drafts') },
     { href: '/digest', label: t('nav.digest') },
     { href: '/directory', label: t('nav.directory') },

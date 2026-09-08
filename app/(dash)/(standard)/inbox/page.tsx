@@ -165,7 +165,10 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
       substageName: tk.substage_template_id ? substageNameById.get(tk.substage_template_id) ?? null : null,
       legacyLabel: tk.stage_key ? prettyStage(tk.stage_key) : null,
     }) ?? '',
+    substageTemplateId: tk.substage_template_id,
   }));
+
+  const phaseOptions = ((phasesQ.data ?? []) as Phase[]).map((ph) => ({ key: ph.key as string, label: ph.label }));
 
   const labels: Record<string, string> = {
     attachTask: t('review.attach_task'), attachNone: t('review.attach_none'),
@@ -225,7 +228,7 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
           <Link href="/inbox" className="font-semibold text-sage hover:underline">{t('inbox.show_all')}</Link>
         </p>
       )}
-      <ReviewBoard rows={rows} projects={projectOptions} openTasks={openTasks} labels={labels} />
+      <ReviewBoard rows={rows} projects={projectOptions} openTasks={openTasks} phases={phaseOptions} substages={substageTemplates} labels={labels} />
     </div>
   );
 }

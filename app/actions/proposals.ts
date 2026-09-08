@@ -28,6 +28,10 @@ export interface ReviewEdits {
    *  when the agent matched nothing (or matched the wrong one). '' = none
    *  (create new); undefined = untouched, keep the agent's target_task_id. */
   targetTaskId?: string | null;
+  /** Drawer Sub-stage select — the sub-stage to set on the task this decision
+   *  writes (Phase is a filter of it, not stored). '' = clear; undefined =
+   *  untouched. A task's phase is owned through substage_template_id. */
+  substageTemplateId?: string | null;
 }
 
 export interface ReviewResult {
@@ -158,6 +162,7 @@ export async function decideProposal(
       owner,
       due,
       stage_key: typeof p.payload.stage_key === 'string' ? p.payload.stage_key : null,
+      substage_template_id: edits.substageTemplateId || null,
       category: p.payload.category === 'admin' ? 'admin' : 'project',
       status: 'open',
       source: 'agent review',
@@ -183,6 +188,7 @@ export async function decideProposal(
       owner,
       due,
       stage_key: typeof p.payload.stage_key === 'string' ? p.payload.stage_key : null,
+      substage_template_id: edits.substageTemplateId || null,
       category: p.payload.category === 'admin' ? 'admin' : 'project',
       status: 'open',
       source: 'agent review',
@@ -224,6 +230,7 @@ export async function decideProposal(
     if (owner) taskPatch.owner = owner;
     if (due) taskPatch.due = due;
     if (note) taskPatch.description = note;
+    if (edits.substageTemplateId !== undefined) taskPatch.substage_template_id = edits.substageTemplateId || null;
     if (changeType === 'complete_existing') taskPatch.status = 'done';
     const { error } = await admin.from('tasks').update(taskPatch).eq('id', effectiveTargetTaskId);
     if (error) return { error: error.message };

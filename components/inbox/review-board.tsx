@@ -40,6 +40,7 @@ export interface OpenTaskOption {
   projectId: string | null;
   phase: string;
   substage: string;
+  substageTemplateId: string | null;
 }
 
 const FILTERS: { key: string; labelKey: string }[] = [
@@ -67,13 +68,17 @@ const stateTone = (s: ProposalState) =>
         : s === 'ignored' ? 'bg-inset text-ink3'
           : 'bg-mist-soft text-mist';
 
-export function ReviewBoard({ rows, projects, openTasks, labels }: {
+export function ReviewBoard({ rows, projects, openTasks, phases, substages, labels }: {
   rows: ReviewRow[];
   /** Active projects for the drawer's attribution select. */
   projects: { id: string; name: string }[];
   /** Every open task — the drawer filters these to the chosen project for the
    *  "attach to existing task" select (Section 2). */
   openTasks: OpenTaskOption[];
+  /** The 5 canonical phases (for the editable Phase filter). */
+  phases: { key: string; label: string }[];
+  /** Sub-stage library (the editable Sub-stage select filters to the phase). */
+  substages: { id: string; phase_key: string; name: string }[];
   labels: Record<string, string>;
 }) {
   const [filter, setFilter] = useState('pending');
@@ -95,6 +100,11 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
   // Section 2: the human's target-task pick ('' = none/create new). Seeded from
   // the agent's match so keeping it unchanged behaves exactly as before.
   const [targetTaskId, setTargetTaskId] = useState('');
+  // Editable Sub-stage (Phase is its filter, not stored) — sets the task's
+  // sub-stage on Apply.
+  const [substageId, setSubstageId] = useState('');
+  const [phaseFilter, setPhaseFilter] = useState('');
+  const phaseKeyOfSubstage = (id: string) => substages.find((s) => s.id === id)?.phase_key ?? '';
 
   const open = (row: ReviewRow) => {
     setSelected(row);
@@ -106,6 +116,9 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
     setNote(row.resultNote);
     setProjectId(row.projectId ?? '');
     setTargetTaskId(row.targetTaskId ?? '');
+    const seed = row.targetTaskId ? openTasks.find((tk) => tk.id === row.targetTaskId) : undefined;
+    setSubstageId(seed?.substageTemplateId ?? '');
+    setPhaseFilter(seed?.substageTemplateId ? phaseKeyOfSubstage(seed.substageTemplateId) : '');
     setFailure(null);
   };
 
@@ -121,9 +134,12 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
 
   // When a task is attached, the Phase/Sub-stage boxes should show THAT task's
   // location (confirming the match), not the proposal's empty one.
-  const attachedTask = targetTaskId ? openTasks.find((tk) => tk.id === targetTaskId) : undefined;
-  const shownPhase = attachedTask?.phase || selected?.phase || '';
-  const shownSubstage = attachedTask?.substage || selected?.substage || '';
+  // Editable Sub-stage options — filtered to the chosen Phase, but always keep
+  // the current value visible even if it falls outside the filter.
+  const substageChoices = substages.filter((s) => s.phase_key === phaseFilter);
+  const currentSubstage = substages.find((s) => s.id === substageId);
+  const substageSelectOptions = currentSubstage && !substageChoices.some((s) => s.id === currentSubstage.id)
+    ? [currentSubstage, ...substageChoices] : substageChoices;
 
   // "What will change" before Apply (Section 2): the exact fields this update
   // lands on the chosen task, and which task that is.
@@ -162,6 +178,7 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
         resultNote: note,
         projectId,
         targetTaskId: targetTaskId || null,
+        substageTemplateId: substageId || null,
       });
       if ('error' in res) { setFailure(res.error); return; }
       setSelected(null);
@@ -480,6 +497,11 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
                   onChange={(e) => {
                     const id = e.target.value;
                     setTargetTaskId(id);
+                    // Seed Sub-stage from the task being attached, so it shows
+                    // that task's location and edits start from the real value.
+                    const picked = id ? openTasks.find((tk) => tk.id === id) : undefined;
+                    setSubstageId(picked?.substageTemplateId ?? '');
+                    setPhaseFilter(picked?.substageTemplateId ? phaseKeyOfSubstage(picked.substageTemplateId) : '');
                     if (id && (treatment === 'new_task' || treatment === 'information_only')) {
                       setTreatment(selected.type === 'task_done' ? 'complete_existing' : 'update_existing');
                     } else if (!id && (NEEDS_MATCH as string[]).includes(treatment)) {
@@ -499,14 +521,32 @@ export function ReviewBoard({ rows, projects, openTasks, labels }: {
               </label>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div>
+                <label className="block">
                   <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fPhase}</span>
-                  <p className="mt-1 min-h-11 rounded-lg border border-line bg-inset px-3 py-2.5 text-sm text-ink2">{shownPhase || '—'}</p>
-                </div>
-                <div>
+                  <select
+                    value={phaseFilter}
+                    onChange={(e) => setPhaseFilter(e.target.value)}
+                    className="mt-1 min-h-11 w-full cursor-pointer rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
+                  >
+                    <option value="">—</option>
+                    {phases.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                  </select>
+                </label>
+                <label className="block">
                   <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fSubstage}</span>
-                  <p className="mt-1 min-h-11 rounded-lg border border-line bg-inset px-3 py-2.5 text-sm text-ink2">{shownSubstage || '—'}</p>
-                </div>
+                  <select
+                    value={substageId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setSubstageId(id);
+                      if (id) setPhaseFilter(phaseKeyOfSubstage(id));
+                    }}
+                    className="mt-1 min-h-11 w-full cursor-pointer rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
+                  >
+                    <option value="">—</option>
+                    {substageSelectOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </label>
                 <label className="block">
                   <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fOwner}</span>
                   <input
