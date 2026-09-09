@@ -37,6 +37,14 @@ describe('buildDetailsPatch', () => {
     expect(clean).toEqual({ owner: 'Rowan' });
   });
 
+  it('accepts a title rename, trims it, and refuses to blank a required title', () => {
+    expect(buildDetailsPatch({ title: 'LADBS returned the soils report' }))
+      .toEqual({ clean: { title: 'LADBS returned the soils report' } });
+    expect(buildDetailsPatch({ title: '  spaced name  ' })).toEqual({ clean: { title: 'spaced name' } });
+    expect(buildDetailsPatch({ title: '   ' })).toEqual({ error: 'title cannot be empty' });
+    expect(buildDetailsPatch({ title: '' })).toEqual({ error: 'title cannot be empty' });
+  });
+
   it('accepts a YYYY-MM-DD due date, rejects a malformed one, allows clearing to null', () => {
     expect(buildDetailsPatch({ due: '2026-09-01' })).toEqual({ clean: { due: '2026-09-01' } });
     expect(buildDetailsPatch({ due: 'not-a-date' })).toEqual({ error: 'invalid date' });

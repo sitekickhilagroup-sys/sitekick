@@ -112,16 +112,32 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const closedTasks = (closedQ.data ?? []) as Task[];
 
   // Latest AI prioritization run (0022) — the suggestion layer: per-project
-  // and cross-project ranks plus a grounded reason per task. Two small
-  // queries; absent (no run yet) everything below falls back to the
-  // deterministic engine exactly as before.
-  const { data: latestRunRow } = await supabase.from('priority_runs')
-    .select('id,created_at').order('created_at', { ascending: false }).limit(1).maybeSingle();
-  const { data: prioRows } = latestRunRow
-    ? await supabase.from('task_priorities').select('*').eq('run_id', latestRunRow.id)
+  // and cross-project ranks plus a grounded reason per task.
+  //
+  // Fix (docs/ai/DECISIONS.md D-011, OPEN_QUESTIONS.md Q-007): applyPrioritization
+  // in agents/prioritize-tasks.ts commits the `priority_runs` row before the
+  // `task_priorities` rows; if that second insert fails, an empty run is left
+  // behind. The old query here picked strictly the newest `priority_runs` row
+  // by created_at, so an empty run would silently replace a good prior one —
+  // the UI would show no AI ranks at all even though a real run exists. Fix:
+  // look at the last few runs and use the newest one that actually has at
+  // least one linked task_priorities row, instead of trusting recency alone.
+  const { data: recentRuns } = await supabase.from('priority_runs')
+    .select('id,created_at').order('created_at', { ascending: false }).limit(10);
+  const recentRunIds = (recentRuns ?? []).map((r) => r.id);
+  const { data: recentPrioRows } = recentRunIds.length
+    ? await supabase.from('task_priorities').select('*').in('run_id', recentRunIds)
     : { data: [] as TaskRank[] };
-  const aiByTask = new Map(((prioRows ?? []) as TaskRank[]).map((r) => [r.task_id, r]));
-  const aiRunAt: string | null = latestRunRow?.created_at ?? null;
+  const prioRowsByRun = new Map<string, TaskRank[]>();
+  for (const row of (recentPrioRows ?? []) as TaskRank[]) {
+    const list = prioRowsByRun.get(row.run_id) ?? [];
+    list.push(row);
+    prioRowsByRun.set(row.run_id, list);
+  }
+  const latestNonEmptyRun = (recentRuns ?? []).find((r) => (prioRowsByRun.get(r.id)?.length ?? 0) > 0);
+  const prioRows: TaskRank[] = latestNonEmptyRun ? (prioRowsByRun.get(latestNonEmptyRun.id) ?? []) : [];
+  const aiByTask = new Map(prioRows.map((r) => [r.task_id, r]));
+  const aiRunAt: string | null = latestNonEmptyRun?.created_at ?? null;
   // Full relationship set — needed both here (excluding pairs Noa already
   // told apart via 'unrelated' — see lib/dedup.ts's findDuplicatePairs) and
   // later for unlocksFor's blocks-edge lookup.
@@ -437,6 +453,8 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     // form's field labels and select options. phase reuses review.f_phase
     // (already "Phase"/"שלב") rather than adding a duplicate key.
     editDetails: t('work.edit_details'),
+    taskName: t('work.task_name'),
+    errTitleEmpty: t('work.err_title_empty'),
     project: t('common.project'),
     general: t('common.general'),
     waitingOn: t('tasks.waiting'),

@@ -38,6 +38,9 @@ export function verbToPatch(
 export const UNDO_RESTORE_KEYS = [
   'status', 'waiting_for', 'due', 'last_touched', 'description', 'owner', 'latest_note',
   'project_id', 'substage_template_id', 'workstream_id', 'process_impact',
+  // title + category are editable in Edit details, so an Undo of a rename or a
+  // category change must be able to restore them from the snapshot too.
+  'title', 'category',
 ] as const;
 
 /**

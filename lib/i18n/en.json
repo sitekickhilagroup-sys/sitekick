@@ -546,6 +546,8 @@
   "work.why.impact.not_blocking": "Not Blocking",
   "work.why.impact.verify": "Verify",
   "work.edit_details": "Edit details…",
+  "work.task_name": "Task name",
+  "work.err_title_empty": "Task name can't be empty",
   "work.impact": "Impact on process",
   "work.substage": "Sub-stage",
   "work.workstream": "Workstream",

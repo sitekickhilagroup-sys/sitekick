@@ -546,6 +546,8 @@
   "work.why.impact.not_blocking": "לא חוסם",
   "work.why.impact.verify": "לאימות",
   "work.edit_details": "עריכת פרטים…",
+  "work.task_name": "שם המשימה",
+  "work.err_title_empty": "שם המשימה לא יכול להיות ריק",
   "work.impact": "השפעה על התהליך",
   "work.substage": "תת־שלב",
   "work.workstream": "מסלול עבודה",

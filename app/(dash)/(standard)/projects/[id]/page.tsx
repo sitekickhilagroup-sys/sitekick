@@ -154,6 +154,8 @@ export default async function ProjectProcessPage({ params }: PageProps<'/project
     // two pages can't drift on wording. phase reuses review.f_phase (already
     // "Phase"/"שלב") rather than adding a duplicate key.
     editDetails: t('work.edit_details'),
+    taskName: t('work.task_name'),
+    errTitleEmpty: t('work.err_title_empty'),
     project: t('common.project'),
     general: t('common.general'),
     waitingOn: t('tasks.waiting'),

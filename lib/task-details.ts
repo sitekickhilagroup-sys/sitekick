@@ -18,6 +18,10 @@ export const DETAIL_KEYS = ['owner', 'waiting_for', 'due', 'project_id',
   'substage_template_id', 'workstream_id', 'process_impact', 'category'] as const;
 
 export interface TaskDetailsPatch {
+  /** Task name. Never null — a task must keep a title — so it's handled apart
+   *  from DETAIL_KEYS (which null-coalesce). Editing it here is the only way
+   *  Noa can fix a name a review Apply overwrote (Noa's report §1). */
+  title?: string;
   owner?: string | null; waiting_for?: string | null; due?: string | null;
   project_id?: string | null;
   substage_template_id?: string | null; workstream_id?: string | null;
@@ -52,6 +56,12 @@ export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export function buildDetailsPatch(patch: TaskDetailsPatch): { clean: Record<string, unknown> } | { error: string } {
   const clean: Record<string, unknown> = {};
   for (const k of DETAIL_KEYS) if (k in patch) clean[k] = (patch as Record<string, unknown>)[k] ?? null;
+  // Title is NOT NULL on tasks — a patch may rename but never blank it.
+  if ('title' in patch) {
+    const t = String(patch.title ?? '').trim();
+    if (!t) return { error: 'title cannot be empty' };
+    clean.title = t;
+  }
   if (clean.due != null && !DATE_RE.test(String(clean.due))) return { error: 'invalid date' };
   if (clean.process_impact != null && !PROCESS_IMPACTS.includes(clean.process_impact as NonNullable<Task['process_impact']>)) {
     return { error: 'invalid impact' };

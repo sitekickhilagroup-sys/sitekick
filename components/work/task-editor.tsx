@@ -76,6 +76,7 @@ interface Props {
  * real, correctly-sized box instead of collapsing to nothing).
  */
 export function TaskEditor({ task, options, labels, onClose }: Props) {
+  const [title, setTitle] = useState(task.title ?? '');
   const [owner, setOwner] = useState(task.owner ?? '');
   const [waitingFor, setWaitingFor] = useState(task.waiting_for ?? '');
   const [due, setDue] = useState(task.due ?? '');
@@ -145,6 +146,13 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
     // (even unchanged ones) would silently revert a concurrent write, e.g. a
     // verb chip's status/waiting_for change the row hasn't re-rendered yet.
     const patch: TaskDetailsPatch = {};
+    // Renaming a task: the only in-UI fix for a name a review Apply overwrote.
+    // A task must keep a title, so an emptied field is a clear error, not a save.
+    const trimmedTitle = title.trim();
+    if (trimmedTitle !== (task.title ?? '')) {
+      if (!trimmedTitle) { setErrorMsg(labels.errTitleEmpty ?? labels.errorSave); return; }
+      patch.title = trimmedTitle;
+    }
     if (owner !== (task.owner ?? '')) patch.owner = owner.trim() || null;
     if (waitingFor !== (task.waiting_for ?? '')) patch.waiting_for = waitingFor.trim() || null;
     if (due !== (task.due ?? '')) patch.due = due || null;
@@ -203,6 +211,12 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
             a flex container's direct children are always blockified for
             layout regardless of their own default display. */}
         <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink3">{labels.editDetails}</span>
+
+        <label className="block text-xs text-ink2">
+          <span className="mb-0.5 block text-[10px] font-medium text-ink3">{labels.taskName}</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)}
+            className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9" />
+        </label>
 
         <label className="block text-xs text-ink2">
           <span className="mb-0.5 block text-[10px] font-medium text-ink3">{labels.owner}</span>
