@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type Anthropic from '@anthropic-ai/sdk';
 import { runStructured, MODELS } from '../lib/claude.ts';
 import { scoreTask, IMPACT_WEIGHT } from '../lib/priority.ts';
+import { loadVerifiedNotes, renderVerifiedNotes } from '../lib/feedback-context.ts';
 import { PrioritizeResultSchema, type PrioritizeResult } from './schemas.ts';
 import type { Blocker, Project, Task } from '../lib/types.ts';
 
@@ -46,6 +47,9 @@ export interface PrioritizeContext {
   today: string;
   /** Recent human pins — the correction signal the brief wants fed back. */
   pinned?: { title: string; manual_priority: number }[];
+  /** Feedback in use (kill-switched): human-confirmed facts/corrections, pre-
+   *  rendered by lib/feedback-context.ts. Empty when FEEDBACK_USE is off. */
+  verifiedNotesBlock?: string;
   client?: Anthropic;
 }
 
@@ -95,11 +99,12 @@ export async function prioritizeTasks(ctx: PrioritizeContext): Promise<Prioritiz
   const pins = (ctx.pinned ?? []).length
     ? `\nHUMAN CORRECTIONS (Noa pinned these to the top recently — treat similar work as important):\n${ctx.pinned!.map((p) => `- #${p.manual_priority} ${p.title}`).join('\n')}\n`
     : '';
+  const verified = ctx.verifiedNotesBlock ? `\n${ctx.verifiedNotesBlock}` : '';
 
   return runStructured({
     job: 'digest',
     system: SYSTEM,
-    messages: [{ role: 'user', content: `TODAY: ${ctx.today}\n${pins}\n${sections.join('\n\n')}` }],
+    messages: [{ role: 'user', content: `TODAY: ${ctx.today}\n${pins}${verified}\n${sections.join('\n\n')}` }],
     schema: PrioritizeResultSchema,
     toolName: 'report_priorities',
     toolDescription: 'Report the urgency score, tier and reason for every open task.',
@@ -172,7 +177,14 @@ export async function applyPrioritization(
   });
   if (rows.length) {
     const { error } = await admin.from('task_priorities').insert(rows);
-    if (error) return { error: `task_priorities insert failed: ${error.message}` };
+    if (error) {
+      // task_priorities.run_id is a NOT NULL FK to priority_runs(id) (0022_prioritize_learn.sql),
+      // so the run row above must exist before these can be inserted — it can't be created after.
+      // Delete it here instead, so a failed insert never leaves an empty run behind for the
+      // "latest run" queries (docs/ai/DECISIONS.md D-011/D-013) to have to filter out.
+      await admin.from('priority_runs').delete().eq('id', run.id);
+      return { error: `task_priorities insert failed: ${error.message}` };
+    }
   }
   return { run_id: run.id as string, ranked: rows.length, missing, unknown };
 }
@@ -194,12 +206,17 @@ export async function runPrioritization(
   ]);
   const tasks = (tasksQ.data ?? []) as Task[];
   if (!tasks.length) return { error: 'no open tasks to rank' };
+  // Feedback in use (kill-switched): Noa's confirmed facts/corrections ride into
+  // the ranker's context so a corrected fact (e.g. an invented deadline she
+  // disowned) is present when it scores. Empty when FEEDBACK_USE is off.
+  const verifiedNotes = await loadVerifiedNotes(admin, tasks.map((t) => t.id));
   const result = await prioritizeTasks({
     projects: (projectsQ.data ?? []) as PrioritizeContext['projects'],
     tasks,
     blockers: (blockersQ.data ?? []) as PrioritizeContext['blockers'],
     today,
     pinned: (pinsQ.data ?? []) as { title: string; manual_priority: number }[],
+    verifiedNotesBlock: renderVerifiedNotes(verifiedNotes),
     client,
   });
   return applyPrioritization(admin, result, { tasks, today });

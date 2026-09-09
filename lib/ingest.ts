@@ -2,6 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { extractComms, applyExtractResult } from '../agents/extract-comms.ts';
 import { parseInvoice, applyInvoiceParse } from '../agents/parse-invoice.ts';
 import { loadRejectedPatterns } from './auto-triage.ts';
+import {
+  loadVerifiedNotes, loadMatchDecisions, renderVerifiedNotes, renderMatchDecisions,
+} from './feedback-context.ts';
 import type { DocKind, DocSource, Project, Task, Vendor } from './types.ts';
 
 export interface IngestInput {
@@ -89,11 +92,21 @@ export async function processDocument(
   }
 
   // Source-side learning: titles the team explicitly dismissed ride into the
-  // prompt so the same noise stops being produced at all.
-  const rejectedPatterns = await loadRejectedPatterns(admin);
+  // prompt so the same noise stops being produced at all. Plus feedback in use
+  // (kill-switched): human-confirmed facts and reviewers' match decisions —
+  // both loaders return empty when FEEDBACK_USE is off, so this is a no-op then.
+  const [rejectedPatterns, verifiedNotes, matchDecisions] = await Promise.all([
+    loadRejectedPatterns(admin),
+    loadVerifiedNotes(admin, openTasks.map((t) => t.id)),
+    loadMatchDecisions(admin),
+  ]);
   const result = await extractComms(
     { id: doc.id, project_hint: doc.project_hint, raw_text: doc.raw_text ?? '' },
-    { projects, openTasks, rejectedPatterns },
+    {
+      projects, openTasks, rejectedPatterns,
+      verifiedNotesBlock: renderVerifiedNotes(verifiedNotes),
+      matchDecisionsBlock: renderMatchDecisions(matchDecisions),
+    },
   );
   // Trust boundary: email (forwarded, polled, or an uploaded archive of
   // external mail) is attacker-controllable content — its new tasks go to the
