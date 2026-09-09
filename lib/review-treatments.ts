@@ -42,30 +42,55 @@ export function defaultTreatment(type: ProposalType, matched: boolean): ChangeTy
 /** Treatments whose apply path UPDATES an existing task (vs create/link/info). */
 const UPDATE_BRANCH: ChangeType[] = ['update_existing', 'complete_existing', 'merge_duplicate', 'keep_open'];
 
-export type UpdateField = 'title' | 'owner' | 'due' | 'note' | 'status';
+export type UpdateField = 'title' | 'owner' | 'due' | 'note' | 'substage' | 'phase' | 'status';
 
 /**
- * Exactly which fields an Apply will change on the target task, given the
- * drawer's current inputs — so the human sees "what will change" before Apply
- * (handoff §2). Mirrors decideProposal's taskPatch precisely: title only on
- * update_existing; owner/due/note whenever set; complete_existing also closes
- * the task. Fields the human didn't fill are not listed and are never
- * overwritten. Pure/testable.
+ * Current values on the target task, so the plan lists only what actually
+ * CHANGES (Noa's bug: a Sub-stage/Phase change was written but never shown, and
+ * an email-extracted title silently renamed the existing task). `substage`
+ * carries pre-resolved labels because this function stays pure — the caller
+ * looks names up and passes `changed` after diffing chosen vs current id.
+ */
+export interface TargetBefore {
+  title?: string | null;
+  substage?: { changed: boolean; substageLabel: string | null; phaseLabel: string | null };
+}
+
+/**
+ * The single normalized change-plan: exactly which fields an Apply will write
+ * to the target task, given the drawer's current inputs. Both the drawer's
+ * "what will change" panel AND decideProposal's taskPatch derive from THIS
+ * plan, so what Noa approves is what gets written (brief §1 — a separate
+ * display list is what recreated the gap). Fields that match the current value
+ * are omitted: a title only appears on update_existing when it differs from the
+ * task's current title (no silent rename); substage/phase only when `changed`.
+ * Pure/testable.
  */
 export function updateFieldsPreview(
   treatment: ChangeType,
   edits: { title?: string; owner?: string; due?: string; note?: string },
+  before: TargetBefore = {},
 ): { field: UpdateField; value: string }[] {
   if (!UPDATE_BRANCH.includes(treatment)) return [];
   const title = (edits.title ?? '').trim();
   const owner = (edits.owner ?? '').trim();
   const due = (edits.due ?? '').trim();
   const note = (edits.note ?? '').trim();
+  const currentTitle = (before.title ?? '').trim();
   const out: { field: UpdateField; value: string }[] = [];
-  if (treatment === 'update_existing' && title) out.push({ field: 'title', value: title });
+  // Rename is explicit: only when update_existing AND the title actually differs
+  // from the task's current title. An extracted email title left unchanged is
+  // not a rename.
+  if (treatment === 'update_existing' && title && title !== currentTitle) out.push({ field: 'title', value: title });
   if (owner) out.push({ field: 'owner', value: owner });
   if (due) out.push({ field: 'due', value: due });
   if (note) out.push({ field: 'note', value: note });
+  // Phase is derived from Sub-stage; show both when the Sub-stage changed, so
+  // the derived Phase move is never invisible.
+  if (before.substage?.changed) {
+    if (before.substage.phaseLabel) out.push({ field: 'phase', value: before.substage.phaseLabel });
+    out.push({ field: 'substage', value: before.substage.substageLabel ?? '—' });
+  }
   if (treatment === 'complete_existing') out.push({ field: 'status', value: 'done' });
   return out;
 }

@@ -108,7 +108,11 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
 
   const open = (row: ReviewRow) => {
     setSelected(row);
-    setTitle(row.title);
+    const seed = row.targetTaskId ? openTasks.find((tk) => tk.id === row.targetTaskId) : undefined;
+    // When a task is attached, the title field starts from THAT task's title,
+    // not the email-extracted one — so Apply preserves the work name unless Noa
+    // deliberately edits it (brief §1: no silent rename).
+    setTitle(seed?.title ?? row.title);
     setOwner(row.owner);
     setDue(/^\d{4}-\d{2}-\d{2}$/.test(row.due) ? row.due : '');
     const allowed = treatmentsFor(row.type, !!row.targetTaskId);
@@ -116,7 +120,6 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
     setNote(row.resultNote);
     setProjectId(row.projectId ?? '');
     setTargetTaskId(row.targetTaskId ?? '');
-    const seed = row.targetTaskId ? openTasks.find((tk) => tk.id === row.targetTaskId) : undefined;
     setSubstageId(seed?.substageTemplateId ?? '');
     setPhaseFilter(seed?.substageTemplateId ? phaseKeyOfSubstage(seed.substageTemplateId) : '');
     setFailure(null);
@@ -141,15 +144,26 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
   const substageSelectOptions = currentSubstage && !substageChoices.some((s) => s.id === currentSubstage.id)
     ? [currentSubstage, ...substageChoices] : substageChoices;
 
-  // "What will change" before Apply (Section 2): the exact fields this update
-  // lands on the chosen task, and which task that is.
-  const previewFields = updateFieldsPreview(treatment, { title, owner, due, note });
-  const targetTitle = targetTaskId
-    ? (openTasks.find((tk) => tk.id === targetTaskId)?.title ?? selected?.matched?.title ?? '')
-    : '';
+  // "What will change" before Apply: the exact fields this update lands on the
+  // chosen task — diffed against that task's current values so a Sub-stage/Phase
+  // move is shown (brief §1) and an unchanged title is not staged as a rename.
+  const attachedTask = targetTaskId ? openTasks.find((tk) => tk.id === targetTaskId) : undefined;
+  const substageChanged = !!attachedTask && (substageId || '') !== (attachedTask.substageTemplateId || '');
+  const chosenSubstageLabel = substageId ? (substages.find((s) => s.id === substageId)?.name ?? null) : null;
+  const chosenPhaseKey = substageId ? phaseKeyOfSubstage(substageId) : '';
+  const chosenPhaseLabel = chosenPhaseKey ? (phases.find((p) => p.key === chosenPhaseKey)?.label ?? null) : null;
+  const previewFields = updateFieldsPreview(treatment, { title, owner, due, note }, {
+    title: attachedTask?.title ?? selected?.matched?.title ?? null,
+    substage: substageChanged
+      ? { changed: true, substageLabel: chosenSubstageLabel, phaseLabel: chosenPhaseLabel }
+      : undefined,
+  });
+  const targetTitle = attachedTask?.title ?? selected?.matched?.title ?? '';
   const fieldLabel = (f: string) =>
     f === 'title' ? labels.pvTitle : f === 'owner' ? labels.fOwner
-      : f === 'due' ? labels.fDue : f === 'note' ? labels.pvNote : labels.pvStatusDone;
+      : f === 'due' ? labels.fDue : f === 'note' ? labels.pvNote
+        : f === 'substage' ? labels.fSubstage : f === 'phase' ? labels.fPhase
+          : labels.pvStatusDone;
 
   useEffect(() => {
     if (!toast) return;
@@ -497,9 +511,12 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
                   onChange={(e) => {
                     const id = e.target.value;
                     setTargetTaskId(id);
-                    // Seed Sub-stage from the task being attached, so it shows
-                    // that task's location and edits start from the real value.
+                    // Seed Sub-stage AND title from the task being attached, so
+                    // the fields start from that task's real values — attaching
+                    // must not stage a rename to the email's title. Detaching
+                    // returns to the proposal's own title.
                     const picked = id ? openTasks.find((tk) => tk.id === id) : undefined;
+                    setTitle(picked?.title ?? selected.title);
                     setSubstageId(picked?.substageTemplateId ?? '');
                     setPhaseFilter(picked?.substageTemplateId ? phaseKeyOfSubstage(picked.substageTemplateId) : '');
                     if (id && (treatment === 'new_task' || treatment === 'information_only')) {

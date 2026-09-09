@@ -226,11 +226,22 @@ export async function decideProposal(
     const before = (beforeRow ?? null) as Task | null;
     if (!before) return { error: 'the matched task no longer exists' };
     const taskPatch: Record<string, unknown> = { last_touched: today, document_id: p.document_id ?? before.document_id };
-    if (title && changeType === 'update_existing') taskPatch.title = title;
+    // Rename only when the human's title actually differs from the task's
+    // current title — an email-extracted title left unchanged must never
+    // silently overwrite Noa's work name (brief §1). This mirrors
+    // updateFieldsPreview exactly, so what the drawer showed is what is written.
+    if (title && changeType === 'update_existing' && title !== (before.title ?? '')) taskPatch.title = title;
     if (owner) taskPatch.owner = owner;
     if (due) taskPatch.due = due;
     if (note) taskPatch.description = note;
-    if (edits.substageTemplateId !== undefined) taskPatch.substage_template_id = edits.substageTemplateId || null;
+    // Sub-stage (and the Phase derived from it) only when it actually changed —
+    // the drawer always sends the current value, and writing an unchanged one
+    // would both clear a sub-stage on a blank pick and hide the move from the
+    // preview.
+    if (edits.substageTemplateId !== undefined
+        && (edits.substageTemplateId || null) !== (before.substage_template_id ?? null)) {
+      taskPatch.substage_template_id = edits.substageTemplateId || null;
+    }
     if (changeType === 'complete_existing') taskPatch.status = 'done';
     const { error } = await admin.from('tasks').update(taskPatch).eq('id', effectiveTargetTaskId);
     if (error) return { error: error.message };
@@ -364,7 +375,7 @@ export async function undoProposalDecision(logId: string): Promise<{ ok: true } 
   } else if (entry.entity_type === 'task' && entry.before_json) {
     const before = entry.before_json;
     const restore: Record<string, unknown> = {};
-    for (const k of ['title', 'description', 'owner', 'due', 'status', 'waiting_for', 'stage_key', 'last_touched', 'document_id'] as const) {
+    for (const k of ['title', 'description', 'owner', 'due', 'status', 'waiting_for', 'stage_key', 'substage_template_id', 'last_touched', 'document_id'] as const) {
       restore[k] = before[k] ?? null;
     }
     const { error } = await admin.from('tasks').update(restore).eq('id', entry.entity_id);

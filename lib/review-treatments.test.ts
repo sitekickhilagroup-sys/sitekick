@@ -19,6 +19,34 @@ describe('updateFieldsPreview — "what will change" before Apply', () => {
     expect(updateFieldsPreview('information_only', { note: 'n' })).toEqual([]);
     expect(updateFieldsPreview('keep_both_linked', { title: 'X' })).toEqual([]);
   });
+
+  it('shows the Sub-stage change AND its derived Phase (Noa\'s bug: written but never shown)', () => {
+    expect(updateFieldsPreview('update_existing', { title: '', owner: '', due: '', note: '' }, {
+      title: 'LADBS returned the soils report',
+      substage: { changed: true, substageLabel: 'Soils review / addendum', phaseLabel: 'Plan Check' },
+    })).toEqual([
+      { field: 'phase', value: 'Plan Check' },
+      { field: 'substage', value: 'Soils review / addendum' },
+    ]);
+  });
+
+  it('does NOT show substage/phase when the sub-stage is unchanged', () => {
+    expect(updateFieldsPreview('update_existing', { note: 'status refresh' }, {
+      title: 'Task', substage: undefined,
+    })).toEqual([{ field: 'note', value: 'status refresh' }]);
+  });
+
+  it('does NOT stage a rename when the title equals the target task\'s current title', () => {
+    expect(updateFieldsPreview('update_existing', { title: 'Existing work name' }, {
+      title: 'Existing work name',
+    })).toEqual([]);
+  });
+
+  it('shows a rename only when the title actually differs from the current title', () => {
+    expect(updateFieldsPreview('update_existing', { title: 'A new explicit name' }, {
+      title: 'Old name',
+    })).toEqual([{ field: 'title', value: 'A new explicit name' }]);
+  });
 });
 
 describe('selectableTasksFor — target-task choices for the chosen project', () => {
