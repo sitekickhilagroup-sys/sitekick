@@ -40,7 +40,13 @@ const VIEWS: WorkView[] = ['today', 'blocking', 'followups', 'waiting', 'all', '
 function filterView(tasks: Task[], view: Exclude<WorkView, 'today' | 'completed'>, today: string): Task[] {
   switch (view) {
     case 'blocking':
-      return tasks.filter((t) => t.priority === 'critical');
+      // Use the SAME classifier as the row badge and the "Blocking" chip
+      // (isBlockingTask: process_impact wins, raw priority is only the fallback
+      // for unclassified tasks). Filtering on priority==='critical' alone made
+      // the Blocking tab disagree with the badges — a task Noa marked
+      // primary_blocker was missing from the tab, and ones she marked
+      // not_blocking still showed. Now the tab, its count and the badges agree.
+      return tasks.filter((t) => isBlockingTask(t));
     case 'followups':
       return tasks.filter(
         (t) => (!!t.follow_up_date && t.follow_up_date <= today) || (!!t.check_back_on && t.check_back_on <= today),
@@ -148,6 +154,10 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const projects = (projectsQ.data ?? []) as Project[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
   const pendingCount = proposalsQ.count ?? 0;
+  // Distinguish a true zero (queue empty) from a failed count load — the Agent
+  // Review entry stays permanent either way (Noa's report item 4), but a zero
+  // and a load error must not read the same.
+  const pendingCountFailed = !!proposalsQ.error;
   const approvedInvoices = (approvedInvoicesQ.data ?? []) as Pick<Invoice, 'amount_usd' | 'vendor_id'>[];
   const approvedCount = approvedInvoices.length;
   const approvedTotal = approvedInvoices.reduce((s, i) => s + Number(i.amount_usd), 0);
@@ -679,14 +689,20 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
           own write triggers. See the component's own doc comment. */}
       <DuplicateReview pairs={dupPairViews} labels={dupReviewLabels} />
 
-      {pendingCount > 0 && (
-        <Link
-          href="/inbox"
-          className="flex min-h-11 items-center rounded-(--radius-card) border border-apricot/40 bg-apricot-soft px-4 py-2.5 text-sm text-apricot hover:underline"
-        >
-          {t('inbox.title')} · {pendingCount}
-        </Link>
-      )}
+      {/* Permanent Agent Review entry (Noa's report item 4): reachable from My
+          Work even at zero, so the review history is always one click away.
+          Apricot when there's work to do; neutral at zero; a failed count reads
+          as "—", never as a false zero. */}
+      <Link
+        href="/inbox"
+        className={`flex min-h-11 items-center rounded-(--radius-card) border px-4 py-2.5 text-sm hover:underline ${
+          pendingCount > 0 && !pendingCountFailed
+            ? 'border-apricot/40 bg-apricot-soft text-apricot'
+            : 'border-line bg-card text-ink2'
+        }`}
+      >
+        {t('inbox.title')} · {pendingCountFailed ? '—' : pendingCount}
+      </Link>
 
       {/* Her .management-cards: big count, view name, one-line meaning. */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
