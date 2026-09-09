@@ -446,6 +446,17 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
                 </section>
               )}
 
+              {/* SOURCE SAYS in the normal path too (Noa's report §1: the
+                  original quote was only visible on the duplicate screen, so a
+                  plain approval showed no basis). The matched panel above already
+                  carries its own source, so this shows only when there's no match. */}
+              {!selected.matched && selected.evidence && (
+                <section className="rounded-(--radius-card) border border-line bg-inset p-3">
+                  <p className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.sourceSays}</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-ink2">{selected.evidence}</p>
+                </section>
+              )}
+
               <section className="rounded-(--radius-card) border border-line bg-inset p-3">
                 <p className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.treatment}</p>
                 <p className="mt-1 text-[11px] text-ink3">{labels.treatmentSub}</p>
@@ -542,7 +553,15 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
                   <span className="text-[10px] font-semibold tracking-[0.1em] text-ink3 uppercase">{labels.fPhase}</span>
                   <select
                     value={phaseFilter}
-                    onChange={(e) => setPhaseFilter(e.target.value)}
+                    onChange={(e) => {
+                      const ph = e.target.value;
+                      setPhaseFilter(ph);
+                      // Moving Phase invalidates a sub-stage from the old phase.
+                      // Clear it so a stale value (Noa's report: "Loan application"
+                      // lingering under Plan Check) can't stay selected as if valid
+                      // — she re-picks under the new phase (brief §1).
+                      if (ph && substageId && phaseKeyOfSubstage(substageId) !== ph) setSubstageId('');
+                    }}
                     className="mt-1 min-h-11 w-full cursor-pointer rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
                   >
                     <option value="">—</option>
