@@ -122,9 +122,32 @@ export async function processImportBatch(admin: SupabaseClient, batchSize: numbe
   }[];
   const { batch, more } = selectBatch(rows, permanentlyFailed, batchSize);
 
+  let attempted = 0;
   let succeeded = 0;
   let failed = 0;
   for (const doc of batch) {
+    // Atomic claim: a plain "SELECT unprocessed, then process, then UPDATE"
+    // leaves a real gap — a manual click and the cron (or two manual clicks)
+    // could both select the same document before either marks it done,
+    // producing duplicate proposals from the same content. This UPDATE's
+    // WHERE clause (processed_at IS NULL) is evaluated by Postgres against
+    // whatever the row actually holds at that instant, as one atomic
+    // statement — only the first caller to reach it gets a non-null `data`
+    // back and proceeds; every other concurrent caller gets null and skips
+    // this document entirely, exactly like applyCasGuard's pattern for
+    // tasks (lib/state-writer.ts), applied here without a new lease column:
+    // `processed_at` doubles as the claim flag until release-on-failure
+    // below sets it back to null for a retry.
+    const { data: claimed } = await admin
+      .from('documents')
+      .update({ processed_at: new Date().toISOString() })
+      .eq('id', doc.id)
+      .is('processed_at', null)
+      .select('id')
+      .maybeSingle();
+    if (!claimed) continue; // lost the race to another concurrent run — not a failure, just skip
+
+    attempted++;
     try {
       if (doc.kind === 'invoice_pdf' && !doc.raw_text) {
         if (!doc.storage_path) throw new Error('invoice_pdf has neither raw_text nor storage_path');
@@ -135,10 +158,16 @@ export async function processImportBatch(admin: SupabaseClient, batchSize: numbe
       } else {
         await processDocument(admin, { id: doc.id, kind: doc.kind, raw_text: doc.raw_text });
       }
-      await admin.from('documents').update({ processed_at: new Date().toISOString() }).eq('id', doc.id);
+      // Claim already set processed_at — success just leaves it as is.
       succeeded++;
     } catch (e) {
       failed++;
+      // Release the claim so a genuinely unprocessed document isn't stuck
+      // looking "done" forever — this is what makes attempt 1 and 2 still
+      // show as Waiting (eligible for the next batch); only once
+      // countFailuresByDocument reaches MAX_ATTEMPTS does selectPermanentlyFailed
+      // stop it from being claimed again, and it moves to Failed instead.
+      await admin.from('documents').update({ processed_at: null }).eq('id', doc.id);
       await logActivity(admin, {
         entity_type: 'document', entity_id: doc.id, actor: 'system:import-queue',
         action: 'ingest:failed', after: { error: e instanceof Error ? e.message : String(e) },
@@ -146,5 +175,5 @@ export async function processImportBatch(admin: SupabaseClient, batchSize: numbe
       console.error('[import-queue] processDocument failed (will retry, up to MAX_ATTEMPTS)', { documentId: doc.id, error: e });
     }
   }
-  return { attempted: batch.length, succeeded, failed, more };
+  return { attempted, succeeded, failed, more };
 }
