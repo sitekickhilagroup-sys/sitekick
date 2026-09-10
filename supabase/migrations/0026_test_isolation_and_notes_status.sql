@@ -2,25 +2,25 @@
 --
 -- Prepared but NOT applied by the agent — this session's Supabase connection
 -- is read-only (an UPDATE was refused with "cannot execute UPDATE in a
--- read-only transaction"), consistent with every earlier migration tonight:
--- run this in the Supabase SQL Editor when convenient.
+-- read-only transaction"). Run this in the Supabase SQL Editor.
 --
--- Two additive, backward-compatible columns:
+-- Four additive, backward-compatible columns, all default-safe (existing
+-- rows get is_test=false / status='active' — nothing already in the
+-- database changes meaning):
 --
--- 1. tasks.is_test / projects.is_test — lets a UI-driven test record be
---    created and marked so it can be EXCLUDED from every automated business
---    process (the prioritization agent run, the daily digest, the extractor's
---    OPEN TASKS / feedback context) while still rendering normally in My
---    Work/Inbox/the Notes Center screens the agent needs to actually verify
---    against. Once this lands, the corresponding code-side filters
---    (agents/prioritize-tasks.ts, agents/daily-digest.ts, lib/ingest.ts,
---    lib/feedback-context.ts) are a small, mechanical follow-up.
---
--- 2. comments.status — a durable state distinct from "General": today
---    "dismissed / not relevant" has no home of its own and collapses onto
---    the same entity_type='general' value as a genuine general note. This
---    column lets the Notes Center (app/(dash)/(standard)/notes-center) offer
---    a real "Not relevant" action instead of overloading General for it.
+-- 1. tasks.is_test, projects.is_test — a test task/project is excluded from
+--    every automated business process (the prioritization run, the daily
+--    digest, the extractor's OPEN TASKS / feedback context) while still
+--    rendering normally on screen. Marking a PROJECT is_test excludes every
+--    task under it too (no need to flag each task one by one) — the app
+--    code (lib/open-tasks.ts, lib/feedback-context.ts) already joins through
+--    this and is deployed, waiting on these columns.
+-- 2. comments.is_test — a test note isn't always tied to a test task (a
+--    General note, or one on a test project) — its own explicit flag.
+-- 3. comments.status ('active' | 'dismissed') — a state distinct from
+--    General: today "dismissed / not relevant" collapses onto the same
+--    entity_type='general' value as a genuine general note. A dismissed
+--    note is also excluded from learning (already wired app-side).
 
 alter table tasks add column if not exists is_test boolean not null default false;
 alter table projects add column if not exists is_test boolean not null default false;
