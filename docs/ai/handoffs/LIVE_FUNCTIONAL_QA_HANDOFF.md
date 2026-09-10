@@ -8,6 +8,26 @@ Real task `afac2f3b-f4f2-4ca0-bb98-f60e82dcd72f` ("Set up LLC bank account and c
 
 No further action needed on this task. It is safe to reference in links to Noa.
 
+## Part 1 — Persistent Undo from history (LIVE-PASS)
+
+**Scope:** the toast-based Undo only survives while its SavedChip stays mounted — once closed, or the page reloads, the undoId is gone and the action is permanently unrecoverable. This adds a "History" panel inside Edit details (task-editor.tsx) that lists the task's real activity_log trail and keeps Undo reachable on the single newest entry, guarded against clobbering a newer change.
+
+**Code:** `lib/task-history.ts` (pure entry-shaping, unit-tested), `lib/state-writer.ts` (`getLatestActivityLogId` — the concurrency guard), `app/actions/tasks.ts` (`getTaskHistory`, `revertTaskHistoryEntry`), `components/work/task-history.tsx` (UI), wired into `components/work/task-editor.tsx`.
+
+**Commits deployed:** `adeee66` (feature), `0da00b1` (live-caught fix — see below).
+
+**Tests:** 7 new unit tests (`lib/task-history.test.ts`) — canUndo is positional (only index 0), a create-shaped entry with no before_json isn't undoable, last_touched never counts as a changed field, and the live-caught partial-after_json bug below has a regression test. Full suite: 470/470 passing. Typecheck clean. Lint clean.
+
+**Live-caught bug, fixed same session:** first deploy showed "Changed: id, Due, admin, Owner, Task name, source, Status, is_test, planned, Category, priority, created_at, Project, Note, Waiting on, Impact on process, Sub-stage" for a plain Reopen — 17 fields, because before_json is a full-row snapshot but after_json for most task actions is a small patch naming only the touched fields; reusing invoices' `diffChangedKeys` (which assumes both sides are full rows) treated every populated-but-untouched column as "changed." Fixed with a task-specific `taskChangedKeys` that only reports keys after_json itself names. Redeployed (`0da00b1`), re-verified live: same Reopen now correctly shows "Changed: Status" only.
+
+**Live test log (QA task `0656c6be-c2a2-4090-a85d-a447a7a77550` only):**
+1. Opened Edit details → History panel → loaded real entries (Reopened, Completed, Add note, ...) with correct actor/timestamp/changed-fields, only the newest entry showing an Undo button — **LIVE-PASS**.
+2. Clicked Undo on the newest entry ("Reopened") → drawer closed, no error. Verified via SQL: `status` reverted from `open` back to `done` (undoing exactly that action), owner/project/substage/latest_note all correctly preserved (untouched by this action) — **LIVE-PASS**.
+3. Undo-of-undo (chain revert): reopened again via the Completed view's Reopen button, reopened History — the earlier `undo:history` entry correctly showed action label "Undone", and was itself revertible (it carries a real live-row snapshot, not a placeholder) — **LIVE-PASS**.
+4. **Concurrency conflict guard — real two-tab race, not simulated:** opened History in tab A (top entry: "Reopened", Undo visible). Without refreshing tab A, switched to tab B on the same task and used "Add note" to write a genuinely concurrent activity_log entry. Switched back to tab A and clicked its now-stale Undo button. Result: **"Changed since — refresh to see the latest."** shown inline, drawer stayed open, no error toast, no false success. Verified via SQL immediately after: `status='open'`, `latest_note='QA note v3: concurrent-edit conflict guard test'` — tab B's write was fully preserved, zero data loss from tab A's stale click — **LIVE-PASS**.
+
+**Known scope limits (acceptable, not blocking):** the changed-field label map covers the fields exercised by Edit details/verb actions/reopen/undo; `pin`/`snooze` actions' after_json keys (`manualPriority`/`until`) don't match DB column names 1:1 and would show their raw key names if ever displayed here — neither action is reachable from this panel today, so this is a latent cosmetic gap, not a live-visible one. History is capped at the 10 most recent entries per task (mirrors the existing invoice history panel's own cap).
+
 **Last updated:** 2026-09-10, ~23:35 UTC (America/Los_Angeles ≈ 16:35 — LA is the app's reference timezone; times below are UTC unless noted)
 **Site:** https://sitekick-ecru.vercel.app (production alias)
 **Production version at start of this pass:** `e9ab420`
