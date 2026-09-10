@@ -582,6 +582,7 @@
   "work.history_action_undo": "Undone",
   "work.history_action_reopen": "Reopened",
   "work.history_conflict": "Changed since — refresh to see the latest.",
+  "work.error_conflict": "This task changed since you opened it — refresh to see the latest before saving.",
   "work.error_history_load": "Couldn't load history: {reason}",
   "work.field_status": "Status",
   "work.field_note": "Note",

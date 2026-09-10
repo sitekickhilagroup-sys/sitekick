@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
-import { updateTaskDetails, type TaskDetailsPatch } from '@/app/actions/tasks';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { updateTaskDetails, getTaskVersion, type TaskDetailsPatch } from '@/app/actions/tasks';
 import { undoWorkVerb } from '@/app/actions/work';
 import { editorSaveOutcome, resolveTaskPhaseKey } from '@/lib/task-details';
 import type { PhaseKey, ProcessImpact, Task } from '@/lib/types';
@@ -117,6 +117,21 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
   // a sub-stage) from just opening the editor. Captured once; never reassigned.
   const initialPhaseRef = useRef(phaseFilter);
 
+  // Optimistic-concurrency baseline: the newest activity_log id for this
+  // task as of the moment the editor opened. Fetched immediately on mount
+  // (in parallel with the user filling the form, not gating it) and only
+  // awaited once Save is actually clicked — in the normal case that await
+  // resolves instantly since the fetch has long since finished. A fetch
+  // failure falls back to null rather than skipping the guard: a spurious
+  // "refresh and retry" is the safe failure mode here, never a silent
+  // overwrite of a real concurrent change.
+  const baseVersionRef = useRef<Promise<string | null>>(Promise.resolve(null));
+  useEffect(() => {
+    baseVersionRef.current = getTaskVersion(task.id)
+      .then((r) => r.version)
+      .catch((e) => { console.error('[task-editor] getTaskVersion failed', e); return null; });
+  }, [task.id]);
+
   // Never hide a value the record actually has behind a filtered-out select:
   // the phase/project filters narrow which NEW choices are offered, but the
   // control's current value is always present as a real option, even when it
@@ -172,8 +187,12 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
     if (outcome === 'phase_hint') { setPhaseHint(true); return; }
     if (outcome === 'noop') { onClose(); return; }
 
-    const res = await updateTaskDetails(task.id, patch);
-    if ('error' in res) { setErrorMsg(res.error); return; }
+    const baseVersion = await baseVersionRef.current;
+    const res = await updateTaskDetails(task.id, patch, baseVersion);
+    if ('error' in res) {
+      setErrorMsg(res.conflict ? (labels.errorConflict ?? labels.errorSave) : res.error);
+      return;
+    }
     // C3: same reasoning as VerbMenu's run() — the edit itself always
     // succeeded here, so a weekly-sync hiccup (res.syncWarning) rides along
     // on the same chip rather than reading as a failed save.

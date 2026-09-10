@@ -352,7 +352,12 @@ export async function updateTaskWaiting(taskId: string, waitingFor: string) {
  * and resolving "effective" values so a field this patch doesn't touch can't
  * end up inconsistent with one it does (see the test for the race this closes).
  */
-export async function updateTaskDetails(taskId: string, patch: TaskDetailsPatch) {
+export async function updateTaskDetails(
+  taskId: string, patch: TaskDetailsPatch, baseVersion: string | null,
+): Promise<
+  | { ok: true; undoId: string | null; syncWarning?: true }
+  | { error: string; conflict?: true }
+> {
   const user = await requireUser();
   const built = buildDetailsPatch(patch);
   if ('error' in built) return built;
@@ -362,6 +367,16 @@ export async function updateTaskDetails(taskId: string, patch: TaskDetailsPatch)
   const { data: before } = await admin.from('tasks').select('*').eq('id', taskId).maybeSingle();
   if (!before) return { error: 'task not found' };
   const beforeRow = before as Task;
+
+  // Optimistic-concurrency guard: baseVersion is the newest activity_log id
+  // for this task as of when the editor opened (getTaskVersion, fetched by
+  // TaskEditor on mount). If something else has written to the task since —
+  // another tab's Save, a verb click, a persistent Undo — the current
+  // newest id has moved on, and writing this patch over it would silently
+  // discard that other change. Fail with a conflict instead, the same
+  // guard revertTaskHistoryEntry already uses for history-based Undo.
+  const currentVersion = await getLatestActivityLogId(admin, 'task', taskId);
+  if (currentVersion !== baseVersion) return { error: 'conflict', conflict: true as const };
 
   // "Effective" = this patch's value if it touches the key, else the row's
   // current value — a patch that only changes project_id must still be
@@ -411,6 +426,20 @@ export async function updateTaskDetails(taskId: string, patch: TaskDetailsPatch)
     syncWarning = true;
   }
   return { ok: true as const, undoId, ...(syncWarning ? { syncWarning: true as const } : {}) };
+}
+
+/**
+ * The optimistic-concurrency token TaskEditor captures when Edit details
+ * opens (see updateTaskDetails's baseVersion param above) — the newest
+ * activity_log id for the task at that moment. Its own tiny round trip so
+ * opening the editor never blocks on it; TaskEditor fires this on mount and
+ * awaits the result only when Save is actually clicked.
+ */
+export async function getTaskVersion(taskId: string): Promise<{ version: string | null }> {
+  await requireUser();
+  const admin = supabaseAdmin();
+  const version = await getLatestActivityLogId(admin, 'task', taskId);
+  return { version };
 }
 
 export type { TaskHistoryEntryShape as TaskHistoryEntry } from '@/lib/task-history';

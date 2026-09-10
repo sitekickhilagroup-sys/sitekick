@@ -526,6 +526,9 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     historyActionReopen: t('work.history_action_reopen'),
     fieldStatus: t('work.field_status'),
     fieldNote: t('work.field_note'),
+    // Optimistic-concurrency guard (updateTaskDetails's baseVersion check) —
+    // a stale Save shows this instead of the generic errorSave.
+    errorConflict: t('work.error_conflict'),
     whyNow: t('work.why_now'),
     urgencyNow: t('work.urgency.now'),
     unlocks: t('work.unlocks'),

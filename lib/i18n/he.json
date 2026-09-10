@@ -582,6 +582,7 @@
   "work.history_action_undo": "בוטל",
   "work.history_action_reopen": "נפתח מחדש",
   "work.history_conflict": "השתנה מאז — רענן כדי לראות את המצב העדכני.",
+  "work.error_conflict": "המשימה השתנתה מאז שפתחת אותה — רענן כדי לראות את המצב העדכני לפני השמירה.",
   "work.error_history_load": "לא ניתן לטעון היסטוריה: {reason}",
   "work.field_status": "סטטוס",
   "work.field_note": "הערה",
