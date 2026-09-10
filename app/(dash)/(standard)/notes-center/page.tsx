@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
-import { mergeNoteSources, rankTargetCandidates, isAmbiguous, buildClarifyingQuestion } from '@/lib/notes-center';
+import { mergeNoteSources, rankTargetCandidates, ensureSourceTaskCandidate, isAmbiguous, buildClarifyingQuestion } from '@/lib/notes-center';
 import { NotesCenterBoard, type NotesCenterRow } from '@/components/notes/notes-center-board';
 import type { CommentIntent } from '@/lib/comment-intent';
 
@@ -64,7 +64,12 @@ export default async function NotesCenterPage() {
   };
 
   const rows: NotesCenterRow[] = merged.map((n) => {
-    const candidates = rankTargetCandidates(n.body, candidatePool);
+    const ranked = rankTargetCandidates(n.body, candidatePool);
+    // A historical note's own originating task is always a visible option —
+    // keyword overlap between a long note and short titles is noisy enough
+    // that a generic short title can outscore the note's real, demonstrable
+    // home (live-observed: "Noa's agreement" outranked the correct task).
+    const candidates = ensureSourceTaskCandidate(ranked, n.sourceTaskId, n.sourceTaskId ? taskTitle.get(n.sourceTaskId) ?? null : null);
     const question = buildClarifyingQuestion(candidates);
     // A note already associated to a real entity shows that entity's label as
     // its current home; a virtual historical item shows the task it came from.

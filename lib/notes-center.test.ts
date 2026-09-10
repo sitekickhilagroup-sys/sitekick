@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isAttributedHistoricalNote, mergeNoteSources, rankTargetCandidates,
+  isAttributedHistoricalNote, mergeNoteSources, rankTargetCandidates, ensureSourceTaskCandidate,
   isAmbiguous, buildClarifyingQuestion, historicalNoteId,
 } from './notes-center.ts';
 
@@ -75,6 +75,32 @@ describe('rankTargetCandidates', () => {
   });
   it('caps at the given limit', () => {
     expect(rankTargetCandidates('soils report addendum LADBS', pool, 2)).toHaveLength(2);
+  });
+});
+
+describe('ensureSourceTaskCandidate — the note\'s own task is always a visible option', () => {
+  // Live-observed gap: for "Obtain the soil approval letter from LADBS",
+  // short generic titles ("Noa's agreement", "Noa's CAR") outscored the
+  // note's own originating task by pure token-overlap math.
+  const weakCandidates = [
+    { kind: 'task' as const, id: 'na', label: "Noa's agreement", score: 0.30, why: '' },
+    { kind: 'task' as const, id: 'nc', label: "Noa's CAR", score: 0.30, why: '' },
+    { kind: 'task' as const, id: 'em03', label: 'LADBS returned the soils report — Bob to review and resubmit an addendum', score: 0.18, why: '' },
+  ];
+  it('adds the source task when it is missing, at a defensible mid score', () => {
+    const out = ensureSourceTaskCandidate(weakCandidates, 'src1', 'Obtain the soil approval letter from LADBS', 4);
+    expect(out.some((c) => c.id === 'src1')).toBe(true);
+  });
+  it('does not duplicate the source task when it is already ranked', () => {
+    const withSource = [...weakCandidates, { kind: 'task' as const, id: 'src1', label: 'Obtain the soil approval letter from LADBS', score: 0.5, why: '' }];
+    const out = ensureSourceTaskCandidate(withSource, 'src1', 'Obtain the soil approval letter from LADBS');
+    expect(out.filter((c) => c.id === 'src1')).toHaveLength(1);
+  });
+  it('is a no-op for a note with no source task (a real, already-targeted comment)', () => {
+    expect(ensureSourceTaskCandidate(weakCandidates, null, null)).toBe(weakCandidates);
+  });
+  it('respects the limit', () => {
+    expect(ensureSourceTaskCandidate(weakCandidates, 'src1', 'Source task title', 3)).toHaveLength(3);
   });
 });
 

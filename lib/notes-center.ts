@@ -132,6 +132,30 @@ export function rankTargetCandidates(
 }
 
 /**
+ * A historical note's own originating task (`tasks.latest_note`) is where it
+ * demonstrably already lives — the most defensible default there is. Keyword
+ * overlap between a long note and short task titles is noisy (a short,
+ * generic title like "Noa's agreement" can out-score the real match by pure
+ * token-overlap math), so this guarantees the source task is always a visible
+ * option, at a middle-confidence score, without displacing a genuinely
+ * stronger match already ranked above it. Pure/testable.
+ */
+export function ensureSourceTaskCandidate(
+  candidates: TargetCandidate[],
+  sourceTaskId: string | null,
+  sourceTaskTitle: string | null,
+  limit = 3,
+): TargetCandidate[] {
+  if (!sourceTaskId || !sourceTaskTitle) return candidates;
+  if (candidates.some((c) => c.kind === 'task' && c.id === sourceTaskId)) return candidates;
+  const anchor: TargetCandidate = {
+    kind: 'task', id: sourceTaskId, label: sourceTaskTitle, score: 0.55,
+    why: 'this note is already recorded on this task',
+  };
+  return [...candidates, anchor].sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+/**
  * Whether the top candidates are close enough to genuinely be ambiguous
  * (worth ONE focused question) rather than one clear leader. Pure so the rule
  * (not the wording) is testable: the gap between #1 and #2 must be small AND
