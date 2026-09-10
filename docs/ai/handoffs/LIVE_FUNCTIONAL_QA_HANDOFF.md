@@ -8,6 +8,23 @@ Real task `afac2f3b-f4f2-4ca0-bb98-f60e82dcd72f` ("Set up LLC bank account and c
 
 No further action needed on this task. It is safe to reference in links to Noa.
 
+## Part 3 — Inbox review-drawer draft persistence + staleness detection (LIVE-PASS)
+
+**Scope:** the Inbox review drawer's `open(row)` always re-seeded every field from the row — closing the drawer (even just switching to another item and back, no reload needed) silently discarded whatever was typed. Adds localStorage-backed draft persistence keyed per proposal, with a staleness guard so a draft is never silently applied if the underlying proposal moved on since (decided elsewhere, re-matched) — matching the guard pattern proven in Parts 1–2, extended to a case with no server-side signal at all (`agent_proposals` has no `updated_at` column).
+
+**Code:** `lib/inbox-draft.ts` (pure — `draftKey`, `isDraftStale`, `parseDraft`; 11 unit tests), wired into `components/inbox/review-board.tsx` (debounced auto-save effect, `open()` restores-or-detects-staleness, `discardDraft()`, draft cleared on `decide()`/`bulkDecide()`).
+
+**Commit deployed:** `9a5a732`.
+
+**Tests:** 11 new unit tests (`lib/inbox-draft.test.ts`) covering staleness on each snapshot field independently, JSON round-trip, and rejecting malformed/foreign localStorage content (old app version, hand-edited, non-object). Full suite: 481/481 passing. Typecheck clean. Lint clean.
+
+**Live test — real pending item, never decided, zero business data touched:**
+1. Opened a real `not_sure` proposal ("Confirm Deemed Complete letter status for Gray hearing", id `6a1781b4-…`), appended a test marker to the Result field, confirmed via `localStorage` a draft was auto-saved (debounced) — **LIVE-PASS**.
+2. Closed via the drawer's × (never clicked Approve/Reject/Ignore/Restore — no server write). Reopened the same item: banner **"Restored your unsaved notes from before — pick up where you left off."** shown; verified via `document.querySelector('textarea').value` that the exact edited text (including the test marker) came back — **LIVE-PASS**.
+3. Clicked **Discard draft**: field reverted to the row's real original text, `localStorage` draft key removed — **LIVE-PASS**.
+4. Re-typed a second test marker, let it auto-save, then **directly edited the saved draft's `snapshot.state` in localStorage via JS** (`'not_sure'` → `'accepted'`) to simulate the proposal having been decided elsewhere while the draft sat unsaved — a deliberate, client-side-only way to exercise the staleness path without writing to any real record. Closed and reopened: banner **"This item changed since your last visit, so your earlier notes weren't restored — showing the latest data instead."** shown; textarea held the row's real fresh text (no trace of the test marker); the stale draft was auto-removed from `localStorage` — **LIVE-PASS**.
+5. Verified via SQL after all of the above: `agent_proposals.state='not_sure'`, `decided_by='noa.m@hillagroup.com'`, `result_note` exactly matches Noa's original 2026-09-06 text — this real item was never touched by any of the testing above.
+
 ## Part 2 — Concurrent-update protection on Edit details Save (LIVE-PASS)
 
 **Scope:** extends Part 1's already-proven guard mechanism (`getLatestActivityLogId` as a version token) to the Edit details Save path — the update Rotem specifically asked to also be covered, not just Undo. An "old" Save (form opened, someone/something else changed the task since, then this stale form is submitted) now conflicts instead of silently overwriting.
@@ -116,11 +133,11 @@ Legend: **LIVE-PASS** (verified in the browser, production) / **CODE-ONLY** (ver
 
 - ~~Persistent undo in history~~ — **DONE, see Part 1 above.**
 - ~~Concurrent-edit / stale-target conflict detection~~ — **DONE for tasks (Edit details Save + persistent Undo), see Part 2 above.** Not extended to the Inbox review-queue's Apply/proposal-decision writes, or to invoices — out of scope for tonight's ordered list.
-- **Draft persistence** across the Inbox review drawer's close/reopen. Not started — next per Rotem's ordering.
+- ~~Draft persistence across the Inbox review drawer's close/reopen~~ — **DONE, see Part 3 above.**
 - **Continuous import processing queue** — 149 documents stored, 16 processed, 133 waiting, confirmed live earlier tonight; no resumable batch worker exists. Not started.
 - **Explicit date-provenance categories** (explicit/derived/unresolved). Not started.
 
-Parts 1–2 were built, tested, and live-verified this pass (see above). Parts 3–5 were judged too large to responsibly ship, test, and verify live within this session's remaining scope (each is a real, multi-step feature: draft auto-save + staleness detection, a resumable background queue, and a new classification dimension threaded through ingest+display) — the user's own instruction explicitly permits leaving an unbuilt capability marked as missing rather than attempting a rushed, undertested version of it.
+Parts 1–3 were built, tested, and live-verified this pass (see above). Parts 4–5 were judged too large to responsibly ship, test, and verify live within this session's remaining scope (a resumable background queue, and a new classification dimension threaded through ingest+display) — the user's own instruction explicitly permits leaving an unbuilt capability marked as missing rather than attempting a rushed, undertested version of it.
 
 (Log continues below as each subsequent test runs — this file is updated incrementally, not only at the end, so state survives an interruption.)
 
