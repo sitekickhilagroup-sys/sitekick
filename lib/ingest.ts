@@ -5,6 +5,7 @@ import { loadRejectedPatterns } from './auto-triage.ts';
 import {
   loadVerifiedNotes, loadMatchDecisions, renderVerifiedNotes, renderMatchDecisions,
 } from './feedback-context.ts';
+import { selectOpenTasksExcludingTest } from './open-tasks.ts';
 import type { DocKind, DocSource, Project, Task, Vendor } from './types.ts';
 
 export interface IngestInput {
@@ -76,7 +77,7 @@ export async function processDocument(
     // city_case rides along for extract-comms' project-attribution rules —
     // a case number in an email subject is often the only property evidence.
     admin.from('projects').select('id,name,city_case'),
-    admin.from('tasks').select('*').eq('status', 'open'),
+    selectOpenTasksExcludingTest(admin),
     admin.from('vendors').select('id,name'),
   ]);
   const projects = (projectsQ.data ?? []) as (Pick<Project, 'id' | 'name'> & { city_case?: string | null })[];

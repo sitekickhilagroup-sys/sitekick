@@ -3,6 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { runStructured } from '../lib/claude.ts';
 import { followUpAlerts, topActions } from '../lib/priority.ts';
+import { selectOpenTasksExcludingTest } from '../lib/open-tasks.ts';
 import type { Action, Blocker, Invoice, Project, ProjectStage, Relationship, Task } from '../lib/types.ts';
 
 const DigestSchema = z.object({ body_md: z.string().min(1) });
@@ -26,7 +27,7 @@ export async function buildDigest(
   const [projectsQ, stagesQ, tasksQ, blockersQ, invoicesQ, relationshipsQ, profilesQ] = await Promise.all([
     admin.from('projects').select('*'),
     admin.from('project_stages').select('*'),
-    admin.from('tasks').select('*').eq('status', 'open'),
+    selectOpenTasksExcludingTest(admin),
     admin.from('blockers').select('*').eq('status', 'active'),
     admin.from('invoices').select('*').eq('status', 'for_rowan_approval'),
     admin.from('relationships').select('*').eq('type', 'blocks'),

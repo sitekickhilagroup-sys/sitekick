@@ -3,6 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { runStructured, MODELS } from '../lib/claude.ts';
 import { scoreTask, IMPACT_WEIGHT } from '../lib/priority.ts';
 import { loadVerifiedNotes, renderVerifiedNotes } from '../lib/feedback-context.ts';
+import { selectOpenTasksExcludingTest } from '../lib/open-tasks.ts';
 import { PrioritizeResultSchema, type PrioritizeResult } from './schemas.ts';
 import type { Blocker, Project, Task } from '../lib/types.ts';
 
@@ -197,7 +198,7 @@ export async function runPrioritization(
   client?: Anthropic,
 ): Promise<PrioritizeRunSummary | { error: string }> {
   const [tasksQ, projectsQ, blockersQ, pinsQ] = await Promise.all([
-    admin.from('tasks').select('*').eq('status', 'open'),
+    selectOpenTasksExcludingTest(admin),
     admin.from('projects').select('id,name,current_phase_key,business_rank'),
     admin.from('blockers').select('project_id,what,blocked_by,kind,days_stuck').eq('status', 'active'),
     // The correction signal: her current explicit pins ride into the prompt.
