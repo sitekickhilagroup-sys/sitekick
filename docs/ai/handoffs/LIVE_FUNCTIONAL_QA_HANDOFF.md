@@ -8,6 +8,24 @@ Real task `afac2f3b-f4f2-4ca0-bb98-f60e82dcd72f` ("Set up LLC bank account and c
 
 No further action needed on this task. It is safe to reference in links to Noa.
 
+## Part 2 — Concurrent-update protection on Edit details Save (LIVE-PASS)
+
+**Scope:** extends Part 1's already-proven guard mechanism (`getLatestActivityLogId` as a version token) to the Edit details Save path — the update Rotem specifically asked to also be covered, not just Undo. An "old" Save (form opened, someone/something else changed the task since, then this stale form is submitted) now conflicts instead of silently overwriting.
+
+**Code:** `app/actions/tasks.ts` — `getTaskVersion(taskId)` (tiny read, the version token) and `updateTaskDetails` extended with a required `baseVersion` param, checked against the task's current version immediately before writing. `components/work/task-editor.tsx` — fetches `getTaskVersion` on mount (parallel with the user filling the form, not gating it), awaits it only when Save actually fires, and shows a distinct conflict message (`work.error_conflict`) instead of the generic save-error text.
+
+**Commit deployed:** `107df75`.
+
+**Tests:** full suite still 470/470, typecheck clean, lint clean. (The guard itself is a one-line `!==` comparison on two already-tested values — getLatestActivityLogId has no independent logic to unit-test beyond what Part 1 already covers; correctness here rests on the live concurrency test below, the same way Part 1's history-undo guard was proven.)
+
+**Live test log (QA task `0656c6be-…` only), two real browser tabs, no data faked:**
+1. Tab A: opened Edit details (captures baseVersion on mount).
+2. Tab B (same task): used "Add note" to write a genuinely concurrent activity_log entry, succeeded normally.
+3. Tab A (still on the now-stale form): edited Owner to "Claude QA (stale edit)", clicked Save.
+4. **Result: "This task changed since you opened it — refresh to see the latest before saving."** shown inline; drawer stayed open; the typed edit was NOT lost from the input (visible on screen, matching every other save-failure path tested tonight) — **LIVE-PASS**.
+5. Verified via SQL immediately after: `owner` still `"Claude QA"` (tab A's stale write never landed), `latest_note` still tab B's `"QA note v4: Edit-details concurrency guard test"` — zero data loss, and no phantom `edit:details` activity_log row was created by the rejected attempt — **LIVE-PASS**.
+6. **Happy path, same session:** fresh reload → fresh Edit details open (fresh baseVersion, nothing concurrent this time) → edited Owner → Save → "Update recorded · Details updated." — normal saves are unaffected by the guard, no false positives — **LIVE-PASS**.
+
 ## Part 1 — Persistent Undo from history (LIVE-PASS)
 
 **Scope:** the toast-based Undo only survives while its SavedChip stays mounted — once closed, or the page reloads, the undoId is gone and the action is permanently unrecoverable. This adds a "History" panel inside Edit details (task-editor.tsx) that lists the task's real activity_log trail and keeps Undo reachable on the single newest entry, guarded against clobbering a newer change.
@@ -96,27 +114,19 @@ Legend: **LIVE-PASS** (verified in the browser, production) / **CODE-ONLY** (ver
 
 ## What's NOT implemented (explicitly, per Rotem's own rule — a capability that wasn't built stays marked missing, not silently attempted under time pressure)
 
-- **Persistent undo in history** (reachable after the save toast/chip disappears) — confirmed live tonight that the chip's Undo window is short-lived (missed it once myself while verifying via SQL in parallel). No history-based undo screen exists.
-- **Concurrent-edit / stale-target conflict detection** — no version check exists; a later edit silently wins.
-- **Draft persistence** across the Inbox review drawer's close/reopen.
-- **Continuous import processing queue** — 149 documents stored, 16 processed, 133 waiting, confirmed live earlier tonight; no resumable batch worker exists.
-- **Explicit date-provenance categories** (explicit/derived/unresolved).
+- ~~Persistent undo in history~~ — **DONE, see Part 1 above.**
+- ~~Concurrent-edit / stale-target conflict detection~~ — **DONE for tasks (Edit details Save + persistent Undo), see Part 2 above.** Not extended to the Inbox review-queue's Apply/proposal-decision writes, or to invoices — out of scope for tonight's ordered list.
+- **Draft persistence** across the Inbox review drawer's close/reopen. Not started — next per Rotem's ordering.
+- **Continuous import processing queue** — 149 documents stored, 16 processed, 133 waiting, confirmed live earlier tonight; no resumable batch worker exists. Not started.
+- **Explicit date-provenance categories** (explicit/derived/unresolved). Not started.
 
-These were NOT built in this session — building all four properly (each is a real, multi-step feature: a persistent-undo screen, an optimistic-concurrency check wired through every write path, draft auto-save + staleness detection, and a resumable background queue) was judged too large to responsibly ship, test, and verify live within this session's remaining scope, and the user's own instruction explicitly permits leaving an unbuilt capability marked as missing rather than attempting a rushed, undertested version of it.
+Parts 1–2 were built, tested, and live-verified this pass (see above). Parts 3–5 were judged too large to responsibly ship, test, and verify live within this session's remaining scope (each is a real, multi-step feature: draft auto-save + staleness detection, a resumable background queue, and a new classification dimension threaded through ingest+display) — the user's own instruction explicitly permits leaving an unbuilt capability marked as missing rather than attempting a rushed, undertested version of it.
 
 (Log continues below as each subsequent test runs — this file is updated incrementally, not only at the end, so state survives an interruption.)
 
 ## Status of the 32-item acceptance matrix
 
 See `/Users/rotemmeir/Documents/Codex/2026-09-07/referenced-chatgpt-conversation-this-is-an/output/pdf/noa-fixes-test-results.csv` for the full, current per-item table (updated throughout tonight). This file records the LIVE browser evidence behind whichever rows move from "לא אומת" to "עבר" during this pass.
-
-## What's NOT implemented tonight (stays marked missing, not "not tested")
-
-- Persistent undo in history (after the toast disappears)
-- Concurrent-edit / stale-target conflict detection
-- Draft persistence across drawer close/reopen (Inbox review)
-- Continuous import processing queue (149 documents stored, 16 processed, 133 waiting — confirmed live earlier)
-- Explicit date-provenance categories (explicit/derived/unresolved)
 
 ## Final state of test records
 
