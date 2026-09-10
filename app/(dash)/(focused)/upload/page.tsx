@@ -4,6 +4,8 @@ import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { fmtDate } from '@/lib/format';
 import { IntakePanel, type IntakeTab } from '@/components/upload/intake-panel';
+import { ImportQueuePanel } from '@/components/upload/import-queue-panel';
+import { getImportQueueStats } from '@/lib/import-queue';
 import type { DocumentRow, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -15,13 +17,17 @@ export default async function UploadPage() {
   const locale = (store.get(LOCALE_COOKIE)?.value === 'he' ? 'he' : 'en') as Locale;
   const t = getT(locale);
   const supabase = await supabaseServer();
-  const [projectsQ, docsQ, pendingQ] = await Promise.all([
+  const [projectsQ, docsQ, pendingQ, importStats] = await Promise.all([
     supabase.from('projects').select('id,name').order('name'),
     supabase.from('documents').select('id,kind,source,storage_path,received_at,processed_at')
       .order('received_at', { ascending: false }).limit(8),
     // Additive query, no migration: lets the queue show a real "Ready for
     // review" state instead of labelling everything Processed.
     supabase.from('agent_proposals').select('document_id').eq('state', 'pending'),
+    // Real aggregate counts (stored/processed/waiting/failed) — the old
+    // "133 waiting" figure quoted earlier tonight was stale; this always
+    // reflects the live table, never a remembered number.
+    getImportQueueStats(supabase),
   ]);
   const projects = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name'>[];
   const docs = (docsQ.data ?? []) as (Pick<DocumentRow, 'id' | 'kind' | 'source' | 'received_at' | 'processed_at'>
@@ -145,6 +151,22 @@ export default async function UploadPage() {
         </div>
 
         <p className="text-[10px] leading-[1.5] text-sk-muted">{t('upload.help')}</p>
+
+        <ImportQueuePanel
+          initialStats={importStats}
+          labels={{
+            title: t('upload.queue_stats_title'),
+            stored: t('upload.queue_stat_stored'),
+            processed: t('upload.queue_stat_processed'),
+            waiting: t('upload.queue_stat_waiting'),
+            failed: t('upload.queue_stat_failed'),
+            runBatch: t('upload.run_batch'),
+            running: t('upload.running_batch'),
+            result: t('upload.batch_result'),
+            more: t('upload.batch_more'),
+            errorSave: t('common.error_save'),
+          }}
+        />
 
         {/* Queue — spec §14-§15. Rendered unconditionally so zero documents
             shows an empty state rather than the section vanishing. */}
