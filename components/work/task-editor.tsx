@@ -247,7 +247,19 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
 
         <label className="block text-xs text-ink2">
           <span className="mb-0.5 block text-[10px] font-medium text-ink3">{labels.phase}</span>
-          <select value={phaseFilter} onChange={(e) => setPhaseFilter(e.target.value)}
+          <select
+            value={phaseFilter}
+            onChange={(e) => {
+              const ph = e.target.value;
+              setPhaseFilter(ph);
+              // Same fix as the Inbox review drawer (c4e6ee4): moving Phase
+              // invalidates a Sub-stage picked under the OLD phase — Noa's
+              // report #11, "Loan application" still listed/selected under
+              // Plan Check. Clear it so a stale pair can't linger as if valid;
+              // she re-picks under the new phase.
+              const picked = substageId ? options.substages.find((s) => s.id === substageId) : undefined;
+              if (ph && picked && picked.phase_key !== ph) setSubstageId('');
+            }}
             className="min-h-11 w-full rounded-lg border border-line bg-card2 px-2 py-1.5 text-sm text-ink sm:min-h-9">
             <option value="">—</option>
             {options.phases.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
