@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { getOverviewData } from '@/lib/queries';
 import { supabaseServer } from '@/lib/supabase/server';
+import { pickLatestNonEmptyRun } from '@/lib/priority-run-select';
 import { IntelligenceTabs } from '@/components/overview/intelligence-tabs';
 import { ProjectAccordion } from '@/components/portfolio/project-accordion';
 import type { TaskRank } from '@/lib/types';
@@ -27,8 +28,17 @@ export default async function OverviewPage() {
   // highest in the latest AI run comes first, the same rule My Work's
   // sections follow. No run yet = the existing order stands.
   const supabase = await supabaseServer();
-  const { data: latestRun } = await supabase.from('priority_runs')
-    .select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  // Same rule as My Work (lib/priority-run-select.ts): pick the newest run
+  // that actually has rows, via a lightweight count per run (never a truncated
+  // multi-run row fetch), so this ordering can't silently reflect an empty run
+  // when a real one exists just before it.
+  const { data: recentRunsForOrder } = await supabase.from('priority_runs')
+    .select('id,created_at').order('created_at', { ascending: false }).limit(10);
+  const orderRunsList = recentRunsForOrder ?? [];
+  const orderRunCounts = await Promise.all(
+    orderRunsList.map((r) => supabase.from('task_priorities').select('*', { count: 'exact', head: true }).eq('run_id', r.id)),
+  );
+  const latestRun = pickLatestNonEmptyRun(orderRunsList, orderRunCounts.map((r) => r.count));
   if (latestRun) {
     const { data: prioRows } = await supabase.from('task_priorities')
       .select('project_id,global_rank').eq('run_id', latestRun.id);
