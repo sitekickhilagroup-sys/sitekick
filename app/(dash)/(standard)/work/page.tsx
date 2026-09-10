@@ -8,6 +8,7 @@ import { supabaseServer } from '@/lib/supabase/server';
 import { rankToday, scoreTask, type TodayRankContext } from '@/lib/priority';
 import { laToday } from '@/lib/date';
 import { resolveTaskPhaseKey, resolveTaskSubstageLabel } from '@/lib/task-details';
+import { pickLatestNonEmptyRun } from '@/lib/priority-run-select';
 import { WorkTableRow } from '@/components/work/work-table-row';
 import { WORK_COLS } from '@/components/work/work-cols';
 import { AddAction } from '@/components/work/add-action';
@@ -130,18 +131,30 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // least one linked task_priorities row, instead of trusting recency alone.
   const { data: recentRuns } = await supabase.from('priority_runs')
     .select('id,created_at').order('created_at', { ascending: false }).limit(10);
-  const recentRunIds = (recentRuns ?? []).map((r) => r.id);
-  const { data: recentPrioRows } = recentRunIds.length
-    ? await supabase.from('task_priorities').select('*').in('run_id', recentRunIds)
+  const runsList = recentRuns ?? [];
+  // Find the newest run that actually has ranked rows via a lightweight COUNT
+  // (head:true, no row body) per run, run in parallel — NOT by pulling every
+  // row for the last 10 runs into one `.select('*').in(...)` with no ORDER BY.
+  //
+  // LIVE BUG (Rotem's report, verified against production data 2026-09-10):
+  // that old query silently truncated at PostgREST's default 1000-row cap.
+  // With no ORDER BY, Postgres returned rows in physical/heap order — on
+  // production this pushed the two newest runs (~130 rows each, today's and
+  // yesterday's) entirely PAST the cutoff, and cut a third run to 70 of its
+  // 136 rows. The page fell back to that partial, day-old run: "Priorities
+  // updated" showed 09/08 and every reason/rank (including Greg's "due today
+  // (9/8)") came from a stale, incomplete run — even though non-empty runs for
+  // 09/09 and 09/10 existed in the database the whole time. A head:true count
+  // has no row body, so it is never subject to the row cap; fetching rows for
+  // exactly the one winning run_id (~130-140 rows) stays safely under it too.
+  const runCounts = await Promise.all(
+    runsList.map((r) => supabase.from('task_priorities').select('*', { count: 'exact', head: true }).eq('run_id', r.id)),
+  );
+  const latestNonEmptyRun = pickLatestNonEmptyRun(runsList, runCounts.map((r) => r.count));
+  const { data: prioRowsData } = latestNonEmptyRun
+    ? await supabase.from('task_priorities').select('*').eq('run_id', latestNonEmptyRun.id)
     : { data: [] as TaskRank[] };
-  const prioRowsByRun = new Map<string, TaskRank[]>();
-  for (const row of (recentPrioRows ?? []) as TaskRank[]) {
-    const list = prioRowsByRun.get(row.run_id) ?? [];
-    list.push(row);
-    prioRowsByRun.set(row.run_id, list);
-  }
-  const latestNonEmptyRun = (recentRuns ?? []).find((r) => (prioRowsByRun.get(r.id)?.length ?? 0) > 0);
-  const prioRows: TaskRank[] = latestNonEmptyRun ? (prioRowsByRun.get(latestNonEmptyRun.id) ?? []) : [];
+  const prioRows: TaskRank[] = (prioRowsData ?? []) as TaskRank[];
   const aiByTask = new Map(prioRows.map((r) => [r.task_id, r]));
   const aiRunAt: string | null = latestNonEmptyRun?.created_at ?? null;
   // Full relationship set — needed both here (excluding pairs Noa already
