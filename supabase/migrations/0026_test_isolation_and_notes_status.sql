@@ -25,6 +25,21 @@
 alter table tasks add column if not exists is_test boolean not null default false;
 alter table projects add column if not exists is_test boolean not null default false;
 create index if not exists tasks_is_test_idx on tasks(is_test) where is_test;
+create index if not exists projects_is_test_idx on projects(is_test) where is_test;
 
+-- A task under a test PROJECT must be excluded even when the task row itself
+-- was never explicitly flagged (the common case: mark the project, not every
+-- task created under it one by one). Code-side join, not a generated column,
+-- so a project flipped test<->real later is picked up immediately.
+--
+-- comments.is_test: a test note is not always tied to a test task (a General
+-- note, or one on a test project) — its own flag, set explicitly whenever the
+-- tester records it, rather than derived transitively at every read.
+alter table comments add column if not exists is_test boolean not null default false;
+create index if not exists comments_is_test_idx on comments(is_test) where is_test;
+
+-- 'dismissed' = a real state distinct from General (today both collapse onto
+-- entity_type='general'), AND the state that keeps a note out of learning —
+-- a dismissed note must never feed the extractor/ranker context again.
 alter table comments add column if not exists status text not null default 'active'
   check (status in ('active', 'dismissed'));

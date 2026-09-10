@@ -112,7 +112,7 @@ export async function loadVerifiedNotes(
   env: Record<string, string | undefined> = process.env,
 ): Promise<VerifiedNote[]> {
   if (!feedbackUseEnabled(env) || taskIds.length === 0) return [];
-  const { data, error } = await admin
+  const base = () => admin
     .from('comments')
     .select('entity_id, body, intent, created_at')
     .eq('entity_type', 'task')
@@ -120,7 +120,16 @@ export async function loadVerifiedNotes(
     .in('intent', ['fact', 'preference'])
     .order('created_at', { ascending: false })
     .limit(60);
-  if (error || !data) return []; // table missing (migration not applied) → no context, never a crash
+  // A test note or one Noa dismissed must never reach the ranker/extractor —
+  // but is_test/status are migration 0026 columns not yet applied everywhere,
+  // so try the excluding query first and only fall back to the plain one (the
+  // exact query this function ran before those columns existed) if it errors.
+  // A hard `if (error) return []` here would have made the WHOLE feedback
+  // pipeline go silent pre-migration — a real regression of the Greg case
+  // already proven live tonight — not just skip test/dismissed rows.
+  const excluding = await base().eq('is_test', false).neq('status', 'dismissed');
+  const { data, error } = excluding.error ? await base() : excluding;
+  if (error || !data) return []; // table missing entirely → no context, never a crash
   const notes = (data as { entity_id: string; body: string; intent: 'fact' | 'preference'; created_at: string }[])
     .map((c) => ({ taskId: c.entity_id, body: c.body, intent: c.intent, date: DATED(c.created_at), at: c.created_at }));
   // Two versions of one correction (Noa's Hebrew + English Greg notes) collapse

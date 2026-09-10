@@ -1,9 +1,41 @@
 import { describe, expect, it } from 'vitest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   feedbackUseEnabled, renderVerifiedNotes, renderMatchDecisions, dedupeVerifiedNotes,
   loadVerifiedNotes, loadMatchDecisions,
   type VerifiedNote, type MatchDecision,
 } from './feedback-context.ts';
+
+/** Chainable fake for the comments query loadVerifiedNotes builds. Tracks
+ *  every .eq()/.neq() call; `columnsExist` simulates whether migration 0026's
+ *  is_test/status columns have landed yet. */
+function fakeCommentsAdmin(opts: {
+  columnsExist: boolean;
+  rows: { entity_id: string; body: string; intent: string; created_at: string; is_test?: boolean; status?: string }[];
+}) {
+  const build = (calls: string[]) => {
+    const chain = {
+      eq: (col: string, val: unknown) => build([...calls, `eq:${col}=${val}`]),
+      neq: (col: string, val: unknown) => build([...calls, `neq:${col}=${val}`]),
+      in: () => build(calls),
+      order: () => build(calls),
+      limit: () => build(calls),
+      then: (resolve: (v: { data: unknown; error: unknown }) => void) => {
+        const wantsIsolation = calls.some((c) => c.includes('is_test') || c.includes('status'));
+        if (wantsIsolation && !opts.columnsExist) {
+          resolve({ data: null, error: { message: 'column comments.is_test does not exist', code: '42703' } });
+          return;
+        }
+        let rows = opts.rows;
+        if (calls.includes('eq:is_test=false')) rows = rows.filter((r) => !r.is_test);
+        if (calls.includes('neq:status=dismissed')) rows = rows.filter((r) => r.status !== 'dismissed');
+        resolve({ data: rows, error: null });
+      },
+    };
+    return chain;
+  };
+  return { from: () => ({ select: () => build([]) }) } as unknown as SupabaseClient;
+}
 
 describe('feedbackUseEnabled — the kill-switch (ON by default, reverts with off)', () => {
   it('is on by default (unset/empty/1/true/on)', () => {
@@ -100,5 +132,23 @@ describe('loaders honour the kill-switch (no DB touch when off)', () => {
   });
   it('loadVerifiedNotes returns [] for an empty task list even when on', async () => {
     await expect(loadVerifiedNotes(explodingAdmin, [], { FEEDBACK_USE: '1' })).resolves.toEqual([]);
+  });
+});
+
+describe('loadVerifiedNotes excludes test and dismissed notes from learning (Rotem\'s isolation requirement)', () => {
+  const rows = [
+    { entity_id: 't1', body: 'real fact', intent: 'fact', created_at: '2026-09-10T00:00:00Z' },
+    { entity_id: 't1', body: 'test fact', intent: 'fact', created_at: '2026-09-10T00:00:00Z', is_test: true },
+    { entity_id: 't1', body: 'dismissed fact', intent: 'fact', created_at: '2026-09-10T00:00:00Z', status: 'dismissed' },
+  ];
+  it('excludes is_test and dismissed rows once the columns exist (post-migration)', async () => {
+    const admin = fakeCommentsAdmin({ columnsExist: true, rows });
+    const notes = await loadVerifiedNotes(admin, ['t1']);
+    expect(notes.map((n) => n.body)).toEqual(['real fact']);
+  });
+  it('falls back to the pre-migration query (no is_test/status filter) when those columns do not exist yet — never silently loses ALL feedback because of this', async () => {
+    const admin = fakeCommentsAdmin({ columnsExist: false, rows: rows.map((r) => ({ entity_id: r.entity_id, body: r.body, intent: r.intent, created_at: r.created_at })) });
+    const notes = await loadVerifiedNotes(admin, ['t1']);
+    expect(notes.length).toBeGreaterThan(0);
   });
 });
