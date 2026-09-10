@@ -203,14 +203,19 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
 
   const undo = () => start(async () => {
     if (!result?.undoId) { onClose(); return; }
+    setErrorMsg(null);
     const res = await undoWorkVerb(result.undoId);
-    if ('error' in res) { setErrorMsg(res.error ?? labels.errorSave); return; }
+    // A conflict here means the task changed since this save — undoWorkVerb
+    // is guarded against clobbering that, so it's reported instead. Stays on
+    // the SavedChip (not the form) since setErrorMsg alone is invisible
+    // while `result` is still set.
+    if ('error' in res) { setErrorMsg(res.conflict ? (labels.errorConflict ?? labels.errorSave) : res.error); return; }
     onClose();
   });
 
   if (result) {
     return (
-      <SavedChip message={result.message} undoId={result.undoId} pending={pending}
+      <SavedChip message={result.message} undoId={result.undoId} pending={pending} error={errorMsg}
         onUndo={undo} onDismiss={onClose} labels={labels} />
     );
   }

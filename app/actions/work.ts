@@ -4,9 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
-import { buildUndoRestorePatch, verbToPatch, type WorkVerb } from '@/lib/work-verbs';
-import { logActivity } from '@/lib/state-writer';
-import { recordPriorityFeedback } from '@/lib/collect-priority-feedback';
+import { buildUndoRestorePatch, verbToPatch, UNDO_RESTORE_KEYS, type WorkVerb } from '@/lib/work-verbs';
+import { logActivity, applyCasGuard, getLatestActivityLogId } from '@/lib/state-writer';
+import { recordPriorityFeedback, voidPriorityFeedback } from '@/lib/collect-priority-feedback';
 import { syncTaskIntoOpenReview } from '@/app/actions/weekly';
 
 const VALID_VERBS: WorkVerb[] = ['completed', 'sent_email', 'waiting', 'delayed', 'scheduled', 'not_applicable', 'note'];
@@ -61,11 +61,11 @@ export async function applyWorkVerb(taskId: string, verb: WorkVerb, input: strin
 }
 
 /** Restores the task snapshot taken before the verb was applied. */
-export async function undoWorkVerb(logId: string) {
+export async function undoWorkVerb(logId: string): Promise<{ ok: true } | { error: string; conflict?: true }> {
   const user = await requireUser();
   const admin = supabaseAdmin();
   const { data } = await admin.from('activity_log').select('*').eq('id', logId).maybeSingle();
-  const entry = data as { entity_type: string; entity_id: string; before_json: Record<string, unknown> | null } | null;
+  const entry = data as { id: string; entity_type: string; entity_id: string; before_json: Record<string, unknown> | null } | null;
   if (!entry?.before_json || entry.entity_type !== 'task') return { error: 'nothing to undo' };
   const before = entry.before_json;
   // A6: task-details edits (owner/waiting/due already covered above) also
@@ -83,12 +83,43 @@ export async function undoWorkVerb(logId: string) {
   // before_json sending latest_note/substage_template_id/workstream_id
   // unconditionally used to 400 the whole restore with PGRST204.
   const restore = buildUndoRestorePatch(before);
-  const { error } = await admin.from('tasks').update(restore).eq('id', entry.entity_id);
+
+  // Long-window guard: is this entry still the newest activity for the task?
+  const latestId = await getLatestActivityLogId(admin, 'task', entry.entity_id);
+  if (latestId !== entry.id) return { error: 'conflict', conflict: true as const };
+
+  // Short-window guard: fold the check into the write itself (same fix as
+  // revertTaskHistoryEntry / updateTaskDetails, app/actions/tasks.ts) — a
+  // plain check-then-write still leaves a gap where a write landing between
+  // the check above and this UPDATE would be silently overwritten. The live
+  // row was already read as `before` when applyWorkVerb captured this
+  // snapshot originally; re-read it fresh here so the guard compares against
+  // what the row holds right now, not a stale value.
+  const { data: live } = await admin.from('tasks').select('*').eq('id', entry.entity_id).maybeSingle();
+  if (!live) return { error: 'task not found' };
+  const { data: written, error } = await applyCasGuard(
+    admin.from('tasks').update(restore).eq('id', entry.entity_id),
+    live as Record<string, unknown>,
+    UNDO_RESTORE_KEYS,
+  ).select('id').maybeSingle();
   if (error) return { error: error.message };
-  await logActivity(admin, {
+  if (!written) return { error: 'conflict', conflict: true as const };
+
+  const undoId = await logActivity(admin, {
     entity_type: 'task', entity_id: entry.entity_id, actor: user.email ?? user.id,
-    action: 'undo', after: restore,
+    action: 'undo', before: live, after: restore,
   });
+  // The action this undo reverses no longer counts as valid human signal —
+  // void its priority_feedback row (if any) so learning never reads it as
+  // still-current once it starts consuming this table. Best-effort, never
+  // blocks the undo itself.
+  try {
+    await voidPriorityFeedback(admin, {
+      sourceActivityLogId: entry.id, reversesActivityLogId: undoId, kind: 'cancellation',
+    });
+  } catch (e) {
+    console.error('[priority-feedback] undoWorkVerb void failed (non-fatal)', { logId, error: e });
+  }
   revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
   return { ok: true as const };
 }

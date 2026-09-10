@@ -59,6 +59,39 @@ async function latestSeenRank(admin: SupabaseClient, taskId: string): Promise<Pr
  * collection is enabled and the event is one we capture. Caller must still wrap
  * this in try/catch — it also guards internally so it never throws.
  */
+/**
+ * Marks a priority_feedback row voided when the action that produced it is
+ * later undone (undoWorkVerb / revertTaskHistoryEntry) — so an undone human
+ * decision stops reading as valid signal once learning starts consuming this
+ * table. `priority_feedback` is append-only by design (the row for the
+ * original action is never deleted or rewritten); `voided`,
+ * `retraction_kind` and `reverses_activity_log_id` were added for exactly
+ * this in migration 0023 and left unpopulated until now.
+ *
+ * Best-effort, like recordPriorityFeedback: an undo must never fail or even
+ * slow down because this bookkeeping call had trouble. `.eq('voided',
+ * false)` makes a second void on the same source a safe no-op rather than
+ * overwriting which undo gets credited as the reversal.
+ */
+export async function voidPriorityFeedback(
+  admin: SupabaseClient,
+  input: { sourceActivityLogId: string; reversesActivityLogId: string | null; kind: 'cancellation' | 'correction' },
+): Promise<void> {
+  if (!isCollectionEnabled()) return;
+  try {
+    await admin.from('priority_feedback')
+      .update({
+        voided: true,
+        retraction_kind: input.kind,
+        reverses_activity_log_id: input.reversesActivityLogId,
+      })
+      .eq('source_activity_log_id', input.sourceActivityLogId)
+      .eq('voided', false);
+  } catch (e) {
+    console.error('[priority-feedback] void failed (non-fatal)', { sourceActivityLogId: input.sourceActivityLogId, error: e });
+  }
+}
+
 export async function recordPriorityFeedback(
   admin: SupabaseClient,
   input: { taskId: string; verb: string; sourceActivityLogId: string | null; decidedBy: string },

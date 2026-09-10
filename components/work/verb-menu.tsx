@@ -41,13 +41,16 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
   const openedAt = useRef(0);
   // What the update meant, in Noa's words, plus the audit row that reverses it.
   const [result, setResult] = useState<{ message: string; undoId: string | null } | null>(null);
+  // A failed Undo click — most commonly a real conflict (the task changed
+  // since this action, and undoWorkVerb is guarded against clobbering that).
+  const [undoError, setUndoError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const run = (verb: WorkVerb, input: string | null) => start(async () => {
     setFailed(false);
     const res = await applyWorkVerb(taskId, verb, input);
     if ('error' in res) { setFailed(true); setArmedVerb(null); return; }
-    setOpen(false); setAskInput(null); setDraft(''); setArmedVerb(null);
+    setOpen(false); setAskInput(null); setDraft(''); setArmedVerb(null); setUndoError(null);
     // C3: the primary write always succeeded here — a weekly-sync hiccup
     // (res.syncWarning) rides along on the same "recorded" chip instead of
     // becoming a separate failure state, so it's visible without implying
@@ -59,15 +62,16 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
 
   const undo = () => start(async () => {
     if (!result?.undoId) { setResult(null); return; }
+    setUndoError(null);
     const res = await undoWorkVerb(result.undoId);
-    if ('error' in res) { setFailed(true); return; }
+    if ('error' in res) { setUndoError(res.conflict ? (labels.errorConflict ?? labels.errorSave) : res.error); return; }
     setResult(null);
   });
 
   if (result) {
     return (
-      <SavedChip message={result.message} undoId={result.undoId} pending={pending}
-        onUndo={undo} onDismiss={() => setResult(null)} labels={labels} />
+      <SavedChip message={result.message} undoId={result.undoId} pending={pending} error={undoError}
+        onUndo={undo} onDismiss={() => { setResult(null); setUndoError(null); }} labels={labels} />
     );
   }
 

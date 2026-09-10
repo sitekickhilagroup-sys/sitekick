@@ -26,6 +26,34 @@ export async function getLatestActivityLogId(
   return (data?.id as string | undefined) ?? null;
 }
 
+/**
+ * Chains an `.eq()`/`.is()` filter onto a Supabase update query builder for
+ * every given key, comparing against `liveRow`'s value for that key — turns
+ * a plain UPDATE into an atomic compare-and-swap. This is the fix for a real
+ * gap in the original concurrency guards (revertTaskHistoryEntry /
+ * updateTaskDetails, app/actions/tasks.ts): checking "is my version still
+ * current" and then issuing the write were two separate round trips, so a
+ * write landing in the gap between them would still be silently overwritten
+ * by the second one. Folding the guard into the UPDATE's own WHERE clause
+ * closes that gap completely — Postgres evaluates the WHERE clause against
+ * whatever the row actually holds at the moment the UPDATE executes, not
+ * against a stale read from moments earlier, so if anything changed any of
+ * these columns since `liveRow` was read, the UPDATE matches zero rows
+ * instead of overwriting them.
+ */
+export function applyCasGuard<T extends { eq: (col: string, val: unknown) => T; is: (col: string, val: null) => T }>(
+  query: T,
+  liveRow: Record<string, unknown>,
+  keys: readonly string[],
+): T {
+  let q = query;
+  for (const key of keys) {
+    const val = liveRow[key];
+    q = (val === null || val === undefined) ? q.is(key, null) : q.eq(key, val);
+  }
+  return q;
+}
+
 /** Returns the audit row id, which is what Undo needs to restore the snapshot. */
 export async function logActivity(
   admin: SupabaseClient,

@@ -4,10 +4,11 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday, laDateTime } from '@/lib/date';
-import { logActivity, getLatestActivityLogId } from '@/lib/state-writer';
+import { logActivity, getLatestActivityLogId, applyCasGuard } from '@/lib/state-writer';
 import { planMerge } from '@/lib/merge';
 import { buildDetailsPatch, validateDetailsIntegrity, type TaskDetailsPatch } from '@/lib/task-details';
-import { buildUndoRestorePatch } from '@/lib/work-verbs';
+import { buildUndoRestorePatch, UNDO_RESTORE_KEYS } from '@/lib/work-verbs';
+import { voidPriorityFeedback } from '@/lib/collect-priority-feedback';
 import { buildTaskHistoryEntries, type TaskHistoryRow, type TaskHistoryEntryShape } from '@/lib/task-history';
 import { syncTaskIntoOpenReview } from '@/app/actions/weekly';
 import type { ProcessImpact, Task } from '@/lib/types';
@@ -403,8 +404,19 @@ export async function updateTaskDetails(
   });
   if (integrityError) return integrityError;
 
-  const { error } = await admin.from('tasks').update({ ...clean, last_touched: laToday() }).eq('id', taskId);
+  // Short-window guard: the currentVersion check above only tells us nothing
+  // had happened as of that read — closes the gap between that check and
+  // this statement itself, which a plain "check, then write" could still
+  // miss (a write landing in between would previously have been silently
+  // overwritten by this UPDATE). Folding the guard into the UPDATE's own
+  // WHERE clause makes the check and the write one atomic operation.
+  const { data: written, error } = await applyCasGuard(
+    admin.from('tasks').update({ ...clean, last_touched: laToday() }).eq('id', taskId),
+    beforeRow as unknown as Record<string, unknown>,
+    UNDO_RESTORE_KEYS,
+  ).select('id').maybeSingle();
   if (error) return { error: error.message };
+  if (!written) return { error: 'conflict', conflict: true as const };
   const undoId = await logActivity(admin, {
     entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id,
     action: 'edit:details', before, after: clean,
@@ -472,13 +484,15 @@ export async function getTaskHistory(
  * the "persistent Undo" a Noa can reach from the History panel even after
  * the SavedChip that originally offered it has long since closed or expired.
  *
- * Guarded the same way undoWorkVerb (app/actions/work.ts) is NOT: this can
- * be clicked minutes or days after the action it reverts, so a real write
- * could easily have landed on the task in between. getLatestActivityLogId
- * re-checks that `logId` is still the newest row for this task immediately
- * before writing — if anything else touched the task since, the entry is no
- * longer the newest and this returns a conflict instead of silently
- * discarding that later change.
+ * Guarded the same way undoWorkVerb (app/actions/work.ts) now is too: this
+ * can be clicked minutes or days after the action it reverts, so a real
+ * write could easily have landed on the task in between. getLatestActivityLogId
+ * re-checks that `logId` is still the newest row for this task, and the
+ * write itself is a compare-and-swap (applyCasGuard) against a live re-read
+ * — closing both the long window (has anything happened since History was
+ * opened) and the short window (between that check and this statement) —
+ * if anything else touched the task, this returns a conflict instead of
+ * silently discarding that later change.
  */
 export async function revertTaskHistoryEntry(logId: string): Promise<
   { ok: true } | { error: string; conflict?: true }
@@ -492,6 +506,8 @@ export async function revertTaskHistoryEntry(logId: string): Promise<
   } | null;
   if (!entry || entry.entity_type !== 'task' || !entry.before_json) return { error: 'nothing to undo' };
 
+  // Long-window guard: is this entry still the newest activity for the task?
+  // (Catches "someone acted on this task since you last looked at History.")
   const latestId = await getLatestActivityLogId(admin, 'task', entry.entity_id);
   if (latestId !== entry.id) return { error: 'conflict', conflict: true as const };
 
@@ -501,13 +517,39 @@ export async function revertTaskHistoryEntry(logId: string): Promise<
   // state. A real live snapshot also means this new row is itself a fully
   // valid, independently revertible history entry.
   const { data: liveBefore } = await admin.from('tasks').select('*').eq('id', entry.entity_id).maybeSingle();
+  if (!liveBefore) return { error: 'task not found' };
   const restore = buildUndoRestorePatch(entry.before_json);
-  const { error } = await admin.from('tasks').update(restore).eq('id', entry.entity_id);
+
+  // Short-window guard: the write above only tells us nothing had happened
+  // as of that read — closes the gap between that check and this statement
+  // itself, which a plain "check, then write" could still miss (a write
+  // landing in between would previously have been silently overwritten by
+  // this UPDATE). Folding the guard into the UPDATE's own WHERE clause makes
+  // the check and the write one atomic operation.
+  const { data: written, error } = await applyCasGuard(
+    admin.from('tasks').update(restore).eq('id', entry.entity_id),
+    liveBefore as Record<string, unknown>,
+    UNDO_RESTORE_KEYS,
+  ).select('id').maybeSingle();
   if (error) return { error: error.message };
-  await logActivity(admin, {
+  if (!written) return { error: 'conflict', conflict: true as const };
+
+  const undoId = await logActivity(admin, {
     entity_type: 'task', entity_id: entry.entity_id, actor: user.email ?? user.id,
     action: 'undo:history', before: liveBefore, after: restore,
   });
+  // The action this reverts no longer counts as valid human signal — void
+  // its priority_feedback row (if any; a no-op when there isn't one, e.g.
+  // reverting an edit:details action that never recorded feedback) so
+  // learning never reads it as still-current. Best-effort, never blocks
+  // the revert itself.
+  try {
+    await voidPriorityFeedback(admin, {
+      sourceActivityLogId: entry.id, reversesActivityLogId: undoId, kind: 'cancellation',
+    });
+  } catch (e) {
+    console.error('[priority-feedback] revertTaskHistoryEntry void failed (non-fatal)', { logId, error: e });
+  }
   revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
   return { ok: true as const };
 }

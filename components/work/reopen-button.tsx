@@ -19,18 +19,26 @@ interface Props {
 export function ReopenButton({ taskId, labels }: Props) {
   const [result, setResult] = useState<{ undoId: string | null } | null>(null);
   const [failed, setFailed] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const reopen = () => start(async () => {
     setFailed(false);
     const res = await reopenTask(taskId);
     if ('error' in res) { setFailed(true); return; }
+    setUndoError(null);
     setResult({ undoId: res.undoId });
   });
 
   const undo = (undoId: string) => start(async () => {
+    // A genuine conflict (the task changed since this reopen) is now
+    // possible — undoWorkVerb is guarded against clobbering a newer update.
+    // Silently doing nothing here would leave the chip looking normal with
+    // no sign the click failed.
+    setUndoError(null);
     const res = await undoWorkVerb(undoId);
-    if (!('error' in res)) setResult(null);
+    if ('error' in res) { setUndoError(res.error); return; }
+    setResult(null);
   });
 
   if (result) {
@@ -39,8 +47,9 @@ export function ReopenButton({ taskId, labels }: Props) {
         message={labels.reopened}
         undoId={result.undoId}
         pending={pending}
+        error={undoError}
         onUndo={() => { if (result.undoId) undo(result.undoId); }}
-        onDismiss={() => setResult(null)}
+        onDismiss={() => { setResult(null); setUndoError(null); }}
         labels={{ recorded: labels.reopened, undo: labels.undo, cancel: labels.cancel }}
       />
     );

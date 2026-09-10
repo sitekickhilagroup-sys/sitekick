@@ -16,6 +16,13 @@ interface Props {
   /** Disables Undo while a transition (the undo call itself, or another
    *  action from the same caller) is in flight. */
   pending?: boolean;
+  /** Set when an Undo click itself failed — most commonly a genuine
+   *  conflict (undoWorkVerb/revertTaskHistoryEntry is guarded against
+   *  clobbering a newer update, so a stale Undo now reports this instead of
+   *  silently doing nothing or discarding whatever changed since). Shown in
+   *  place of the chip staying silent; the caller decides how long it
+   *  persists (typically until dismissed or the next action). */
+  error?: string | null;
 }
 
 /**
@@ -25,12 +32,13 @@ interface Props {
  * Pure display — the caller owns the mutation, the pending flag, and clearing
  * its own result state on dismiss/undo.
  */
-export function SavedChip({ message, undoId, onUndo, onDismiss, labels, pending }: Props) {
+export function SavedChip({ message, undoId, onUndo, onDismiss, labels, pending, error }: Props) {
   return (
     <span role="status" className="inline-flex max-w-72 items-start gap-2 rounded-lg bg-sage-soft px-2.5 py-1.5 text-start motion-safe:animate-sk-pop">
       <span className="min-w-0">
         <strong className="block text-[11px] font-semibold text-sage">{labels.recorded}</strong>
         <span className="mt-0.5 block text-[10px] leading-relaxed text-ink2">{message}</span>
+        {error && <span role="alert" className="mt-0.5 block text-[10px] font-semibold text-coral">{error}</span>}
       </span>
       {undoId && (
         <button type="button" disabled={pending} onClick={onUndo}
