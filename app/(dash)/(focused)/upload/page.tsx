@@ -168,19 +168,26 @@ export default async function UploadPage() {
                 // where the branch stored one; otherwise the source is shown.
                 const name = doc.storage_path?.split('/').pop() ?? doc.source;
                 return (
-                  <li key={doc.id} className="grid grid-cols-[48px_minmax(0,1.5fr)_auto] items-center gap-3.5 py-3 sm:grid-cols-[48px_minmax(200px,1.5fr)_auto_minmax(180px,1fr)_auto]">
+                  <li key={doc.id} className="grid grid-cols-[48px_minmax(0,1.2fr)_auto_auto] items-center gap-2.5 py-3 sm:grid-cols-[48px_minmax(200px,1.5fr)_auto_minmax(180px,1fr)_auto] sm:gap-3.5">
                     <span className="rounded-[6px] bg-sk-surface-soft px-1.5 py-1 text-center font-mono text-[9px] uppercase text-sk-muted">
                       {doc.kind}
                     </span>
                     <span className="min-w-0 truncate text-[11px] text-sk-ink"><bdi>{name}</bdi></span>
-                    <span className="hidden font-mono text-[9px] text-sk-muted sm:inline"><bdi>{fmtDate(doc.received_at)}</bdi></span>
-                    <span className={`hidden justify-self-start rounded-full px-2 py-1 text-[9px] font-[650] uppercase tracking-[0.06em] sm:inline ${
+                    {/* Status was `hidden sm:inline` — invisible entirely below
+                        the sm breakpoint (~640px), which a real narrow window
+                        or panel routinely is. That's Noa's exact complaint:
+                        an import row reading only "EMAIL upload" with no state
+                        at all. Status is the critical piece — always shown now,
+                        reordered ahead of the (still secondary) date so it
+                        never gets crowded out on a narrow screen. */}
+                    <span className={`justify-self-start rounded-full px-2 py-1 text-[9px] font-[650] uppercase tracking-[0.06em] sm:order-3 ${
                       ready ? 'bg-sk-amber-halo text-sk-amber'
                       : doc.processed_at ? 'bg-sk-green-soft-strong text-sk-green'
                       : 'bg-sk-blue-soft text-sk-blue'
                     }`}>
                       {ready ? t('upload.st_ready') : doc.processed_at ? t('upload.st_processed') : t('upload.st_uploaded')}
                     </span>
+                    <span className="hidden font-mono text-[9px] text-sk-muted sm:order-2 sm:inline"><bdi>{fmtDate(doc.received_at)}</bdi></span>
                     {ready ? (
                       // I8: used to be a literal href="/inbox" — one .zip can
                       // drop 30-60 pending rows behind a per-document label
