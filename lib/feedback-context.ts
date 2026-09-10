@@ -16,6 +16,12 @@ export function feedbackUseEnabled(env: Record<string, string | undefined> = pro
   return v !== '0' && v !== 'false' && v !== 'off';
 }
 
+// Postgres SQLSTATE for "column does not exist" — the ONE error shape safe to
+// treat as "migration 0026 hasn't landed yet, isolation is moot" and fall back
+// to a pre-migration query. Any other error (network, permissions, a typo)
+// must fail closed instead of silently bypassing isolation.
+const UNDEFINED_COLUMN = '42703';
+
 /** A note a human RECORDED and classified (comments.intent, not the raw
  *  suggestion) as a fact/correction or a preference, pinned to a task. This is
  *  their recorded input — NOT independently-verified ground truth. */
@@ -27,33 +33,44 @@ export interface VerifiedNote {
   at: string;   // full ISO timestamp (used to collapse same-session restatements)
 }
 
-// Same task + same intent, and either a strong token overlap (a same-language
-// restatement) or written in the same short session — one correction restated,
-// not two independent signals. Cross-language restatements share few tokens, so
-// the session window is what catches Noa's Hebrew+English pair (minutes apart).
-const SESSION_MS = 30 * 60 * 1000;
+// Same task + same intent + strong token overlap = one correction restated,
+// not two independent signals. Deliberately NOT time-based: writing two notes
+// close together is not proof they're the same correction (Rotem's
+// correction) — only real content overlap merges anything.
+//
+// tokenize() (lib/dedup.ts) strips anything outside [a-z0-9] — it is Latin-
+// only. Hebrew text survives as leftover digit fragments alone (verified:
+// "גרג אמר שיתקן וישיב עד סוף השבוע. התאריך 04.09 אינו התחייבות שלו" tokenizes
+// to just {'04','09'}), which then reads as 100%-"contained" in almost any
+// English text sharing those two digits — a false-positive merge, not a real
+// one. MIN_TOKENS refuses to judge overlap at all when either side's token
+// set is too sparse to mean anything, rather than trust a comparison it
+// cannot make reliably. Net effect: a genuine cross-language restatement (a
+// Hebrew note and its English translation) is NOT collapsed — it shows as two
+// distinct, separately-authored notes, which is the honest default now that
+// neither time proximity nor this tokenizer can prove they're the same text.
+const MIN_TOKENS = 3;
 function overlap(a: Set<string>, b: Set<string>): number {
-  if (!a.size || !b.size) return 0;
+  if (a.size < MIN_TOKENS || b.size < MIN_TOKENS) return 0;
   let shared = 0;
   for (const t of a) if (b.has(t)) shared++;
   return shared / Math.min(a.size, b.size);
 }
 
 /**
- * PURE: collapse near-duplicate corrections on the SAME task so two versions of
- * one correction (e.g. the same note in Hebrew and English) count as ONE case
- * in the processing path — not two. Keeps the most recent of a duplicate group.
+ * PURE: collapse near-duplicate corrections on the SAME task — ONLY when the
+ * text itself overlaps strongly (a same-language restatement of one
+ * correction) — so that case counts as ONE in the processing path, not two.
+ * Keeps the most recent of a duplicate group.
  */
 export function dedupeVerifiedNotes(notes: VerifiedNote[]): VerifiedNote[] {
   const byRecency = [...notes].sort((a, b) => (b.at || '').localeCompare(a.at || ''));
-  const kept: { note: VerifiedNote; tokens: Set<string>; t: number }[] = [];
+  const kept: { note: VerifiedNote; tokens: Set<string> }[] = [];
   for (const n of byRecency) {
     const tokens = tokenize(n.body);
-    const t = Date.parse(n.at) || 0;
     const dup = kept.find((k) =>
-      k.note.taskId === n.taskId && k.note.intent === n.intent
-      && (overlap(k.tokens, tokens) >= 0.5 || (t && k.t && Math.abs(k.t - t) <= SESSION_MS)));
-    if (!dup) kept.push({ note: n, tokens, t });
+      k.note.taskId === n.taskId && k.note.intent === n.intent && overlap(k.tokens, tokens) >= 0.5);
+    if (!dup) kept.push({ note: n, tokens });
   }
   return kept.map((k) => k.note);
 }
@@ -120,20 +137,30 @@ export async function loadVerifiedNotes(
     .in('intent', ['fact', 'preference'])
     .order('created_at', { ascending: false })
     .limit(60);
-  // A test note or one Noa dismissed must never reach the ranker/extractor —
-  // but is_test/status are migration 0026 columns not yet applied everywhere,
-  // so try the excluding query first and only fall back to the plain one (the
-  // exact query this function ran before those columns existed) if it errors.
-  // A hard `if (error) return []` here would have made the WHOLE feedback
-  // pipeline go silent pre-migration — a real regression of the Greg case
-  // already proven live tonight — not just skip test/dismissed rows.
+  // A test note or one Noa dismissed must never reach the ranker/extractor.
+  // Try the excluding query first; fall back to the plain pre-migration query
+  // ONLY when the failure is specifically "is_test/status doesn't exist yet"
+  // (Postgres undefined_column, 42703) — the one case where isolation is a
+  // moot concept because no test/dismissed data can exist without the column
+  // to mark it. Any OTHER error (network, permissions, anything else) must
+  // fail CLOSED — falling back to the unfiltered query on an arbitrary error
+  // would let a real failure quietly bypass isolation, which is worse than
+  // returning no feedback context at all for that call.
   const excluding = await base().eq('is_test', false).neq('status', 'dismissed');
-  const { data, error } = excluding.error ? await base() : excluding;
+  let result = excluding;
+  if (excluding.error) {
+    if ((excluding.error as { code?: string }).code === UNDEFINED_COLUMN) {
+      result = await base();
+    } else {
+      return [];
+    }
+  }
+  const { data, error } = result;
   if (error || !data) return []; // table missing entirely → no context, never a crash
   const notes = (data as { entity_id: string; body: string; intent: 'fact' | 'preference'; created_at: string }[])
     .map((c) => ({ taskId: c.entity_id, body: c.body, intent: c.intent, date: DATED(c.created_at), at: c.created_at }));
-  // Two versions of one correction (Noa's Hebrew + English Greg notes) collapse
-  // to a single case here, in the path — not just in a report.
+  // Two genuinely-restated versions of one correction collapse to a single
+  // case here, in the path — content overlap only, never by proximity in time.
   return dedupeVerifiedNotes(notes);
 }
 
@@ -155,6 +182,16 @@ export async function loadMatchDecisions(
   env: Record<string, string | undefined> = process.env,
 ): Promise<MatchDecision[]> {
   if (!feedbackUseEnabled(env)) return [];
+
+  // A decision whose target is a test task (its own flag, or under a test
+  // project) must never become a "confirmed same" signal. Determine the
+  // excluded-task set BEFORE reading proposals. Fail CLOSED (no decisions at
+  // all) on a real error; a missing is_test column on projects/tasks
+  // (pre-migration — no test data can exist without it) is the one case safe
+  // to treat as "nothing to exclude".
+  const excludedTaskIds = await loadTestTaskIds(admin);
+  if (excludedTaskIds === null) return [];
+
   const UPDATE_BRANCH = ['update_existing', 'complete_existing', 'merge_duplicate', 'keep_open'];
   const { data, error } = await admin
     .from('agent_proposals')
@@ -168,9 +205,41 @@ export async function loadMatchDecisions(
   const out: MatchDecision[] = [];
   for (const r of data as { title: string | null; target_task_id: string; change_type: string | null; decided_by: string | null }[]) {
     if (!r.title) continue;
+    if (excludedTaskIds.has(r.target_task_id)) continue;
     // Human confirmations only — an agent's auto-triage acceptance is not Noa's.
     if (!r.decided_by || r.decided_by.startsWith('agent:')) continue;
     out.push({ taskId: r.target_task_id, title: r.title, same: true });
   }
   return out;
+}
+
+/**
+ * The set of task ids that are test records — is_test directly, or under a
+ * project flagged is_test. Shared by loadMatchDecisions; kept in this module
+ * (rather than lib/open-tasks.ts) because it returns an id SET for filtering
+ * an unrelated table (agent_proposals), not a tasks query result.
+ *
+ * Returns:
+ *  - a Set (possibly empty) on success, or when is_test genuinely doesn't
+ *    exist yet (pre-migration — nothing to exclude because nothing can be
+ *    marked test yet);
+ *  - null on any OTHER error — the caller must fail closed, never proceed as
+ *    if isolation succeeded when it didn't.
+ */
+async function loadTestTaskIds(admin: SupabaseClient): Promise<Set<string> | null> {
+  const projectsQ = await admin.from('projects').select('id').eq('is_test', true);
+  if (projectsQ.error) {
+    if ((projectsQ.error as { code?: string }).code !== UNDEFINED_COLUMN) return null;
+    return new Set(); // column missing — no test projects can exist yet
+  }
+  const testProjectIds = (projectsQ.data ?? []).map((p: { id: string }) => p.id);
+
+  const tasksQ = testProjectIds.length
+    ? await admin.from('tasks').select('id').or(`is_test.eq.true,project_id.in.(${testProjectIds.join(',')})`)
+    : await admin.from('tasks').select('id').eq('is_test', true);
+  if (tasksQ.error) {
+    if ((tasksQ.error as { code?: string }).code !== UNDEFINED_COLUMN) return null;
+    return new Set();
+  }
+  return new Set((tasksQ.data ?? []).map((t: { id: string }) => t.id));
 }
