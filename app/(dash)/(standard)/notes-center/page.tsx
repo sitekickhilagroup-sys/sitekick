@@ -2,8 +2,10 @@ import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
 import { mergeNoteSources, rankTargetCandidates, ensureSourceTaskCandidate, isAmbiguous, buildClarifyingQuestion } from '@/lib/notes-center';
+import { selectOpenTasksExcludingTest } from '@/lib/open-tasks';
 import { NotesCenterBoard, type NotesCenterRow } from '@/components/notes/notes-center-board';
 import type { CommentIntent } from '@/lib/comment-intent';
+import type { Task } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,14 +27,23 @@ export default async function NotesCenterPage() {
     // Every note, not just the viewer's own — this screen reviews ALL
     // recorded feedback, unlike the widget's personal recent-notes list.
     supabase.from('comments').select('*').order('created_at', { ascending: false }).limit(500),
-    supabase.from('tasks').select('id,title,project_id,status,latest_note,last_touched').eq('status', 'open'),
+    // Excludes test tasks/projects (0026 cascade) — this is a real,
+    // Noa-facing screen, not just the automated business paths. Live-caught
+    // gap: a QA test note on a QA test task was otherwise indistinguishable
+    // from Noa's own notes here.
+    selectOpenTasksExcludingTest(supabase),
     supabase.from('projects').select('id,name').eq('active', true).order('name'),
     supabase.from('blockers').select('id,what,project_id').eq('status', 'active'),
   ]);
 
   const projects = (projectsQ.data ?? []) as { id: string; name: string }[];
   const projectName = new Map(projects.map((p) => [p.id, p.name]));
-  const tasks = (tasksQ.data ?? []) as { id: string; title: string; project_id: string | null; status: string; latest_note: string | null; last_touched: string | null }[];
+  const tasks = ((tasksQ.data ?? []) as Task[])
+    .map((t) => ({ id: t.id, title: t.title, project_id: t.project_id, status: t.status, latest_note: t.latest_note, last_touched: t.last_touched }));
+  // The task-exclusion cascade above already keeps test tasks out of `tasks`
+  // — so any comment whose entity_id isn't among them is either a real task's
+  // note (fine) or points at an excluded/test one (must not surface here).
+  const realTaskIds = new Set(tasks.map((t) => t.id));
   const taskTitle = new Map(tasks.map((tk) => [tk.id, tk.title]));
   const blockers = (blockersQ.data ?? []) as { id: string; what: string | null; project_id: string | null }[];
   const blockerLabel = new Map(blockers.map((b) => [b.id, b.what ?? b.id]));
@@ -47,10 +58,23 @@ export default async function NotesCenterPage() {
   const commentsForMerge = ((commentsQ.data ?? []) as {
     id: string; entity_type: 'task' | 'project' | 'invoice' | 'blocker' | 'general'; entity_id: string | null;
     body: string; suggested_intent: CommentIntent; intent: CommentIntent; created_by: string; created_at: string;
-  }[]).map((c) => ({
-    id: c.id, entityType: c.entity_type, entityId: c.entity_id, body: c.body,
-    suggestedIntent: c.suggested_intent, intent: c.intent, createdBy: c.created_by, createdAt: c.created_at,
-  }));
+    is_test?: boolean;
+  }[])
+    // Live-caught gap: a note on a test task (or flagged is_test directly)
+    // must not appear mixed into Noa's real Notes Center list. A task-linked
+    // comment is kept only when its target survived the tasks exclusion
+    // above; a project-linked one only when that project is in the active
+    // (non-test) project list already loaded.
+    .filter((c) => {
+      if (c.is_test) return false;
+      if (c.entity_type === 'task') return !c.entity_id || realTaskIds.has(c.entity_id);
+      if (c.entity_type === 'project') return !c.entity_id || projectName.has(c.entity_id);
+      return true;
+    })
+    .map((c) => ({
+      id: c.id, entityType: c.entity_type, entityId: c.entity_id, body: c.body,
+      suggestedIntent: c.suggested_intent, intent: c.intent, createdBy: c.created_by, createdAt: c.created_at,
+    }));
   const historicalTasks = tasks
     .filter((tk) => !!tk.latest_note)
     .map((tk) => ({ taskId: tk.id, latestNote: tk.latest_note as string, lastTouched: tk.last_touched }));
