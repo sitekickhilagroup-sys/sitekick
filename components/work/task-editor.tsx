@@ -6,6 +6,7 @@ import { undoWorkVerb } from '@/app/actions/work';
 import { editorSaveOutcome, resolveTaskPhaseKey } from '@/lib/task-details';
 import type { PhaseKey, ProcessImpact, Task } from '@/lib/types';
 import { SavedChip } from './saved-chip';
+import { TaskHistory, type TaskHistoryLabels } from './task-history';
 
 const IMPACTS: ProcessImpact[] = [
   'primary_blocker', 'workstream_blocker', 'future_gate',
@@ -312,6 +313,12 @@ export function TaskEditor({ task, options, labels, onClose }: Props) {
             <option value="admin">{labels['category.admin']}</option>
           </select>
         </label>
+
+        {/* rowLabels (work/page.tsx) carries every TaskHistoryLabels key
+            alongside the editor's other loose-typed strings — the assertion
+            is because Record<string,string>'s index signature doesn't
+            structurally imply the specific named properties TS wants. */}
+        <TaskHistory taskId={task.id} labels={labels as unknown as TaskHistoryLabels} onReverted={onClose} />
 
         {/* Smaller-items fix: was <div> — same invalid-nesting reason as the
             <span> swap above; same blockification reasoning keeps this a

@@ -5,6 +5,27 @@ import { BLOCKER_KINDS } from './blockers.ts';
 import type { BlockerKind } from './types.ts';
 import type { AgentProposal, Task } from './types.ts';
 
+/**
+ * The newest activity_log row id for one entity — the concurrency guard a
+ * persistent (history-based) Undo needs. A history entry is only safe to
+ * revert while it's still this value: if something else has written to the
+ * entity since, reverting an older entry would silently stomp that later
+ * change, so the caller must treat a mismatch as a conflict, not a normal
+ * "not found".
+ */
+export async function getLatestActivityLogId(
+  admin: SupabaseClient,
+  entityType: string,
+  entityId: string,
+): Promise<string | null> {
+  const { data } = await admin.from('activity_log')
+    .select('id')
+    .eq('entity_type', entityType).eq('entity_id', entityId)
+    .order('created_at', { ascending: false })
+    .limit(1).maybeSingle();
+  return (data?.id as string | undefined) ?? null;
+}
+
 /** Returns the audit row id, which is what Undo needs to restore the snapshot. */
 export async function logActivity(
   admin: SupabaseClient,

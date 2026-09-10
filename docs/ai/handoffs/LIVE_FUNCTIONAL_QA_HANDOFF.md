@@ -1,5 +1,13 @@
 # Live Functional QA — handoff (in progress)
 
+## ✅ שוחזר ואומת — LLC task incident closed
+
+Real task `afac2f3b-f4f2-4ca0-bb98-f60e82dcd72f` ("Set up LLC bank account and credit card") had a QA test note written to it by my automation mistake (see INCIDENT section below). Rotem ran the guarded revert (`guarded-revert-llc-task.sql`) at 2026-09-10 20:52:53 UTC. Verified two independent ways immediately after:
+1. **DB**: `tasks.latest_note` is `null`, `last_touched` is `2026-09-07` (both match the pre-incident state exactly); `activity_log` now has the `manual:revert_qa_contamination` row with before/after JSON documenting the fix, actor `rotmmeir22@gmail.com`.
+2. **Live browser** (`/work?view=all&task=afac2f3b-…`): the task card in My Work shows no note text at all (contrast with a neighboring card that legitimately displays a quoted note) — screenshot taken 2026-09-10, post-revert.
+
+No further action needed on this task. It is safe to reference in links to Noa.
+
 **Last updated:** 2026-09-10, ~23:35 UTC (America/Los_Angeles ≈ 16:35 — LA is the app's reference timezone; times below are UTC unless noted)
 **Site:** https://sitekick-ecru.vercel.app (production alias)
 **Production version at start of this pass:** `e9ab420`
@@ -38,7 +46,7 @@ Legend: **LIVE-PASS** (verified in the browser, production) / **CODE-ONLY** (ver
 - What happened: after saving T2, the row list revalidated and reflowed (rows shift position after any write — expected app behavior). I then clicked "Add note" on the QA task's row using a **stale coordinate** from before the reflow, which actually landed on a different row: **"Set up LLC bank account and credit card"** (`afac2f3b-f4f2-4ca0-bb98-f60e82dcd72f`, tracker:OT-37, a REAL business task, `is_test=false`). Its `latest_note` was set to my QA test text; `last_touched` was bumped.
 - This was **my automation mistake** (coordinate reuse after a layout shift), not an app bug — no app defect is implicated.
 - **Caught immediately** via direct SQL confirmation before assuming success from the UI alone (`select ... where latest_note ilike '%QA note%'`).
-- Revert: sent Rotem `revert-real-task-contamination.sql` — restores `latest_note=null`, `last_touched='2026-09-07'` (the exact before-state from `activity_log`, action `verb:note`, 2026-09-10 20:15:21 UTC), logs a new `manual:revert_qa_contamination` entry. **Status: sent, not yet confirmed applied** (I have no DB write access).
+- Revert: **superseded** — the original `revert-real-task-contamination.sql` was never run. Replaced with a guarded version, `guarded-revert-llc-task.sql`, which only wrote if `latest_note`/`last_touched` still held exactly the contaminated values (protects against clobbering any real edit made since), restored `latest_note=null`/`last_touched='2026-09-07'` (the exact before-state from `activity_log`'s own `before_json`, action `verb:note`, 2026-09-10 20:15:21 UTC), and logged a `manual:revert_qa_contamination` activity_log entry. **Status: RUN by Rotem 2026-09-10 20:52:53 UTC, verified via DB + live browser — see "✅ שוחזר ואומת" at the top of this file.**
 - Process fix applied for the rest of this session: every click from here on is anchored by `find()` / a fresh `read_page` ref taken AFTER the most recent save, never a coordinate carried over from before one — coordinates go stale the instant a list re-renders.
 
 ### T3 — Add note (My Work verb) on the correct task, after the incident above
@@ -94,7 +102,7 @@ See `/Users/rotemmeir/Documents/Codex/2026-09-07/referenced-chatgpt-conversation
 
 - QA project `1d3f44cd-047b-4a77-9255-73be26f07fdc` — kept, `active=false, is_test=true`, safe to keep reusing for future sessions rather than creating a second one.
 - QA task `0656c6be-c2a2-4090-a85d-a447a7a77550` — status `open`, title restored to "QA test task — RENAMED via Edit details", carries a real comment (preference) and a `latest_note` — all clearly test data, isolated by the project cascade.
-- **Incident, resolved**: a coordinate-click automation error (mine, not an app bug) wrote test text to a REAL task ("Set up LLC bank account and credit card", `afac2f3b-…`). Caught immediately via direct SQL verification, revert SQL sent to Rotem. **Confirm this was applied before trusting that task's `latest_note`/`last_touched` fields.**
+- **Incident, RESOLVED**: a coordinate-click automation error (mine, not an app bug) wrote test text to a REAL task ("Set up LLC bank account and credit card", `afac2f3b-f4f2-4ca0-bb98-f60e82dcd72f`). Caught immediately via direct SQL verification. Guarded revert run by Rotem 2026-09-10 20:52:53 UTC, confirmed via SQL and live browser. See "✅ שוחזר ואומת" at the top of this file for full evidence.
 - Rollback for all of tonight's test data: delete the QA task, delete the QA comment(s) tied to it, delete the QA project row. Nothing else needs touching — no other business record was affected once the incident above is reverted.
 
 ## Rollback path for tonight's CODE changes

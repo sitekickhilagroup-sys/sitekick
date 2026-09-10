@@ -3,10 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
-import { laToday } from '@/lib/date';
-import { logActivity } from '@/lib/state-writer';
+import { laToday, laDateTime } from '@/lib/date';
+import { logActivity, getLatestActivityLogId } from '@/lib/state-writer';
 import { planMerge } from '@/lib/merge';
 import { buildDetailsPatch, validateDetailsIntegrity, type TaskDetailsPatch } from '@/lib/task-details';
+import { buildUndoRestorePatch } from '@/lib/work-verbs';
+import { buildTaskHistoryEntries, type TaskHistoryRow, type TaskHistoryEntryShape } from '@/lib/task-history';
 import { syncTaskIntoOpenReview } from '@/app/actions/weekly';
 import type { ProcessImpact, Task } from '@/lib/types';
 
@@ -409,4 +411,74 @@ export async function updateTaskDetails(taskId: string, patch: TaskDetailsPatch)
     syncWarning = true;
   }
   return { ok: true as const, undoId, ...(syncWarning ? { syncWarning: true as const } : {}) };
+}
+
+export type { TaskHistoryEntryShape as TaskHistoryEntry } from '@/lib/task-history';
+
+/**
+ * The task equivalent of getInvoiceHistory (app/actions/invoices.ts) — reads
+ * back a slice of what logActivity already wrote, adds nothing to the audit
+ * trail. Powers the persistent "History" panel in TaskEditor, so Undo is
+ * still reachable after the SavedChip's short-lived toast is gone. Shaping
+ * (changedKeys, canUndo) is buildTaskHistoryEntries (lib/task-history.ts) —
+ * pure and unit-tested; this function is only the I/O around it.
+ */
+export async function getTaskHistory(
+  taskId: string,
+): Promise<{ entries: TaskHistoryEntryShape[] } | { error: string }> {
+  await requireUser();
+  const admin = supabaseAdmin();
+  const { data, error } = await admin.from('activity_log')
+    .select('id, actor, action, before_json, after_json, created_at')
+    .eq('entity_type', 'task').eq('entity_id', taskId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  if (error) return { error: error.message };
+  const entries = buildTaskHistoryEntries((data ?? []) as TaskHistoryRow[], laDateTime);
+  return { entries };
+}
+
+/**
+ * Restores the task to its state just before one past activity_log entry —
+ * the "persistent Undo" a Noa can reach from the History panel even after
+ * the SavedChip that originally offered it has long since closed or expired.
+ *
+ * Guarded the same way undoWorkVerb (app/actions/work.ts) is NOT: this can
+ * be clicked minutes or days after the action it reverts, so a real write
+ * could easily have landed on the task in between. getLatestActivityLogId
+ * re-checks that `logId` is still the newest row for this task immediately
+ * before writing — if anything else touched the task since, the entry is no
+ * longer the newest and this returns a conflict instead of silently
+ * discarding that later change.
+ */
+export async function revertTaskHistoryEntry(logId: string): Promise<
+  { ok: true } | { error: string; conflict?: true }
+> {
+  const user = await requireUser();
+  const admin = supabaseAdmin();
+  const { data } = await admin.from('activity_log').select('*').eq('id', logId).maybeSingle();
+  const entry = data as {
+    id: string; entity_type: string; entity_id: string;
+    before_json: Record<string, unknown> | null;
+  } | null;
+  if (!entry || entry.entity_type !== 'task' || !entry.before_json) return { error: 'nothing to undo' };
+
+  const latestId = await getLatestActivityLogId(admin, 'task', entry.entity_id);
+  if (latestId !== entry.id) return { error: 'conflict', conflict: true as const };
+
+  // Snapshot the live row right before writing (same shape as every other
+  // write in this file), not entry.before_json — that would only be correct
+  // by coincidence, and would make an undo-of-the-undo replay the wrong
+  // state. A real live snapshot also means this new row is itself a fully
+  // valid, independently revertible history entry.
+  const { data: liveBefore } = await admin.from('tasks').select('*').eq('id', entry.entity_id).maybeSingle();
+  const restore = buildUndoRestorePatch(entry.before_json);
+  const { error } = await admin.from('tasks').update(restore).eq('id', entry.entity_id);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'task', entity_id: entry.entity_id, actor: user.email ?? user.id,
+    action: 'undo:history', before: liveBefore, after: restore,
+  });
+  revalidatePath('/'); revalidatePath('/work'); revalidatePath('/weekly'); revalidatePath('/projects/[id]', 'page');
+  return { ok: true as const };
 }
