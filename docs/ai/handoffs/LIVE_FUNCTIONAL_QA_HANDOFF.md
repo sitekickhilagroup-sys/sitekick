@@ -8,6 +8,25 @@ Real task `afac2f3b-f4f2-4ca0-bb98-f60e82dcd72f` ("Set up LLC bank account and c
 
 No further action needed on this task. It is safe to reference in links to Noa.
 
+## Continuation pass (2026-09-10 late night → 2026-09-11) — Rotem's 6-item follow-up
+
+Rotem's follow-up flagged a real gap in Parts 1–2's guards: the "check, then write" pattern used two separate DB round trips, leaving a gap where a write landing between them would still be silently overwritten. Fixed and re-verified below.
+
+### Item 1 — Persistent undo + concurrency protection (LIVE-PASS, all 4 scenarios)
+
+**Fix:** `applyCasGuard` (`lib/state-writer.ts`) folds the version guard into the UPDATE's own WHERE clause (compare-and-swap on `UNDO_RESTORE_KEYS`'s current values) instead of a separate check-then-write. Applied to `revertTaskHistoryEntry`, `updateTaskDetails`, **and** `undoWorkVerb` (the original toast-undo, which had no guard at all before this pass). Postgres evaluates the WHERE clause against whatever the row holds when the UPDATE executes — a write landing in the old gap now makes the UPDATE match zero rows (reported as a conflict) instead of being clobbered.
+
+**Also fixed in the same pass:** a genuine Undo conflict was previously invisible — `SavedChip`'s branch never rendered `errorMsg` (task-editor.tsx, verb-menu.tsx), and `reopen-button.tsx`'s undo handler didn't even set an error state. `SavedChip` gained an `error` slot; all three callers now show it. And: `voidPriorityFeedback` (`lib/collect-priority-feedback.ts`) marks a reverted action's `priority_feedback` row `voided=true` (columns already existed, unused, from migration 0023 — no schema change needed) — an undone decision now cannot read as valid signal once learning starts consuming that table.
+
+**Commit:** `db14a41`. Tests: 486/486 passing (+5 new for `applyCasGuard`'s null/non-null branching). Typecheck + lint clean.
+
+**Live test log — QA task `0656c6be-…` only:**
+1. **Normal undo**: History panel → Undo on newest "Edited details" entry (Changed: Owner) → owner correctly reverted, verified via SQL — **LIVE-PASS**.
+2. **Undo-of-undo**: reopened History, the resulting "Undone" entry was itself the newest and independently revertible → clicked its Undo → owner correctly returned to the pre-first-undo value, verified via SQL — **LIVE-PASS**.
+3. **Double-click**: fired two clicks on the same Undo button back-to-back (one `browser_batch`, no gap) → exactly one new `undo:history` activity_log row, not two — **LIVE-PASS**.
+4. **Undo after a later update (conflict)**: same real two-tab race as Parts 1–2's original test, re-run against the new atomic implementation — tab A's History loaded (Undo ready on the newest entry); tab B (same task) added a note, creating a genuinely newer activity_log row; tab A's stale Undo click → **"Changed since — refresh to see the latest."**, and critically **no new activity_log row was created by the rejected click at all** (the old implementation would still have shown the conflict, but only after a slightly larger race window) — verified via SQL: tab B's write fully intact, zero corruption — **LIVE-PASS**.
+5. **Undone decision excluded from learning**: applied "Waiting on…" (a `priority_feedback`-captured verb) via the SavedChip path → confirmed a `priority_feedback` row was created (`voided=false`) → clicked the chip's Undo → confirmed via SQL: `voided=true`, `retraction_kind='cancellation'`, `reverses_activity_log_id` correctly points at the new undo's activity_log row — **LIVE-PASS**. (Collection is live in production — `LEARNING_COLLECT=1` — confirmed via existing non-test rows; nothing reads `priority_feedback` for active ranking yet, so this is collection-side correctness, not yet an observable ranking change.)
+
 ## Part 3 — Inbox review-drawer draft persistence + staleness detection (LIVE-PASS)
 
 **Scope:** the Inbox review drawer's `open(row)` always re-seeded every field from the row — closing the drawer (even just switching to another item and back, no reload needed) silently discarded whatever was typed. Adds localStorage-backed draft persistence keyed per proposal, with a staleness guard so a draft is never silently applied if the underlying proposal moved on since (decided elsewhere, re-matched) — matching the guard pattern proven in Parts 1–2, extended to a case with no server-side signal at all (`agent_proposals` has no `updated_at` column).
