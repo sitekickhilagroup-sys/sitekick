@@ -26,6 +26,17 @@ export interface DraftSnapshot {
   state: ProposalState;
   targetTaskId: string | null;
   title: string;
+  /** Title of the DRAFT's own chosen target task (fields.targetTaskId) at
+   *  save time — null when the draft had no target selected. This is
+   *  deliberately a separate concern from `targetTaskId` above (the
+   *  proposal's OWN matched task, which may differ from what the draft
+   *  chose to attach to): a draft can point at task X while the row's own
+   *  match still points at task Y, and X changing underneath the draft is
+   *  just as much a contradiction as the proposal itself moving on — Noa
+   *  wrote her note against a task that no longer says what it did.
+   *  Absent from openTasks entirely (closed, merged, deleted) compares as
+   *  null too, since that is the strongest form of "this task changed". */
+  targetTaskTitle: string | null;
 }
 
 export interface Draft {
@@ -38,12 +49,14 @@ export function draftKey(proposalId: string): string {
   return `sk:inbox-draft:${proposalId}`;
 }
 
-/** True when the row has moved on since the draft was saved — the draft's
- *  edits were made against a version of this item that no longer exists. */
+/** True when the row — or the task the draft was pointed at — has moved on
+ *  since the draft was saved. The draft's edits were made against a version
+ *  of this item (and possibly a target task) that no longer exists. */
 export function isDraftStale(snapshot: DraftSnapshot, row: DraftSnapshot): boolean {
   return snapshot.state !== row.state
     || snapshot.targetTaskId !== row.targetTaskId
-    || snapshot.title !== row.title;
+    || snapshot.title !== row.title
+    || snapshot.targetTaskTitle !== row.targetTaskTitle;
 }
 
 const isDraftFields = (f: unknown): f is DraftFields => {
@@ -58,7 +71,8 @@ const isDraftSnapshot = (s: unknown): s is DraftSnapshot => {
   if (!s || typeof s !== 'object') return false;
   const r = s as Record<string, unknown>;
   return typeof r.state === 'string' && typeof r.title === 'string'
-    && (r.targetTaskId === null || typeof r.targetTaskId === 'string');
+    && (r.targetTaskId === null || typeof r.targetTaskId === 'string')
+    && (r.targetTaskTitle === null || typeof r.targetTaskTitle === 'string');
 };
 
 /**

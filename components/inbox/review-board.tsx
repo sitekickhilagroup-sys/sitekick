@@ -141,14 +141,29 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
       draft = raw ? parseDraft(raw) : null;
     } catch { /* localStorage unavailable (private window, blocked) — no draft, fall through to a fresh seed */ }
 
-    const rowSnapshot = { state: row.state, targetTaskId: row.targetTaskId, title: row.title };
-    if (draft && isDraftStale(draft.snapshot, rowSnapshot)) {
-      // The item moved on since this draft was saved (decided elsewhere,
-      // re-matched) — restoring it blind could paper over that real change,
-      // so it's discarded rather than silently applied.
-      try { window.localStorage.removeItem(draftKey(row.id)); } catch { /* best-effort cleanup */ }
-      draft = null;
-      setDraftNotice('stale');
+    if (draft) {
+      // Current title of whatever task the DRAFT itself was pointed at — not
+      // necessarily the row's own agent-matched task, since that's what the
+      // draft's notes were actually written against. Missing from openTasks
+      // entirely (closed, merged, deleted since) reads as null, same as
+      // "no target" — the strongest form of "this task changed".
+      const draftTargetTaskId = draft.fields.targetTaskId;
+      const currentTargetTitle = draftTargetTaskId
+        ? (openTasks.find((tk) => tk.id === draftTargetTaskId)?.title ?? null)
+        : null;
+      const rowSnapshot = {
+        state: row.state, targetTaskId: row.targetTaskId, title: row.title,
+        targetTaskTitle: currentTargetTitle,
+      };
+      if (isDraftStale(draft.snapshot, rowSnapshot)) {
+        // The item — or the task the draft targeted — moved on since this
+        // draft was saved (decided elsewhere, re-matched, target renamed or
+        // closed) — restoring it blind could paper over that real change,
+        // so it's discarded rather than silently applied.
+        try { window.localStorage.removeItem(draftKey(row.id)); } catch { /* best-effort cleanup */ }
+        draft = null;
+        setDraftNotice('stale');
+      }
     }
 
     // The seed below re-fires the auto-save effect immediately (every field
@@ -190,15 +205,19 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
     if (!selected) return;
     if (skipNextDraftSaveRef.current) { skipNextDraftSaveRef.current = false; return; }
     const timer = window.setTimeout(() => {
+      const targetTaskTitle = targetTaskId ? (openTasks.find((tk) => tk.id === targetTaskId)?.title ?? null) : null;
       const payload: Draft = {
         fields: { title, owner, due, treatment, note, projectId, targetTaskId, substageId, phaseFilter },
-        snapshot: { state: selected.state, targetTaskId: selected.targetTaskId, title: selected.title },
+        snapshot: {
+          state: selected.state, targetTaskId: selected.targetTaskId, title: selected.title,
+          targetTaskTitle,
+        },
         savedAt: new Date().toISOString(),
       };
       try { window.localStorage.setItem(draftKey(selected.id), JSON.stringify(payload)); } catch { /* best-effort */ }
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [selected, title, owner, due, treatment, note, projectId, targetTaskId, substageId, phaseFilter]);
+  }, [selected, title, owner, due, treatment, note, projectId, targetTaskId, substageId, phaseFilter, openTasks]);
 
   // Open tasks in the project the item is filed under, sorted most-likely-match
   // first (same similarity measure as the dedup engine) — so the right task is

@@ -3,6 +3,7 @@ import { draftKey, isDraftStale, parseDraft, type Draft, type DraftSnapshot } fr
 
 const snap = (overrides: Partial<DraftSnapshot> = {}): DraftSnapshot => ({
   state: 'pending', targetTaskId: null, title: 'Contact Provident for history of ownership transfer',
+  targetTaskTitle: null,
   ...overrides,
 });
 
@@ -34,6 +35,18 @@ describe('isDraftStale', () => {
   });
   it('is stale when the title changed', () => {
     expect(isDraftStale(snap({ title: 'Old title' }), snap({ title: 'New title' }))).toBe(true);
+  });
+  it('is stale when the DRAFT\'s own target task (not the proposal\'s matched one) was renamed since', () => {
+    expect(isDraftStale(
+      snap({ targetTaskTitle: 'Confirm Deemed Complete letter status' }),
+      snap({ targetTaskTitle: 'Confirm Deemed Complete letter status — renamed' }),
+    )).toBe(true);
+  });
+  it('is stale when the draft\'s target task is no longer open (closed, merged, or deleted) — reads as null now', () => {
+    expect(isDraftStale(
+      snap({ targetTaskTitle: 'Confirm Deemed Complete letter status' }),
+      snap({ targetTaskTitle: null }),
+    )).toBe(true);
   });
 });
 
