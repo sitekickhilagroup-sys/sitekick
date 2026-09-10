@@ -89,5 +89,105 @@ export async function correctCommentIntent(id: string, intent: string): Promise<
     before: before ?? null, after: { intent },
   });
   revalidatePath('/notes');
+  revalidatePath('/notes-center');
   return { ok: true };
+}
+
+/**
+ * Notes Center (Noa's report §2): associate or re-associate a REAL comment
+ * row to a task/project/blocker, or mark it general/unsure. Saving the
+ * association is interpretation+attribution only — it never touches the
+ * target record itself (no business update rides along). Mirrors saveComment's
+ * validation (a linked note must point at a real record).
+ */
+export async function retargetComment(
+  id: string,
+  entityType: EntityType,
+  entityId?: string | null,
+): Promise<{ ok: true } | { error: string }> {
+  const user = await requireUser();
+  if (!isEntityType(entityType)) return { error: 'invalid link type' };
+  const admin = supabaseAdmin();
+  let resolvedId: string | null = entityId?.trim() || null;
+  if (entityType === 'general') {
+    resolvedId = null;
+  } else {
+    if (!resolvedId) return { error: 'pick an item to link to' };
+    const { data: ent } = await admin.from(ENTITY_TABLE[entityType]).select('id').eq('id', resolvedId).maybeSingle();
+    if (!ent) return { error: `${entityType} not found` };
+  }
+  const { data: before } = await admin.from('comments').select('entity_type,entity_id').eq('id', id).maybeSingle();
+  const { error } = await admin.from('comments')
+    .update({ entity_type: entityType, entity_id: resolvedId }).eq('id', id);
+  if (error) return { error: error.message };
+  await logActivity(admin, {
+    entity_type: 'comment', entity_id: id, actor: user.email ?? user.id,
+    action: 'comment:retarget',
+    before: before ?? null, after: { entity_type: entityType, entity_id: resolvedId },
+  });
+  revalidatePath('/notes-center');
+  revalidatePath('/work');
+  return { ok: true };
+}
+
+/**
+ * Notes Center: turn a VIRTUAL historical item (a task's latest_note, never
+ * written to `comments`) into a real, reviewable row the first time Noa acts
+ * on it — approving its interpretation, re-targeting it, or dismissing it.
+ * Idempotent by construction: once a task has any real comment, the loader
+ * (lib/notes-center.ts's mergeNoteSources) stops offering its historical item
+ * at all, so a second promotion attempt for the same task can't create a
+ * second row for the same note.
+ */
+export async function promoteHistoricalNote(input: {
+  taskId: string;
+  body: string;
+  intent: string;
+  entityType: EntityType;
+  entityId?: string | null;
+}): Promise<{ ok: true; id: string } | { error: string }> {
+  const user = await requireUser();
+  if (!isIntent(input.intent)) return { error: 'invalid intent' };
+  const body = (input.body ?? '').trim();
+  if (!body) return { error: 'empty note' };
+  const admin = supabaseAdmin();
+
+  // Refuse if a real comment already exists for this task — the loader should
+  // already have hidden this historical item in that case, but the server
+  // never trusts the client's view of that state.
+  const { data: existing } = await admin.from('comments')
+    .select('id').eq('entity_type', 'task').eq('entity_id', input.taskId).limit(1).maybeSingle();
+  if (existing) return { error: 'this note was already reviewed' };
+
+  const entityType = input.entityType;
+  if (!isEntityType(entityType)) return { error: 'invalid link type' };
+  let entityId: string | null = input.entityId?.trim() || null;
+  if (entityType === 'general') {
+    entityId = null;
+  } else {
+    if (!entityId) return { error: 'pick an item to link to' };
+    const { data: ent } = await admin.from(ENTITY_TABLE[entityType]).select('id').eq('id', entityId).maybeSingle();
+    if (!ent) return { error: `${entityType} not found` };
+  }
+
+  const suggested = classifyIntent(body);
+  const { data, error } = await admin.from('comments').insert({
+    entity_type: entityType,
+    entity_id: entityId,
+    body,
+    suggested_intent: suggested,
+    intent: input.intent,
+    interpreter_version: INTENT_CLASSIFIER_VERSION,
+    created_by: user.email ?? user.id,
+  }).select('id').single();
+  if (error) return { error: error.message };
+
+  await logActivity(admin, {
+    entity_type: 'comment', entity_id: data.id, actor: user.email ?? user.id,
+    action: 'comment:promote_historical',
+    after: { source_task_id: input.taskId, entity_type: entityType, entity_id: entityId, intent: input.intent },
+  });
+  revalidatePath('/notes-center');
+  revalidatePath('/work');
+  return { ok: true, id: data.id as string };
 }

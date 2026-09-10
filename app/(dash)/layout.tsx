@@ -77,6 +77,7 @@ export default async function DashLayout({ children }: { children: React.ReactNo
     placeholder: t('notes.placeholder'), send: t('notes.send'), noActions: t('notes.no_actions'),
     linkGeneral: t('notes.link_general'), linkTask: t('nav.work'), linkProject: t('common.project'),
     linkInvoice: t('nav.invoices'), linkBlocker: t('notes.link_blocker'), pick: t('notes.pick'),
+    centerLink: t('notes.center_link'),
     'intent.preference': t('notes.intent_preference'),
     'intent.instruction': t('notes.intent_instruction'),
     'intent.fact': t('notes.intent_fact'),

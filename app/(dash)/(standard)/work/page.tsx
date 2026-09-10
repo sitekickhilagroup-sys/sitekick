@@ -9,6 +9,7 @@ import { rankToday, scoreTask, type TodayRankContext } from '@/lib/priority';
 import { laToday } from '@/lib/date';
 import { resolveTaskPhaseKey, resolveTaskSubstageLabel } from '@/lib/task-details';
 import { pickLatestNonEmptyRun } from '@/lib/priority-run-select';
+import { isAttributedHistoricalNote } from '@/lib/notes-center';
 import { WorkTableRow } from '@/components/work/work-table-row';
 import { WORK_COLS } from '@/components/work/work-cols';
 import { AddAction } from '@/components/work/add-action';
@@ -90,7 +91,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const supabase = await supabaseServer();
   // Relationships ride the same batch (table is small — filter in memory
   // below) so the page costs one database round trip, not two.
-  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ, substageTemplatesQ, workstreamsQ, closedQ] = await Promise.all([
+  const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ, substageTemplatesQ, workstreamsQ, closedQ, taskCommentsQ] = await Promise.all([
     supabase.from('tasks').select('*').eq('status', 'open'),
     supabase.from('projects').select('*'),
     supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
@@ -113,6 +114,8 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     // ('merged' stays out; un-merging is the duplicate review's job).
     supabase.from('tasks').select('*').in('status', ['done', 'dropped'])
       .order('last_touched', { ascending: false }).limit(100),
+    // Notes Center entry badge: which open tasks already have a real note.
+    supabase.from('comments').select('entity_id').eq('entity_type', 'task').not('entity_id', 'is', null),
   ]);
 
   const tasks = (tasksQ.data ?? []) as Task[];
@@ -171,6 +174,14 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // Review entry stays permanent either way (Noa's report item 4), but a zero
   // and a load error must not read the same.
   const pendingCountFailed = !!proposalsQ.error;
+  // Notes Center entry (Noa's report §2): real count of historical
+  // "(... via Claude)" notes nobody has reviewed via the center yet — same
+  // rule lib/notes-center.ts's mergeNoteSources uses, so this badge and the
+  // center's own "needs review" count can't drift.
+  const tasksWithComment = new Set(((taskCommentsQ.data ?? []) as { entity_id: string }[]).map((c) => c.entity_id));
+  const notesNeedingReview = tasks.filter(
+    (tk) => isAttributedHistoricalNote(tk.latest_note) && !tasksWithComment.has(tk.id),
+  ).length;
   const approvedInvoices = (approvedInvoicesQ.data ?? []) as Pick<Invoice, 'amount_usd' | 'vendor_id'>[];
   const approvedCount = approvedInvoices.length;
   const approvedTotal = approvedInvoices.reduce((s, i) => s + Number(i.amount_usd), 0);
@@ -706,16 +717,28 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
           Work even at zero, so the review history is always one click away.
           Apricot when there's work to do; neutral at zero; a failed count reads
           as "—", never as a false zero. */}
-      <Link
-        href="/inbox"
-        className={`flex min-h-11 items-center rounded-(--radius-card) border px-4 py-2.5 text-sm hover:underline ${
-          pendingCount > 0 && !pendingCountFailed
-            ? 'border-apricot/40 bg-apricot-soft text-apricot'
-            : 'border-line bg-card text-ink2'
-        }`}
-      >
-        {t('inbox.title')} · {pendingCountFailed ? '—' : pendingCount}
-      </Link>
+      <div className="flex flex-wrap gap-2">
+        <Link
+          href="/inbox"
+          className={`flex min-h-11 items-center rounded-(--radius-card) border px-4 py-2.5 text-sm hover:underline ${
+            pendingCount > 0 && !pendingCountFailed
+              ? 'border-apricot/40 bg-apricot-soft text-apricot'
+              : 'border-line bg-card text-ink2'
+          }`}
+        >
+          {t('inbox.title')} · {pendingCountFailed ? '—' : pendingCount}
+        </Link>
+        {/* Notes Center entry (Noa's report §2): the other clear, permanent
+            path out of My Work — historical + new feedback in one screen. */}
+        <Link
+          href="/notes-center"
+          className={`flex min-h-11 items-center rounded-(--radius-card) border px-4 py-2.5 text-sm hover:underline ${
+            notesNeedingReview > 0 ? 'border-apricot/40 bg-apricot-soft text-apricot' : 'border-line bg-card text-ink2'
+          }`}
+        >
+          {t('notes.center_link')} · {notesNeedingReview}
+        </Link>
+      </div>
 
       {/* Her .management-cards: big count, view name, one-line meaning. */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">

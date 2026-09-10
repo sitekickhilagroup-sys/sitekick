@@ -11,6 +11,7 @@ import { requireUser } from '@/lib/auth';
 import { getProfile } from '@/lib/profile';
 import { presetOf } from '@/lib/avatar-presets';
 import { PresetAvatar } from '@/components/profile/preset-avatar';
+import { isAttributedHistoricalNote } from '@/lib/notes-center';
 
 // The one global header, rendered by both the (standard) and (focused) group
 // layouts — every page shares the same navigation (navigation-consistency).
@@ -31,10 +32,18 @@ export async function AppHeader() {
   // suggestions waiting for a HUMAN rides the nav, so the queue is visible
   // without opening the bell.
   const supabase = await supabaseServer();
-  const [{ count: openCount }, { count: pendingCount }] = await Promise.all([
+  const [{ count: openCount }, { count: pendingCount }, { data: notesCandidates }, { data: taskComments }] = await Promise.all([
     supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('agent_proposals').select('id', { count: 'exact', head: true }).eq('state', 'pending'),
+    // Notes Center badge: historical "(... via Claude)" notes nobody has
+    // reviewed via the center yet — small set (open tasks with a latest_note),
+    // filtered client-side by the same attribution rule the center itself uses.
+    supabase.from('tasks').select('id,latest_note').eq('status', 'open').not('latest_note', 'is', null),
+    supabase.from('comments').select('entity_id').eq('entity_type', 'task').not('entity_id', 'is', null),
   ]);
+  const tasksWithComment = new Set(((taskComments ?? []) as { entity_id: string }[]).map((c) => c.entity_id));
+  const notesNeedingReview = ((notesCandidates ?? []) as { id: string; latest_note: string | null }[])
+    .filter((tk) => isAttributedHistoricalNote(tk.latest_note) && !tasksWithComment.has(tk.id)).length;
 
   // Spec §א: only the five core work areas stay primary; everything else
   // lives under "More" so the top nav never crowds or clips.
@@ -49,6 +58,7 @@ export async function AppHeader() {
   ];
   const moreLinks = [
     { href: '/inbox', label: t('nav.inbox'), badge: pendingCount ?? undefined },
+    { href: '/notes-center', label: t('notes.center_link'), badge: notesNeedingReview || undefined },
     { href: '/drafts', label: t('nav.drafts') },
     { href: '/digest', label: t('nav.digest') },
     { href: '/directory', label: t('nav.directory') },

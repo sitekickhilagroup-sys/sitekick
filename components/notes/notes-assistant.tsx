@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { saveComment, correctCommentIntent, type CommentRow } from '@/app/actions/comments';
 import type { CommentIntent } from '@/lib/comment-intent';
@@ -89,8 +90,19 @@ export function NotesAssistant({ comments, options, labels }: {
               <p className="text-sm font-semibold text-ink">{labels.title}</p>
               <p className="text-[10px] text-ink3">{labels.subtitle}</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label={labels.close}
-              className="min-h-9 rounded-full px-2 text-ink3 hover:text-ink">✕</button>
+            <div className="flex items-center gap-1">
+              {/* Notes Center entry (Noa's report §2): from the assistant that
+                  RECORDS notes to the screen that reviews/associates them —
+                  the two must not be the same surface. */}
+              <Link
+                href="/notes-center"
+                className="min-h-9 rounded-full px-2 text-[11px] font-medium text-sage hover:underline"
+              >
+                {labels.centerLink}
+              </Link>
+              <button type="button" onClick={() => setOpen(false)} aria-label={labels.close}
+                className="min-h-9 rounded-full px-2 text-ink3 hover:text-ink">✕</button>
+            </div>
           </header>
 
           {/* Thread */}
