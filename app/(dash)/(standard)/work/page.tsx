@@ -271,15 +271,23 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     });
 
   // TaskEditor's option lists (A6). AddAction only ever creates a task
-  // against an active project, so it keeps the active-only projectOptions
-  // list below unchanged. The editor is different: an already-open task can
-  // belong to a project that has since gone inactive (this page still
-  // renders that task under the project's name — see the render loop below,
-  // which looks projects up with no active filter), so editorOptions gets
-  // every project instead, each flagged active/inactive — TaskEditor offers
-  // active ones as normal choices and injects the task's own current project
-  // even when it's inactive, so its name is never silently hidden.
-  const projectOptions = projects.filter((p) => p.active !== false)
+  // against an active project — OR a project explicitly flagged is_test
+  // (0026): a tester needs to create records under a dedicated QA project
+  // that is deliberately kept active=false so it stays out of every OTHER
+  // active-gated surface (Overview's portfolio map, Weekly Review, the Notes
+  // Center's project list, the notes assistant widget, the Project Process
+  // list — none of those were touched; they all still filter active only,
+  // so a test project stays invisible there). This is the one deliberate
+  // exception, not a general active-bypass. The editor is different: an
+  // already-open task can belong to a project that has since gone inactive
+  // (this page still renders that task under the project's name — see the
+  // render loop below, which looks projects up with no active filter), so
+  // editorOptions gets every project instead, each flagged active/inactive —
+  // TaskEditor offers active ones as normal choices and injects the task's
+  // own current project even when it's inactive, so its name is never
+  // silently hidden (the same mechanism will surface a test project too,
+  // once a task already exists on it).
+  const projectOptions = projects.filter((p) => p.active !== false || p.is_test)
     .map((p) => ({ id: p.id, name: p.name, current_phase_key: p.current_phase_key }));
   const editorProjectOptions = projects.map((p) => ({
     id: p.id, name: p.name, current_phase_key: p.current_phase_key, active: p.active !== false,

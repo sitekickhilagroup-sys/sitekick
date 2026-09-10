@@ -21,6 +21,7 @@ function task(over: Partial<Task> & { id: string }): Task {
     manual_priority: null, snoozed_until: null, process_impact: null,
     merged_into: null, merged_at: null, merged_by: null, latest_note: null,
     substage_template_id: null, workstream_id: null, category: 'project',
+    is_test: false,
     ...over,
   };
 }

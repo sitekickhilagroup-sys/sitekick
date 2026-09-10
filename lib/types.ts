@@ -53,6 +53,13 @@ export interface Project {
   /** 0015 — Noa's standing priority: 1=Blair, 2=San Marco, 3=Rinconia,
    *  4=Alta Mesa. Null = unranked (sorts last, with General, on Today). */
   business_rank: number | null;
+  /** 0026 — a QA project (e.g. "🧪 QA — SiteKick internal testing"), kept
+   *  active=false so it stays out of every active-only surface (Overview's
+   *  portfolio map, Weekly Review, Notes Center, the notes assistant widget,
+   *  the Project Process list) — and offered ONLY where a tester genuinely
+   *  needs to create/edit a test record under it (see projectOptions in
+   *  app/(dash)/(standard)/work/page.tsx, the one deliberate exception). */
+  is_test: boolean;
 }
 
 export interface ProjectStage {
@@ -148,6 +155,12 @@ export interface Task {
   /** 0022 — brief §2: administrative work is classified separately from
    *  project work, even when attributed to a project. */
   category: 'project' | 'admin';
+  /** 0026 — a QA-created test record, excluded from every automated business
+   *  process (prioritization, digest, extractor context) via
+   *  lib/open-tasks.ts / lib/feedback-context.ts. Also true for any task
+   *  under a project whose own is_test is set, even when this column itself
+   *  is false — see selectOpenTasksExcludingTest's project-cascade join. */
+  is_test: boolean;
 }
 
 // AI prioritization (0022, brief §3–4): one run = one suggested ordering,
