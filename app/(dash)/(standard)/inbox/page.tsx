@@ -173,6 +173,9 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
   const labels: Record<string, string> = {
     attachTask: t('review.attach_task'), attachNone: t('review.attach_none'),
     attachHint: t('review.attach_hint'), attachChosen: t('review.attach_chosen'),
+    // Draft persistence banner (lib/inbox-draft.ts) — restored vs. stale.
+    draftRestored: t('review.draft_restored'), draftDiscard: t('review.draft_discard'),
+    draftStale: t('review.draft_stale'),
     pvIntro: t('review.pv_intro'), pvTitle: t('review.pv_title'),
     pvNote: t('review.pv_note'), pvStatusDone: t('review.pv_status_done'),
     needs: t('review.f_pending'), unsure: t('review.f_unsure'), approved: t('review.f_approved'),

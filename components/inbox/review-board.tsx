@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { autoTriagePending, decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
 import type { ChangeType, ProposalState, ProposalType } from '@/lib/types';
 import { NEEDS_MATCH, selectableTasksFor, treatmentsFor, updateFieldsPreview } from '@/lib/review-treatments';
 import { titleSimilarity } from '@/lib/dedup';
 import { fmtDate } from '@/lib/format';
+import { draftKey, isDraftStale, parseDraft, type Draft } from '@/lib/inbox-draft';
 
 export interface ReviewRow {
   id: string;
@@ -106,8 +107,13 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
   const [phaseFilter, setPhaseFilter] = useState('');
   const phaseKeyOfSubstage = (id: string) => substages.find((s) => s.id === id)?.phase_key ?? '';
 
-  const open = (row: ReviewRow) => {
-    setSelected(row);
+  // Draft persistence (lib/inbox-draft.ts): 'restored' shows a small "your
+  // earlier notes are back" banner with a Discard option; 'stale' shows why
+  // an unsaved draft was found but NOT applied (the item moved on since).
+  const [draftNotice, setDraftNotice] = useState<'restored' | 'stale' | null>(null);
+  const skipNextDraftSaveRef = useRef(false);
+
+  const seedFromRow = (row: ReviewRow) => {
     const seed = row.targetTaskId ? openTasks.find((tk) => tk.id === row.targetTaskId) : undefined;
     // When a task is attached, the title field starts from THAT task's title,
     // not the email-extracted one — so Apply preserves the work name unless Noa
@@ -122,8 +128,77 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
     setTargetTaskId(row.targetTaskId ?? '');
     setSubstageId(seed?.substageTemplateId ?? '');
     setPhaseFilter(seed?.substageTemplateId ? phaseKeyOfSubstage(seed.substageTemplateId) : '');
-    setFailure(null);
   };
+
+  const open = (row: ReviewRow) => {
+    setSelected(row);
+    setFailure(null);
+    setDraftNotice(null);
+
+    let draft: Draft | null = null;
+    try {
+      const raw = window.localStorage.getItem(draftKey(row.id));
+      draft = raw ? parseDraft(raw) : null;
+    } catch { /* localStorage unavailable (private window, blocked) — no draft, fall through to a fresh seed */ }
+
+    const rowSnapshot = { state: row.state, targetTaskId: row.targetTaskId, title: row.title };
+    if (draft && isDraftStale(draft.snapshot, rowSnapshot)) {
+      // The item moved on since this draft was saved (decided elsewhere,
+      // re-matched) — restoring it blind could paper over that real change,
+      // so it's discarded rather than silently applied.
+      try { window.localStorage.removeItem(draftKey(row.id)); } catch { /* best-effort cleanup */ }
+      draft = null;
+      setDraftNotice('stale');
+    }
+
+    // The seed below re-fires the auto-save effect immediately (every field
+    // it sets is a dependency) — for a restored draft that's a harmless
+    // re-save of the same data, but skip it once so a fresh row-seed on an
+    // item with NO draft doesn't manufacture one purely from opening it.
+    skipNextDraftSaveRef.current = !draft;
+
+    if (draft) {
+      setTitle(draft.fields.title);
+      setOwner(draft.fields.owner);
+      setDue(draft.fields.due);
+      const allowed = treatmentsFor(row.type, !!draft.fields.targetTaskId);
+      setTreatment(allowed.includes(draft.fields.treatment) ? draft.fields.treatment : 'new_task');
+      setNote(draft.fields.note);
+      setProjectId(draft.fields.projectId);
+      setTargetTaskId(draft.fields.targetTaskId);
+      setSubstageId(draft.fields.substageId);
+      setPhaseFilter(draft.fields.phaseFilter);
+      setDraftNotice('restored');
+    } else {
+      seedFromRow(row);
+    }
+  };
+
+  const discardDraft = () => {
+    if (!selected) return;
+    try { window.localStorage.removeItem(draftKey(selected.id)); } catch { /* best-effort */ }
+    skipNextDraftSaveRef.current = true;
+    seedFromRow(selected);
+    setDraftNotice(null);
+  };
+
+  // Auto-persists the drawer's in-progress edits so closing and reopening —
+  // even after a full reload, not just switching to another item and back —
+  // doesn't discard them. Debounced so a fast typist doesn't spam
+  // localStorage on every keystroke.
+  useEffect(() => {
+    if (!selected) return;
+    if (skipNextDraftSaveRef.current) { skipNextDraftSaveRef.current = false; return; }
+    const timer = window.setTimeout(() => {
+      const payload: Draft = {
+        fields: { title, owner, due, treatment, note, projectId, targetTaskId, substageId, phaseFilter },
+        snapshot: { state: selected.state, targetTaskId: selected.targetTaskId, title: selected.title },
+        savedAt: new Date().toISOString(),
+      };
+      try { window.localStorage.setItem(draftKey(selected.id), JSON.stringify(payload)); } catch { /* best-effort */ }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [selected, title, owner, due, treatment, note, projectId, targetTaskId, substageId, phaseFilter]);
 
   // Open tasks in the project the item is filed under, sorted most-likely-match
   // first (same similarity measure as the dedup engine) — so the right task is
@@ -195,6 +270,9 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
         substageTemplateId: substageId || null,
       });
       if ('error' in res) { setFailure(res.error); return; }
+      // The edits just landed for real — any unsaved draft for this item is
+      // superseded, not "still in progress" anymore.
+      try { window.localStorage.removeItem(draftKey(selected.id)); } catch { /* best-effort */ }
       setSelected(null);
       setToast({ text: labels[`done.${decision}`] ?? labels['done.approved'], undoId: res.undoId });
     });
@@ -214,7 +292,13 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
       let ok = 0;
       for (const id of ids) {
         const res = await decideProposal(id, decision, {});
-        if (!('error' in res)) ok++;
+        if (!('error' in res)) {
+          ok++;
+          // A bulk-decided item never goes through the drawer, but it could
+          // still be carrying a draft from an earlier visit — that draft is
+          // now moot.
+          try { window.localStorage.removeItem(draftKey(id)); } catch { /* best-effort */ }
+        }
       }
       setChecked(new Set());
       setToast({ text: `${labels[`done.${decision}`] ?? ''} · ${ok}/${ids.length}`, undoId: null });
@@ -380,6 +464,20 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
             </header>
 
             <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+              {draftNotice === 'restored' && (
+                <section role="status" className="flex items-center justify-between gap-3 rounded-(--radius-card) border border-sage-line bg-sage-soft/40 p-3">
+                  <p className="text-[11px] text-ink2">{labels.draftRestored}</p>
+                  <button type="button" onClick={discardDraft}
+                    className="min-h-11 shrink-0 cursor-pointer rounded-[9px] border border-line px-3 py-1.5 text-[11px] text-ink2">
+                    {labels.draftDiscard}
+                  </button>
+                </section>
+              )}
+              {draftNotice === 'stale' && (
+                <section role="alert" className="rounded-(--radius-card) border border-line bg-apricot-soft/40 p-3">
+                  <p className="text-[11px] text-ink2">{labels.draftStale}</p>
+                </section>
+              )}
               {selected.matched && (
                 <section className="rounded-(--radius-card) border border-line bg-apricot-soft/40 p-3">
                   <header className="flex items-baseline justify-between gap-2">
