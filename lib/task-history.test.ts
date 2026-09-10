@@ -45,6 +45,24 @@ describe('buildTaskHistoryEntries', () => {
     expect(buildTaskHistoryEntries(rows, fmt)[0].changedKeys).toEqual(['title']);
   });
 
+  // Live-caught: reopen/verb actions log a full-row before_json (Undo needs
+  // the whole snapshot) alongside a small AFTER patch naming only the fields
+  // that action actually touched (e.g. reopen's after_json is just
+  // {status: 'open'}). changedKeys must follow after_json's own keys, not
+  // "every column that differs from before" — the latter treats every
+  // untouched, merely-populated column (id, is_test, created_at, ...) as a
+  // change, which is exactly the bug seen live on a plain Reopen.
+  it('a partial after_json (reopen/verb shape) reports only the keys it actually names, not every populated column', () => {
+    const rows = [row({
+      before_json: {
+        id: 'task-1', status: 'done', title: 'Set up LLC bank account', owner: 'Noa',
+        is_test: false, created_at: '2026-09-07T00:00:00Z', priority: 'normal',
+      },
+      after_json: { status: 'open' },
+    })];
+    expect(buildTaskHistoryEntries(rows, fmt)[0].changedKeys).toEqual(['status']);
+  });
+
   it('formats createdAt through the injected formatter and passes actor/action through unchanged', () => {
     const rows = [row({ actor: 'x@y.com', action: 'verb:completed', created_at: '2026-09-10T20:00:00Z' })];
     const entry = buildTaskHistoryEntries(rows, fmt)[0];

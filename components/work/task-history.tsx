@@ -77,6 +77,10 @@ export function TaskHistory({ taskId, labels, onReverted }: Props) {
       due: labels.colDue, project_id: labels.project, substage_template_id: labels.substage,
       workstream_id: labels.workstream, process_impact: labels.impact, category: labels.category,
       status: labels.fieldStatus, latest_note: labels.fieldNote,
+      // applyWorkVerb (app/actions/work.ts) logs the verb:note action's
+      // after_json as { note: ... }, not { latest_note: ... } — the actual
+      // column it writes — so the changed-key here is literally "note".
+      note: labels.fieldNote,
     };
     return map[key] ?? key;
   };
