@@ -52,7 +52,7 @@ function projectTerms(name: string): string[] {
     .filter((w) => (/^\d{3,}$/.test(w) || w.length > 3) && !['drive', 'road', 'street', 'place'].includes(w));
 }
 
-async function read(text: string): Promise<Reading | null> {
+async function read(text: string, today: string): Promise<Reading | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
   try {
     return await runStructured({
@@ -60,6 +60,7 @@ async function read(text: string): Promise<Reading | null> {
       system: 'You read one project update written by a construction project manager and report what it is about. '
         + 'Report only what the text states. Never invent a date, an owner or a completion. '
         + 'Never phrase an estimate ("can have", "expects", "targeting") as a commitment. '
+        + `If the text names a relative date ("end of week", "late next week"), resolve it against today (${today}) and tag due_provenance 'derived'; an outright calendar date or exact day name is 'explicit'; a date mentioned but not pin-downable is 'unresolved' (leave due null). `
         + 'Keep the title under 12 words and the summary to one sentence.',
       messages: [{ role: 'user', content: text }],
       schema: ReadingSchema,
@@ -103,7 +104,7 @@ export async function processPastedUpdate(text: string): Promise<PasteResult> {
   }
   const project = hits[0].project;
 
-  const reading = await read(body);
+  const reading = await read(body, today);
   const { data: taskRows } = await admin.from('tasks').select('*').eq('project_id', project.id).eq('status', 'open');
   const openTasks = (taskRows ?? []) as Task[];
 
