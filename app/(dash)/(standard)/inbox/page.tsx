@@ -35,17 +35,24 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
   const [pendingQ, proposalsQ, projectsQ, phasesQ, stageMapQ, substageTemplatesQ] = await Promise.all([
     supabase.from('agent_proposals').select('*').eq('state', 'pending').order('created_at', { ascending: false }).limit(500),
     supabase.from('agent_proposals').select('*').order('created_at', { ascending: false }).limit(200),
-    supabase.from('projects').select('id,name,current_phase_key,active'),
+    supabase.from('projects').select('id,name,current_phase_key,active,is_test'),
     supabase.from('phases').select('*'),
     supabase.from('stage_phase_map').select('*'),
     supabase.from('substage_templates').select('id,phase_key,name'),
   ]);
 
-  const pendingRows = (pendingQ.data ?? []) as AgentProposal[];
-  const historyRows = (proposalsQ.data ?? []) as AgentProposal[];
+  const projectRows = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name' | 'current_phase_key' | 'active' | 'is_test'>[];
+  // Inbox audit (2026-09-11): a QA-project proposal counted toward every tab
+  // here identically to a real one — this page had never excluded test data,
+  // unlike My Work's own task counts or Notes Center. QA proposals stay
+  // reachable directly (SQL + the same decideProposal action) for testing;
+  // they just don't pollute what Noa sees as her real queue.
+  const testProjectIds = new Set(projectRows.filter((p) => p.is_test).map((p) => p.id));
+  const excludeTest = (p: AgentProposal) => !p.project_id || !testProjectIds.has(p.project_id);
+  const pendingRows = ((pendingQ.data ?? []) as AgentProposal[]).filter(excludeTest);
+  const historyRows = ((proposalsQ.data ?? []) as AgentProposal[]).filter(excludeTest);
   const pendingIds = new Set(pendingRows.map((p) => p.id));
   let proposals = [...pendingRows, ...historyRows.filter((p) => !pendingIds.has(p.id))];
-  const projectRows = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name' | 'current_phase_key' | 'active'>[];
   // Drawer attribution select: active projects only — filing new work under
   // a parked project would just hide it.
   const projectOptions = projectRows

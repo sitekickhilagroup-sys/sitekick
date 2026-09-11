@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
 import { applyProposal, logActivity, resolveDueSourceDate } from '@/lib/state-writer';
-import { attributionTokens, runFullTriage } from '@/lib/auto-triage';
+import { attributionTokens, runFullTriage, type TriageItemOutcome } from '@/lib/auto-triage';
 import { defaultTreatment, targetTaskError } from '@/lib/review-treatments';
 import type { AgentProposal, ChangeType, Task } from '@/lib/types';
 
@@ -323,9 +323,10 @@ export async function decideProposal(
 
 /** Inbox "Auto-triage now" — one sweep of the whole pending backlog through
  *  the deterministic + learned rules. Returns what moved so the UI can say
- *  "applied 58, ignored 12, 20 left". */
+ *  "applied 58, ignored 12, 20 left". Never touches QA-project rows — see
+ *  runFullTriage. */
 export async function autoTriagePending(): Promise<
-  { ok: true; applied: number; ignored: number; kept: number; errors: number } | { error: string }
+  { ok: true; pendingBefore: number; applied: number; ignored: number; kept: number; errors: number } | { error: string }
 > {
   await requireUser();
   const admin = supabaseAdmin();
@@ -333,10 +334,34 @@ export async function autoTriagePending(): Promise<
   revalidateReview();
   return {
     ok: true,
+    pendingBefore: full.pendingBefore,
     applied: full.applied,
     ignored: full.ignored,
     kept: full.pendingAfter,
     errors: full.errors,
+  };
+}
+
+/** Read-only preview of what "Auto-triage now" WOULD do — classifies the
+ *  entire real (non-QA) pending backlog exactly as a real sweep would, but
+ *  writes nothing: no task insert, no proposal state change, no audit row.
+ *  Rotem's explicit ask: prove the sweep's effect before ever running it for
+ *  real, rather than trusting classifyProposal's rules by reading code alone. */
+export async function previewAutoTriage(): Promise<
+  | { ok: true; pendingBefore: number; wouldApply: number; wouldIgnore: number; wouldStayForReview: number; errors: number; items: TriageItemOutcome[] }
+  | { error: string }
+> {
+  await requireUser();
+  const admin = supabaseAdmin();
+  const full = await runFullTriage(admin, { today: laToday(), dryRun: true });
+  return {
+    ok: true,
+    pendingBefore: full.pendingBefore,
+    wouldApply: full.applied,
+    wouldIgnore: full.ignored,
+    wouldStayForReview: full.kept,
+    errors: full.errors,
+    items: full.items ?? [],
   };
 }
 

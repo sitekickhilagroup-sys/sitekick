@@ -169,11 +169,22 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const dupPairs = findDuplicatePairs(tasks, allRels);
   const projects = (projectsQ.data ?? []) as Project[];
   const blockers = (blockersQ.data ?? []) as Blocker[];
-  const pendingCount = proposalsQ.count ?? 0;
+  // 0027 follow-up (Inbox audit): a QA-project proposal inflated this badge
+  // and the /inbox list identically — neither had ever excluded test data,
+  // unlike every other business surface (My Work's own task counts, Notes
+  // Center). Same pattern as selectOpenTasksExcludingTest (lib/open-tasks.ts):
+  // resolve test project ids from data already loaded, then re-count without
+  // them. Falls back to the unfiltered count on error, same as before.
+  const testProjectIds = projects.filter((p) => p.is_test).map((p) => p.id);
+  const pendingProposalsQ = testProjectIds.length
+    ? await supabase.from('agent_proposals').select('id', { count: 'exact', head: true })
+      .eq('state', 'pending').not('project_id', 'in', `(${testProjectIds.join(',')})`)
+    : proposalsQ;
+  const pendingCount = pendingProposalsQ.count ?? 0;
   // Distinguish a true zero (queue empty) from a failed count load — the Agent
   // Review entry stays permanent either way (Noa's report item 4), but a zero
   // and a load error must not read the same.
-  const pendingCountFailed = !!proposalsQ.error;
+  const pendingCountFailed = !!pendingProposalsQ.error;
   // Notes Center entry (Noa's report §2): real count of historical
   // "(... via Claude)" notes nobody has reviewed via the center yet — same
   // rule lib/notes-center.ts's mergeNoteSources uses, so this badge and the

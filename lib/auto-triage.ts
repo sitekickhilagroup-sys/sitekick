@@ -30,7 +30,7 @@
 // Production numbers: 113 pending on 8/28; the first rule sweep cleared 59.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { applyProposal, logActivity } from './state-writer.ts';
+import { applyProposal, logActivity, resolveDueSourceDate } from './state-writer.ts';
 import { tokenize } from './dedup.ts';
 import { proposalKey, type ProposalIdentity } from './proposals.ts';
 import type { AgentProposal, Task } from './types.ts';
@@ -294,6 +294,20 @@ export interface TriageSummary {
   ignored: number;
   kept: number;
   errors: number;
+  /** What each non-'review' proposal WOULD do (dry run) or DID do (real run)
+   *  — the only way to see "what would change" before ever writing anything.
+   *  Always populated, dry-run or not, so a real run's return value is an
+   *  equally useful audit summary. */
+  items?: TriageItemOutcome[];
+}
+
+export interface TriageItemOutcome {
+  id: string;
+  type: string;
+  title: string | null;
+  action: 'auto_apply' | 'auto_ignore';
+  reason: string;
+  classKey: string;
 }
 
 /** Fetch what classifyProposal needs once per batch. */
@@ -329,10 +343,20 @@ export async function loadTriageContext(admin: SupabaseClient): Promise<{
 export async function runAutoTriage(
   admin: SupabaseClient,
   proposals: AgentProposal[],
-  opts?: { today?: string },
+  opts?: {
+    today?: string;
+    /** Classify and report exactly as a real run would, but never write —
+     *  no task insert, no proposal state change, no activity_log row. The
+     *  only safe way to see "what would change" against the REAL backlog
+     *  before ever running it for real. */
+    dryRun?: boolean;
+  },
 ): Promise<TriageSummary> {
-  const summary: TriageSummary = { applied: 0, ignored: 0, kept: 0, errors: 0 };
+  const summary: TriageSummary = { applied: 0, ignored: 0, kept: 0, errors: 0, items: [] };
   if (!proposals.length) return summary;
+  const dryRun = opts?.dryRun ?? false;
+  const titleOf = (p: AgentProposal): string | null =>
+    p.title ?? (typeof p.payload?.title === 'string' ? p.payload.title : null);
   const { stats } = await loadTriageContext(admin);
   const today = opts?.today ?? new Date().toISOString().slice(0, 10);
 
@@ -360,16 +384,19 @@ export async function runAutoTriage(
     !!p.document_id && UNTRUSTED_SOURCES.has(sourceByDoc.get(p.document_id) ?? '');
 
   const ignore = async (p: AgentProposal, reason: string, classKey: string) => {
-    await admin.from('agent_proposals').update({
-      state: 'ignored',
-      decided_by: TRIAGE_ACTOR,
-      decided_at: new Date().toISOString(),
-      result_note: reason,
-    }).eq('id', p.id);
-    await logActivity(admin, {
-      entity_type: 'proposal', entity_id: p.id, actor: TRIAGE_ACTOR,
-      action: 'auto_ignore', after: { class: classKey, reason },
-    });
+    if (!dryRun) {
+      await admin.from('agent_proposals').update({
+        state: 'ignored',
+        decided_by: TRIAGE_ACTOR,
+        decided_at: new Date().toISOString(),
+        result_note: reason,
+      }).eq('id', p.id);
+      await logActivity(admin, {
+        entity_type: 'proposal', entity_id: p.id, actor: TRIAGE_ACTOR,
+        action: 'auto_ignore', after: { class: classKey, reason },
+      });
+    }
+    summary.items!.push({ id: p.id, type: p.type, title: titleOf(p), action: 'auto_ignore', reason, classKey });
     summary.ignored++;
   };
 
@@ -413,33 +440,52 @@ export async function runAutoTriage(
         // human act (or a learned rule applied at ingest) — never defaulted
         // to General here. Without a project the row waits for a person.
         if (!p.project_id) { summary.kept++; continue; }
-        const pay = p.payload as Record<string, unknown>;
-        const str = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null);
-        const { data: created, error } = await admin.from('tasks').insert({
-          project_id: p.project_id,
-          document_id: p.document_id,
-          title: str(pay.title) ?? str(p.title) ?? 'Untitled',
-          description: str(pay.description),
-          owner: str(pay.owner),
-          waiting_for: str(pay.waiting_for),
-          due: str(pay.due),
-          stage_key: str(pay.stage_key),
-          priority: pay.priority === 'critical' || pay.priority === 'high' ? pay.priority : 'normal',
-          category: pay.category === 'admin' ? 'admin' : 'project',
-          status: 'open',
-          source: 'agent:auto-triage',
-          last_touched: today,
-        }).select('id').single();
-        if (error || !created) {
-          console.error('[auto-triage] create failed:', p.id, error?.message);
-          summary.errors++;
-          continue;
+        if (!dryRun) {
+          const pay = p.payload as Record<string, unknown>;
+          const str = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null);
+          const due = str(pay.due);
+          // 0027: this insert had never stamped provenance at all — a
+          // learned-auto-applied create with a due date landed unclassified.
+          // assertsUnconfirmedDue (classifyProposal, above) already forces
+          // an unconfirmed due to 'review' before this point is ever
+          // reached, so an explicit tag is expected here, but default
+          // conservatively rather than assume it.
+          const dueProvenance = due ? (str(pay.due_provenance) ?? 'unresolved') : null;
+          const { data: created, error } = await admin.from('tasks').insert({
+            project_id: p.project_id,
+            document_id: p.document_id,
+            title: str(pay.title) ?? str(p.title) ?? 'Untitled',
+            description: str(pay.description),
+            owner: str(pay.owner),
+            waiting_for: str(pay.waiting_for),
+            due,
+            due_provenance: dueProvenance,
+            due_source_document_id: due ? p.document_id : null,
+            due_source_date: due ? await resolveDueSourceDate(admin, p.document_id) : null,
+            stage_key: str(pay.stage_key),
+            priority: pay.priority === 'critical' || pay.priority === 'high' ? pay.priority : 'normal',
+            category: pay.category === 'admin' ? 'admin' : 'project',
+            status: 'open',
+            source: 'agent:auto-triage',
+            last_touched: today,
+          }).select('id').single();
+          if (error || !created) {
+            console.error('[auto-triage] create failed:', p.id, error?.message);
+            summary.errors++;
+            continue;
+          }
+          await logActivity(admin, {
+            entity_type: 'task', entity_id: created.id, actor: TRIAGE_ACTOR,
+            action: 'create', after: { proposal_id: p.id, reason: verdict.reason },
+          });
         }
-        await logActivity(admin, {
-          entity_type: 'task', entity_id: created.id, actor: TRIAGE_ACTOR,
-          action: 'create', after: { proposal_id: p.id, reason: verdict.reason },
-        });
-      } else {
+      } else if (!dryRun) {
+        // No dry-run branch for applyProposal itself (it has no preview
+        // mode) — a dry run reports the verdict without attempting the
+        // write, which is why a small fraction of "would auto-apply" items
+        // could still fail for real (e.g. the matched task vanished in the
+        // meantime) once actually run. That gap is the honest cost of a
+        // dry run never writing anything.
         const applied = await applyProposal(admin, p, TRIAGE_ACTOR, today, { agentApply: true });
         if ('error' in applied) {
           // Application failed (target vanished, match failed) — the row stays
@@ -449,16 +495,19 @@ export async function runAutoTriage(
           continue;
         }
       }
-      await admin.from('agent_proposals').update({
-        state: 'auto_applied',
-        decided_by: TRIAGE_ACTOR,
-        decided_at: new Date().toISOString(),
-        result_note: verdict.reason,
-      }).eq('id', p.id);
-      await logActivity(admin, {
-        entity_type: 'proposal', entity_id: p.id, actor: TRIAGE_ACTOR,
-        action: 'auto_apply', after: { class: verdict.classKey, reason: verdict.reason },
-      });
+      if (!dryRun) {
+        await admin.from('agent_proposals').update({
+          state: 'auto_applied',
+          decided_by: TRIAGE_ACTOR,
+          decided_at: new Date().toISOString(),
+          result_note: verdict.reason,
+        }).eq('id', p.id);
+        await logActivity(admin, {
+          entity_type: 'proposal', entity_id: p.id, actor: TRIAGE_ACTOR,
+          action: 'auto_apply', after: { class: verdict.classKey, reason: verdict.reason },
+        });
+      }
+      summary.items!.push({ id: p.id, type: p.type, title: titleOf(p), action: 'auto_apply', reason: verdict.reason, classKey: verdict.classKey });
       summary.applied++;
     } else {
       await ignore(p, verdict.reason, verdict.classKey);
@@ -476,16 +525,27 @@ export interface FullTriageSummary extends TriageSummary {
 
 export async function runFullTriage(
   admin: SupabaseClient,
-  opts?: { today?: string },
+  opts?: { today?: string; dryRun?: boolean },
 ): Promise<FullTriageSummary> {
+  // Inbox audit (2026-09-11): the sweep must never touch QA-project rows —
+  // they're deliberately left pending for testing (e.g. this session's own
+  // date-provenance QA proposals), and QA is not part of Noa's real queue
+  // anywhere else (My Work, Notes Center). Same pattern as
+  // lib/open-tasks.ts's selectOpenTasksExcludingTest.
+  const { data: testProjects } = await admin.from('projects').select('id').eq('is_test', true);
+  const testProjectIds = (testProjects ?? []).map((p: { id: string }) => p.id);
   const fetchPending = async (): Promise<AgentProposal[]> => {
-    const { data } = await admin.from('agent_proposals')
+    let query = admin.from('agent_proposals')
       .select('*').eq('state', 'pending')
       .order('created_at', { ascending: true }).limit(500);
+    if (testProjectIds.length) query = query.not('project_id', 'in', `(${testProjectIds.join(',')})`);
+    const { data } = await query;
     return (data ?? []) as AgentProposal[];
   };
   const before = await fetchPending();
   const pass = await runAutoTriage(admin, before, opts);
-  const after = await fetchPending();
+  // A dry run writes nothing, so re-fetching here would just return the same
+  // `before` set again — skip the redundant round trip and report it as-is.
+  const after = opts?.dryRun ? before : await fetchPending();
   return { ...pass, pendingBefore: before.length, pendingAfter: after.length };
 }
