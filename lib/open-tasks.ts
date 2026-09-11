@@ -36,8 +36,9 @@ export async function selectOpenTasksExcludingTest(
     const testProjectIds = (testProjects.data ?? []).map((p: { id: string }) => p.id);
     let query = admin.from('tasks').select('*').eq('status', 'open').eq('is_test', false);
     if (testProjectIds.length) {
-      // PostgREST "not in" filter syntax for a dynamic id list.
-      query = query.not('project_id', 'in', `(${testProjectIds.join(',')})`);
+      // PostgREST "not in" excludes NULL project_id rows entirely (NULL NOT IN (...) is
+      // neither true nor false), so OR in an explicit is-null branch to keep them.
+      query = query.or(`project_id.is.null,project_id.not.in.(${testProjectIds.join(',')})`);
     }
     const filtered = await query;
     if (!filtered.error) return filtered as PostgrestResponse<Task>;

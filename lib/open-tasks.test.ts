@@ -13,10 +13,13 @@ function fakeAdmin(opts: {
   tasks: FakeTask[];
   projects: FakeProject[];
 }) {
-  const buildTasks = (eqCalls: string[], notCalls: string[]) => {
+  const buildTasks = (eqCalls: string[], orExpr: string | null) => {
     const self = {
-      eq: (col: string, val: unknown) => buildTasks([...eqCalls, `${col}=${val}`], notCalls),
-      not: (col: string, _op: string, val: string) => buildTasks(eqCalls, [...notCalls, `${col}${val}`]),
+      eq: (col: string, val: unknown) => buildTasks([...eqCalls, `${col}=${val}`], orExpr),
+      // Mirrors the real `.or('project_id.is.null,project_id.not.in.(...)')` call —
+      // NULL project_id rows must be kept explicitly, matching PostgREST/SQL semantics
+      // where `NULL NOT IN (...)` is neither true nor false and drops the row.
+      or: (expr: string) => buildTasks(eqCalls, expr),
       then: (resolve: (v: { data: unknown; error: unknown }) => void) => {
         if (eqCalls.some((c) => c.startsWith('is_test=')) && !opts.columnsExist) {
           resolve({ data: null, error: { message: 'column tasks.is_test does not exist', code: '42703' } });
@@ -24,9 +27,9 @@ function fakeAdmin(opts: {
         }
         let rows = opts.tasks;
         if (eqCalls.includes('is_test=false')) rows = rows.filter((r) => !r.is_test);
-        const excludedProjectsCall = notCalls.find((c) => c.startsWith('project_id('));
-        if (excludedProjectsCall) {
-          const ids = excludedProjectsCall.slice('project_id('.length, -1).split(',');
+        if (orExpr) {
+          const notInMatch = orExpr.match(/project_id\.not\.in\.\(([^)]*)\)/);
+          const ids = notInMatch ? notInMatch[1].split(',') : [];
           rows = rows.filter((r) => !r.project_id || !ids.includes(r.project_id));
         }
         resolve({ data: rows, error: null });
@@ -47,7 +50,7 @@ function fakeAdmin(opts: {
   });
   const admin = {
     from: (table: string) => ({
-      select: () => (table === 'projects' ? buildProjects([]) : buildTasks([], [])),
+      select: () => (table === 'projects' ? buildProjects([]) : buildTasks([], null)),
     }),
   } as unknown as SupabaseClient;
   return { admin };
@@ -74,6 +77,21 @@ describe('selectOpenTasksExcludingTest', () => {
     const res = await selectOpenTasksExcludingTest(admin);
     expect(res.error).toBeNull();
     expect((res.data ?? []).map((r: { id: string }) => r.id)).toEqual(['real-1']);
+  });
+
+  it('keeps a task with no project (project_id null) when test projects exist — NULL NOT IN (...) must not silently drop it', async () => {
+    const { admin } = fakeAdmin({
+      columnsExist: true,
+      tasks: [
+        { id: 'real-1', project_id: 'p-real' },
+        { id: 'no-project', project_id: null },
+        { id: 'under-test-project', project_id: 'p-test' },
+      ],
+      projects: [{ id: 'p-real' }, { id: 'p-test', is_test: true }],
+    });
+    const res = await selectOpenTasksExcludingTest(admin);
+    expect(res.error).toBeNull();
+    expect((res.data ?? []).map((r: { id: string }) => r.id).sort()).toEqual(['no-project', 'real-1']);
   });
 
   it('falls back to the unfiltered query when the columns do not exist yet (pre-migration) — never returns zero tasks because of this', async () => {
