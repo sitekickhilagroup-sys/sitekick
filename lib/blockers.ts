@@ -84,6 +84,38 @@ function strongest(a: Blocker, b: Blocker): number {
   return b.days_stuck - a.days_stuck || b.days_at_risk - a.days_at_risk;
 }
 
+/**
+ * F-8: `days_stuck` is a static snapshot taken when the blocker was first
+ * discovered (an agent's or a seed's "already stuck N days when found"
+ * estimate) — nothing anywhere ever advances it afterward. Confirmed live:
+ * every active blocker's `days_stuck` is frozen at its creation-time value
+ * regardless of how many real days have since passed (one row created
+ * 2026-08-20, still reading `days_stuck=9` weeks later). This feeds not
+ * just display but `lib/priority.ts`'s scoring and this file's own
+ * `strongest()` sort — so a blocker stuck for a month can score/sort no
+ * differently than the day it was logged.
+ *
+ * Adds real elapsed time since creation to the original estimate, so the
+ * "already stuck N days when found" signal survives while the number
+ * actually grows. Pure — callers apply it once, right after fetching, via
+ * `withEffectiveDaysStuck` below, so every downstream reader (sort, score,
+ * digest, prioritize-tasks, UI) sees the corrected value automatically
+ * without having to know this correction exists.
+ */
+export function effectiveDaysStuck(b: Pick<Blocker, 'created_at' | 'days_stuck'>, today: string): number {
+  const elapsed = Math.max(0, Math.floor((Date.parse(today) - Date.parse(b.created_at.slice(0, 10))) / 86400000));
+  return b.days_stuck + elapsed;
+}
+
+/** Applies effectiveDaysStuck across a fetched blocker list, replacing the
+ *  stale stored value in place. The single place this correction happens —
+ *  not N separate call sites re-deriving it. */
+export function withEffectiveDaysStuck<T extends Pick<Blocker, 'created_at' | 'days_stuck'>>(
+  blockers: T[], today: string,
+): T[] {
+  return blockers.map((b) => ({ ...b, days_stuck: effectiveDaysStuck(b, today) }));
+}
+
 /** The mandatory test's first question: which exact stage cannot advance? A
  *  blocker naming neither a phase nor an active sub-stage cannot answer it. */
 function targetsCurrentStage(b: Blocker, ctx: StageContext): boolean {

@@ -4,6 +4,7 @@ import { runStructured, MODELS } from '../lib/claude.ts';
 import { scoreTask, IMPACT_WEIGHT } from '../lib/priority.ts';
 import { loadVerifiedNotes, renderVerifiedNotes } from '../lib/feedback-context.ts';
 import { selectOpenTasksExcludingTest } from '../lib/open-tasks.ts';
+import { withEffectiveDaysStuck } from '../lib/blockers.ts';
 import { PrioritizeResultSchema, type PrioritizeResult } from './schemas.ts';
 import type { Blocker, Project, Task } from '../lib/types.ts';
 
@@ -44,7 +45,7 @@ Rules:
 export interface PrioritizeContext {
   projects: Pick<Project, 'id' | 'name' | 'current_phase_key' | 'business_rank'>[];
   tasks: Task[];
-  blockers: Pick<Blocker, 'project_id' | 'what' | 'blocked_by' | 'kind' | 'days_stuck'>[];
+  blockers: Pick<Blocker, 'project_id' | 'what' | 'blocked_by' | 'kind' | 'days_stuck' | 'created_at'>[];
   today: string;
   /** Recent human pins — the correction signal the brief wants fed back. */
   pinned?: { title: string; manual_priority: number }[];
@@ -243,7 +244,7 @@ export async function runPrioritization(
   const [tasksQ, projectsQ, blockersQ, pinsQ] = await Promise.all([
     selectOpenTasksExcludingTest(admin),
     admin.from('projects').select('id,name,current_phase_key,business_rank'),
-    admin.from('blockers').select('project_id,what,blocked_by,kind,days_stuck').eq('status', 'active'),
+    admin.from('blockers').select('project_id,what,blocked_by,kind,days_stuck,created_at').eq('status', 'active'),
     // The correction signal: her current explicit pins ride into the prompt.
     admin.from('tasks').select('title,manual_priority').not('manual_priority', 'is', null)
       .eq('status', 'open').order('manual_priority', { ascending: true }).limit(10),
@@ -257,7 +258,11 @@ export async function runPrioritization(
   const result = await prioritizeTasks({
     projects: (projectsQ.data ?? []) as PrioritizeContext['projects'],
     tasks,
-    blockers: (blockersQ.data ?? []) as PrioritizeContext['blockers'],
+    // F-8: days_stuck as stored is a stale creation-time snapshot — without
+    // this, the model would be told a blocker is "9d" stuck when it's
+    // actually been 31, understating exactly the risk this ranking exists to
+    // surface. See lib/blockers.ts's effectiveDaysStuck.
+    blockers: withEffectiveDaysStuck((blockersQ.data ?? []) as PrioritizeContext['blockers'], today),
     today,
     pinned: (pinsQ.data ?? []) as { title: string; manual_priority: number }[],
     verifiedNotesBlock: renderVerifiedNotes(verifiedNotes),

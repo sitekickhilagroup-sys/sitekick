@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { runStructured } from '../lib/claude.ts';
 import { followUpAlerts, topActions } from '../lib/priority.ts';
 import { selectOpenTasksExcludingTest } from '../lib/open-tasks.ts';
+import { withEffectiveDaysStuck } from '../lib/blockers.ts';
 import type { Action, Blocker, Invoice, Project, ProjectStage, Relationship, Task } from '../lib/types.ts';
 
 const DigestSchema = z.object({ body_md: z.string().min(1) });
@@ -36,7 +37,10 @@ export async function buildDigest(
   const projects = (projectsQ.data ?? []) as Project[];
   const stages = (stagesQ.data ?? []) as ProjectStage[];
   const tasks = (tasksQ.data ?? []) as Task[];
-  const blockers = (blockersQ.data ?? []) as Blocker[];
+  // F-8: days_stuck as stored is a stale creation-time snapshot — the
+  // "What's stuck" section would otherwise quote a frozen number instead of
+  // the real elapsed time. See lib/blockers.ts's effectiveDaysStuck.
+  const blockers = withEffectiveDaysStuck((blockersQ.data ?? []) as Blocker[], forDate);
   const rowanInvoices = (invoicesQ.data ?? []) as Invoice[];
   const relationships = (relationshipsQ.data ?? []) as Relationship[];
 

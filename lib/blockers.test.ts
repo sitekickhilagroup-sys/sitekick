@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isBlockingTask, selectBlockerView } from './blockers';
+import { effectiveDaysStuck, isBlockingTask, selectBlockerView, withEffectiveDaysStuck } from './blockers';
 import type { Blocker, BlockerKind } from './types';
 
 // Synthetic rows — the audit's rules are about classification and evidence,
@@ -189,5 +189,34 @@ describe('selectBlockerView — counts', () => {
     const view = selectBlockerView(rows, { currentPhaseKey: null });
     expect(view.primary?.id).toBe('w');
     expect(view.counts.blocking).toBe(1);
+  });
+});
+
+describe('effectiveDaysStuck — F-8: days_stuck must not stay frozen at creation time', () => {
+  it('adds real elapsed days since creation to the original estimate', () => {
+    // Created 22 real days before "today", with an initial estimate of 9
+    // (the "already stuck 9 days when found" signal) — should now read 31.
+    const b = blocker({ id: 'x', days_stuck: 9, created_at: '2026-08-20T19:11:01Z' });
+    expect(effectiveDaysStuck(b, '2026-09-11')).toBe(31);
+  });
+
+  it('is a no-op on the day the blocker was created', () => {
+    const b = blocker({ id: 'x', days_stuck: 3, created_at: '2026-09-11T08:00:00Z' });
+    expect(effectiveDaysStuck(b, '2026-09-11')).toBe(3);
+  });
+
+  it('never goes negative even if created_at is somehow after today', () => {
+    const b = blocker({ id: 'x', days_stuck: 5, created_at: '2026-09-12T00:00:00Z' });
+    expect(effectiveDaysStuck(b, '2026-09-11')).toBe(5);
+  });
+
+  it('withEffectiveDaysStuck corrects every row without mutating the input', () => {
+    const rows = [
+      blocker({ id: 'a', days_stuck: 9, created_at: '2026-08-20T00:00:00Z' }),
+      blocker({ id: 'b', days_stuck: 0, created_at: '2026-09-07T00:00:00Z' }),
+    ];
+    const corrected = withEffectiveDaysStuck(rows, '2026-09-11');
+    expect(corrected.map((b) => b.days_stuck)).toEqual([31, 4]);
+    expect(rows[0].days_stuck).toBe(9); // original untouched
   });
 });

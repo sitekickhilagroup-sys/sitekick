@@ -22,6 +22,7 @@ import type { TaskEditorOptions } from '@/components/work/task-editor';
 import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relationship, SubstageTemplate, Task, TaskRank, Vendor, Workstream } from '@/lib/types';
 import { fmtDate } from '@/lib/format';
 import { ScrollToTask } from '@/components/work/scroll-to-task';
+import { withEffectiveDaysStuck } from '@/lib/blockers';
 
 export const dynamic = 'force-dynamic';
 // "Refresh priorities" is a server action invoked from this page — it runs the
@@ -101,7 +102,10 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ, substageTemplatesQ, workstreamsQ, closedQ, taskCommentsQ] = await Promise.all([
     supabase.from('tasks').select('*').eq('status', 'open'),
     supabase.from('projects').select('*'),
-    supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
+    // F-8: no longer ordered at the query level — days_stuck as stored is a
+    // stale creation-time snapshot (lib/blockers.ts's effectiveDaysStuck),
+    // so sorting happens in memory after the correction, below.
+    supabase.from('blockers').select('*').eq('status', 'active'),
     supabase.from('agent_proposals').select('id', { count: 'exact', head: true }).eq('state', 'pending'),
     supabase.from('invoices').select('amount_usd,vendor_id').eq('status', 'approved'),
     supabase.from('relationships').select('*'),
@@ -185,7 +189,8 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // Header claim (below) is computed from this, not asserted — Dor #47 saw
   // "Nothing is duplicated" above a real General/project duplicate pair.
   const dupPairs = findDuplicatePairs(dedupCandidates, allRels);
-  const blockers = (blockersQ.data ?? []) as Blocker[];
+  const blockers = withEffectiveDaysStuck((blockersQ.data ?? []) as Blocker[], today)
+    .sort((a, b) => b.days_stuck - a.days_stuck);
   // 0027 follow-up (Inbox audit): a QA-project proposal inflated this badge
   // and the /inbox list identically — neither had ever excluded test data,
   // unlike every other business surface (My Work's own task counts, Notes

@@ -1,7 +1,7 @@
 import { supabaseServer } from './supabase/server.ts';
 import { followUpAlerts, topActions } from './priority.ts';
 import { laToday } from './date.ts';
-import { selectBlockerView, type BlockerCounts } from './blockers.ts';
+import { selectBlockerView, withEffectiveDaysStuck, type BlockerCounts } from './blockers.ts';
 import { canonVendorName, vendorKey } from './invoice-rules.ts';
 import type {
   Action, Blocker, BlockerKind, Decision, Invoice, Phase, Project, ProjectEvent, ProjectStage,
@@ -86,7 +86,9 @@ export async function getOverviewData(): Promise<OverviewData> {
     supabase.from('project_events').select('*').order('created_at', { ascending: false }).limit(400),
     // Only open tasks are ever rendered/scored — don't ship done/dropped history.
     supabase.from('tasks').select('*').eq('status', 'open').order('created_at'),
-    supabase.from('blockers').select('*').eq('status', 'active').order('days_stuck', { ascending: false }),
+    // F-8: no longer ordered at the query level — see the sort applied after
+    // effectiveDaysStuck correction, below.
+    supabase.from('blockers').select('*').eq('status', 'active'),
     supabase.from('decisions').select('*').order('created_at', { ascending: false }).limit(30),
     // Open money + Rowan queue + the Budget intelligence tab (needs paid
     // rows too) — all computed in memory from one fetch.
@@ -110,7 +112,11 @@ export async function getOverviewData(): Promise<OverviewData> {
   const requirements = (reqsQ.data ?? []) as StageRequirement[];
   const events = ((eventsQ.data ?? []) as ProjectEvent[]).reverse();
   const tasks = (tasksQ.data ?? []) as Task[];
-  const blockers = (blockersQ.data ?? []) as Blocker[];
+  // F-8: days_stuck as stored is a stale creation-time snapshot — see
+  // effectiveDaysStuck's own doc comment. Corrected once, here, before any
+  // consumer below (worstBlocker's "already sorted days_stuck desc") reads it.
+  const blockers = withEffectiveDaysStuck((blockersQ.data ?? []) as Blocker[], laToday())
+    .sort((a, b) => b.days_stuck - a.days_stuck);
   const decisions = (decisionsQ.data ?? []) as Decision[];
   const invoices = (invoicesQ.data ?? []) as Pick<Invoice, 'project_id' | 'status' | 'amount_usd' | 'vendor_id'>[];
   const catalog = (catalogQ.data ?? []) as SubstageCatalogRow[];
