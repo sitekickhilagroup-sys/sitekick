@@ -104,12 +104,19 @@ export async function decideProposal(
   let effectiveTargetTaskId = p.target_task_id;
   if (edits.targetTaskId !== undefined) {
     effectiveTargetTaskId = edits.targetTaskId || null;
-    if (effectiveTargetTaskId) {
-      const { data: tt } = await admin.from('tasks')
-        .select('status,project_id').eq('id', effectiveTargetTaskId).maybeSingle();
-      const err = targetTaskError(tt as { status: string; project_id: string | null } | null, chosenProject);
-      if (err) return { error: err };
-    }
+  }
+  // Live-caught bug: this validation ran for EVERY decision, including
+  // 'pending' (the drawer's own "Restore to review" button) — so restoring
+  // a proposal back to pending silently failed the instant its target task
+  // was no longer open (e.g. right after Applying it, exactly when a human
+  // is most likely to want to undo). Restoring a proposal's own review
+  // state never touches the task at all; only an actual approve/apply
+  // needs the target to still be a valid, open task to write to.
+  if (decision === 'approved' && effectiveTargetTaskId) {
+    const { data: tt } = await admin.from('tasks')
+      .select('status,project_id').eq('id', effectiveTargetTaskId).maybeSingle();
+    const err = targetTaskError(tt as { status: string; project_id: string | null } | null, chosenProject);
+    if (err) return { error: err };
   }
 
   const patch: Record<string, unknown> = {
