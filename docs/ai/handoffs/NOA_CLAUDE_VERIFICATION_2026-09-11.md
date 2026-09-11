@@ -231,3 +231,37 @@ and editable on a screen, vs. an invisible prompt input only engineers can see)?
 anything in section D.1–D.3 that, once corrected, would change how you'd want the AI to prioritize
 or attribute work — anything where today's wrong assumption is actively causing bad suggestions you
 have to keep rejecting?
+
+---
+
+## Part E — Planned, NOT YET BUILT: "Report a problem" in the Notes Assistant
+
+**Status as of this writing: planned and agreed with Rotem, not built, not deployed.** This section
+is being sent to Noa before any code is written, at Rotem's explicit request — so she sees what's
+coming before it ships, not after.
+
+**What's changing for Noa:** the floating Notes Assistant she already uses (the 💬 button, bottom of
+every screen) gets a fourth option alongside Fact / Instruction / Preference: **"Report a problem."**
+Same place, same flow — she writes what happened in her own words; nothing new to learn.
+
+**What happens to a problem report after she sends it:**
+1. It's stored exactly like her other notes are today — nothing is silently acted on.
+2. **Twice a day**, an automated pass collects every new, not-yet-handled problem report and writes
+   ONE prioritized, plain-language document: what the problem is, a time estimate to fix it, and how
+   significant it is. Rotem can read this document whenever he asks for it — it's always current as
+   of the last twice-daily pass, not something he has to go hunting through raw notes for.
+3. **Hard boundary, by design:** that automated pass only ever WRITES the report. It never touches
+   code, never deploys anything, never fixes anything on its own. Rotem decides which items actually
+   get worked on and when — the same human-approval discipline every other part of this system
+   already follows (an AI suggestion is never a business action until a person says yes).
+
+**What this does NOT do (today, or as currently planned):** it does not send Rotem or anyone a live
+push notification the instant Noa writes something — the twice-daily pass is a check, not an alert.
+If instant notification ever matters, that's a separate, materially bigger piece of work (this system
+has no way to send outbound email/Slack/etc. today, only to receive incoming mail) — flagging this
+now so nobody assumes it already works that way once this ships.
+
+**Question for Noa (via her Claude):** is there anything about HOW she'd want to report a problem
+that this plan is missing — e.g., attaching a screenshot, rating the severity herself instead of
+leaving it to the automated pass, or wanting to be told once something she reported has actually been
+fixed? Any of these would be easy to fold in now, before it's built, rather than retrofitted later.
