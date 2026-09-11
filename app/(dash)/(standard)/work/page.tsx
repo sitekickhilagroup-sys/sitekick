@@ -175,10 +175,17 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // Center). Same pattern as selectOpenTasksExcludingTest (lib/open-tasks.ts):
   // resolve test project ids from data already loaded, then re-count without
   // them. Falls back to the unfiltered count on error, same as before.
+  //
+  // Live-caught bug in this same pass: a bare .not('project_id','in',(...))
+  // silently drops every row where project_id IS NULL too (standard SQL
+  // NULL-comparison semantics — `NULL NOT IN (...)` is neither true nor
+  // false) — dropped the 20 real "no project evidence, needs human
+  // attribution" proposals from the count, the exact items most needing
+  // review. .or() keeps null-project rows explicitly.
   const testProjectIds = projects.filter((p) => p.is_test).map((p) => p.id);
   const pendingProposalsQ = testProjectIds.length
     ? await supabase.from('agent_proposals').select('id', { count: 'exact', head: true })
-      .eq('state', 'pending').not('project_id', 'in', `(${testProjectIds.join(',')})`)
+      .eq('state', 'pending').or(`project_id.is.null,project_id.not.in.(${testProjectIds.join(',')})`)
     : proposalsQ;
   const pendingCount = pendingProposalsQ.count ?? 0;
   // Distinguish a true zero (queue empty) from a failed count load — the Agent

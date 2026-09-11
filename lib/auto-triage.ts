@@ -538,7 +538,11 @@ export async function runFullTriage(
     let query = admin.from('agent_proposals')
       .select('*').eq('state', 'pending')
       .order('created_at', { ascending: true }).limit(500);
-    if (testProjectIds.length) query = query.not('project_id', 'in', `(${testProjectIds.join(',')})`);
+    // Live-caught bug (same pass): a bare .not('project_id','in',(...))
+    // silently drops every project_id-IS-NULL row too (NULL NOT IN (...) is
+    // neither true nor false in SQL) — would have hidden every unattributed
+    // proposal from the sweep entirely. .or() keeps them explicitly.
+    if (testProjectIds.length) query = query.or(`project_id.is.null,project_id.not.in.(${testProjectIds.join(',')})`);
     const { data } = await query;
     return (data ?? []) as AgentProposal[];
   };

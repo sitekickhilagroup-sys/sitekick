@@ -191,6 +191,7 @@ export default async function InboxPage({ searchParams }: PageProps<'/inbox'>) {
     selectAll: t('review.select_all'), selectedN: t('review.selected_n'),
     bulkApprove: t('review.bulk_approve'), bulkIgnore: t('review.bulk_ignore'),
     triageNow: t('review.triage_now'), triageDone: t('review.triage_done'),
+    triagePreview: t('review.triage_preview'), triagePreviewDone: t('review.triage_preview_done'),
     fProject: t('common.project'), projectLearnHint: t('review.project_learn_hint'),
     match: t('review.match'), possibleDup: t('review.possible_dup'), noMatch: t('review.no_match'),
     general: t('common.general'), close: t('common.close'), error: t('common.error_save'),

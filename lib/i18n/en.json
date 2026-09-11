@@ -796,6 +796,8 @@
   "review.bulk_ignore": "Ignore selected",
   "review.triage_now": "Auto-triage now",
   "review.triage_done": "Auto-triage: {applied} applied, {ignored} ignored, {kept} left for review",
+  "review.triage_preview": "Preview (no changes)",
+  "review.triage_preview_done": "Preview of {before} pending: would apply {applied}, would ignore {ignored}, {kept} would stay for review — nothing was changed",
   "review.project_learn_hint": "Picking a project here teaches the system — the same vendor or subject will be filed there automatically next time.",
   "review.done_applied": "Task updated from the suggestion",
   "review.done_rejected": "Marked: the agent was wrong",

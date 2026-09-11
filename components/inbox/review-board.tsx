@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { autoTriagePending, decideProposal, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
+import { autoTriagePending, decideProposal, previewAutoTriage, undoProposalDecision, type ReviewDecision } from '@/app/actions/proposals';
 import type { ChangeType, ProposalState, ProposalType } from '@/lib/types';
 import { NEEDS_MATCH, selectableTasksFor, treatmentsFor, updateFieldsPreview } from '@/lib/review-treatments';
 import { titleSimilarity } from '@/lib/dedup';
@@ -336,6 +336,23 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
     });
   });
 
+  // Rotem's explicit ask: prove the sweep's effect before ever running it
+  // for real. Writes nothing at all — safe to call against the real
+  // backlog any time, not just QA.
+  const triagePreview = () => start(async () => {
+    const res = await previewAutoTriage();
+    if ('error' in res) { setToast({ text: labels.error, undoId: null }); return; }
+    console.log('[auto-triage preview]', res.items);
+    setToast({
+      text: (labels.triagePreviewDone ?? '')
+        .replace('{before}', String(res.pendingBefore))
+        .replace('{applied}', String(res.wouldApply))
+        .replace('{ignored}', String(res.wouldIgnore))
+        .replace('{kept}', String(res.wouldStayForReview)),
+      undoId: null,
+    });
+  });
+
   const toggle = (id: string) => setChecked((prev) => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -395,8 +412,14 @@ export function ReviewBoard({ rows, projects, openTasks, phases, substages, labe
                 </>
               )}
               <button
+                type="button" disabled={pending} onClick={triagePreview}
+                className="ms-auto min-h-11 cursor-pointer rounded-[9px] border border-line px-3 py-1.5 text-xs font-semibold text-ink2 disabled:opacity-50"
+              >
+                {labels.triagePreview ?? 'Preview'}
+              </button>
+              <button
                 type="button" disabled={pending} onClick={triageNow}
-                className="ms-auto min-h-11 cursor-pointer rounded-[9px] border border-sage-line bg-sage-soft px-3 py-1.5 text-xs font-semibold text-sage disabled:opacity-50"
+                className="min-h-11 cursor-pointer rounded-[9px] border border-sage-line bg-sage-soft px-3 py-1.5 text-xs font-semibold text-sage disabled:opacity-50"
               >
                 {labels.triageNow}
               </button>

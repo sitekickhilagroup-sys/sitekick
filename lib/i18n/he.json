@@ -796,6 +796,8 @@
   "review.bulk_ignore": "התעלם מהנבחרים",
   "review.triage_now": "טריאז׳ אוטומטי עכשיו",
   "review.triage_done": "טריאז׳: {applied} הוחלו, {ignored} סוננו, {kept} נשארו לבדיקה",
+  "review.triage_preview": "תצוגה מקדימה (בלי שינוי)",
+  "review.triage_preview_done": "תצוגה מקדימה מתוך {before} ממתינים: {applied} היו מוחלים, {ignored} היו מסוננים, {kept} היו נשארים לבדיקה — שום דבר לא השתנה",
   "review.project_learn_hint": "בחירת פרויקט כאן מלמדת את המערכת — אותו ספק או נושא יתויק לשם אוטומטית בפעם הבאה.",
   "review.done_applied": "המשימה עודכנה לפי ההצעה",
   "review.done_rejected": "סומן: הסוכן טעה",
