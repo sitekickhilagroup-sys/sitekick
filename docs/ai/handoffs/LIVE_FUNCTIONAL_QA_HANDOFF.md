@@ -140,9 +140,70 @@ itself (only the safe dry-run preview and QA-only exclusion were exercised) — 
 against the 99 real items is a decision for Rotem/Noa, not something to trigger unilaterally in a
 diagnostic pass.
 
-**Not yet reached this pass:** item 2 (QA regression pass on My Work — Add Action, field edits,
-Done/Reopen, two-tab concurrent-edit conflict, Undo/Undo-of-undo) — pending remaining time in this
-session.
+### Item 2 — QA regression pass on My Work: representative subset LIVE-PASS, no regressions found
+
+Used only the two existing QA tasks (`0656c6be-…`, and a freshly-created `f2d68188-…` for the
+create/reload test) under the QA project. No business record touched.
+
+- **Add Action → Save → full reload → reopen**: created `f2d68188-…` (title, owner, due,
+  waiting_for) → verified via SQL immediately, then `location.reload(true)` + reopened via
+  `#task-<id>` hash link → all fields intact — **LIVE-PASS**.
+- **Every Edit-details field in one pass**: renamed title, owner, due (2026-10-15→2026-11-01,
+  correctly stamped `due_provenance='explicit'`), Phase→Financing→Sub-stage(Loan application),
+  Impact→Verify, Category→Administrative → Save → full reload → reopen → SQL confirmed every field
+  exactly — **LIVE-PASS**. Then Phase→Plan Check: Sub-stage correctly cleared to "—" and repopulated
+  with Plan Check's own list (Loan application gone) — the stale-substage-clear fix still holds —
+  **LIVE-PASS**.
+- **Done → Reopen, reflected across views**: "Mark completed? Press again" confirm-guard fired;
+  My Work counters moved exactly as expected (All 137→136, Completed 75→76); task appeared at the
+  top of Completed with a DONE badge, correct project/date/owner; Reopen → SQL confirmed
+  `status='open'`, All/Completed counters reverted correctly — **LIVE-PASS**.
+- **Persistent Undo (History panel) restores due_provenance correctly — the exact scenario the
+  UNDO_RESTORE_KEYS fix targets**: on `0656c6be-…` (`due_provenance='derived'` from item 0's earlier
+  test), reopened via History's Undo on the newest "Reopened" entry → status correctly reverted to
+  `done`, due/provenance fields untouched (correctly, since that action never touched them) —
+  **LIVE-PASS**.
+- **Toast Undo, the higher-value test**: used "Delayed to…" to set an explicit date on the same
+  `derived`-provenance task (`due_provenance` correctly flipped to `'explicit'`), then clicked the
+  toast's Undo → SQL confirmed **all four fields reverted together**: `due=2026-09-25`,
+  `due_provenance='derived'`, `due_source_document_id` and `due_source_date` both restored exactly —
+  **LIVE-PASS**. Without today's `UNDO_RESTORE_KEYS` fix this would have left `due` correctly
+  reverted but `due_provenance` stuck at the stale `'explicit'` — confirms the fix was a real,
+  necessary correction, not a defensive no-op.
+- **Two-tab concurrent-edit conflict guard, real race**: opened Edit details in tab A (captures
+  baseVersion), used "Add note" in tab B on the same task (genuinely concurrent write), then saved
+  an Owner edit on tab A's now-stale form → **"This task changed since you opened it — refresh to
+  see the latest before saving."** shown inline, drawer stayed open, typed edit preserved on screen.
+  SQL confirmed: `owner` still the pre-edit value (tab A's stale write never landed), `latest_note`
+  exactly tab B's write, zero data loss — **LIVE-PASS**, no regression from today's changes.
+
+**Not reached this pass (time-boxed, not skipped silently):** Undo-of-undo chain (only single-level
+Undo was exercised); confirming an undone decision is excluded from `priority_feedback` learning
+(structurally unchanged by today's work, but not re-clicked live this pass); Workstream field (the
+QA project has no workstream options configured, so this field can't be meaningfully exercised
+against it); QA's effect on Overview/business counters beyond Agent Review (already known and
+tracked separately — Noa's F-6, not touched today, out of this session's bounded scope).
+
+## Summary for the next hour
+
+- **Production**: `b72c950` deployed and live-verified (this session's last several commits:
+  `3043568`→`b72c950`, date provenance + Inbox audit fixes). Rollback: `git revert` or redeploy an
+  earlier commit to `origin/main`, same pattern used successfully all session.
+- **Agent Review**: 99 real pending items for Noa (down from a nominal ~101 that included 2 QA test
+  proposals). None are duplicates, none target a closed/vanished task. The dry-run preview proved,
+  live, that **zero of the 99 currently qualify for auto-apply or auto-ignore** — every one
+  genuinely needs a human decision today, by the system's own "learning only" design. 58 are from
+  the 9/10 import-queue drain, 41 from 9/11's; 20 have no project attribution at all (previously
+  hidden by a bug introduced and fixed within this same session — see item 1).
+- **Not yet functionally verified this session**: the stale AI-reasoning-text residual on
+  Greg/Rinconia (needs a fresh prioritization run — a separate, bigger action, deliberately not
+  triggered); running the real (non-dry) "Auto-triage now" sweep for real; Undo-of-undo;
+  Notes Center, Project Process consistency, duplicate/dedup safety, digest freshness, import-queue
+  cron firing, and the full 32-item acceptance matrix — none of these were in this hour's scope.
+- **Exact next task**: Product Owner decides whether to (a) trigger a fresh prioritization run to
+  clear the one residual "committed" sentence and verify the new reasoning rules system-wide, or
+  (b) move to the next bounded item (Notes Center write path, duplicate/dedup safety, or the
+  flagged `task_ae4422a2` NULL-project-id bug in `selectOpenTasksExcludingTest`).
 
 Scoped task: implement explicit/derived/unresolved date provenance, source-document/date storage,
 and consistent Details/My-Work-reasoning/Due-Overdue display, using the Greg/Rinconia record as the
