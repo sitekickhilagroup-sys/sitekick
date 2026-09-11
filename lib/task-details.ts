@@ -63,6 +63,15 @@ export function buildDetailsPatch(patch: TaskDetailsPatch): { clean: Record<stri
     clean.title = t;
   }
   if (clean.due != null && !DATE_RE.test(String(clean.due))) return { error: 'invalid date' };
+  // 0027: a human typing a due date directly into Edit details is as
+  // confirmed as a date gets — no hedge language, no relative-date guess to
+  // resolve. Stamp it 'explicit' with no document source; clearing the field
+  // clears the classification along with it (nothing left to classify).
+  if ('due' in clean) {
+    clean.due_provenance = clean.due != null ? 'explicit' : null;
+    clean.due_source_document_id = null;
+    clean.due_source_date = null;
+  }
   if (clean.process_impact != null && !PROCESS_IMPACTS.includes(clean.process_impact as NonNullable<Task['process_impact']>)) {
     return { error: 'invalid impact' };
   }

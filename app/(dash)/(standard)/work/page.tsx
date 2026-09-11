@@ -451,8 +451,13 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
     // precedence over the legacy heuristic (0013_task_process_impact.sql),
     // and this must agree with the row's own Blocking badge (work-table-row.tsx).
     if (isBlockingTask(task)) parts.push(t('work.blocking'));
-    if (task.due && task.due < today) parts.push(t('work.due.overdue'));
-    else if (task.due === today) parts.push(t('work.due.now'));
+    // 0027: a derived/unresolved due date is an estimate, not a deadline —
+    // it must never read as "Overdue"/"Now" here, the same guard
+    // work-table-row.tsx's Due badge applies. Legacy null provenance (every
+    // task before this feature) keeps today's behavior unchanged.
+    const dueIsUnconfirmed = task.due_provenance === 'derived' || task.due_provenance === 'unresolved';
+    if (task.due && task.due < today) parts.push(dueIsUnconfirmed ? t('work.due.estimated') : t('work.due.overdue'));
+    else if (task.due === today) parts.push(dueIsUnconfirmed ? t('work.due.estimated') : t('work.due.now'));
     if ((task.follow_up_date && task.follow_up_date <= today) || (task.check_back_on && task.check_back_on <= today)) {
       parts.push(t('work.why.followup'));
     }
@@ -463,6 +468,10 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const rowLabels = {
     dueNow: t('work.due.now'),
     dueOverdue: t('work.due.overdue'),
+    dueEstimated: t('work.due.estimated'),
+    dueUnresolved: t('work.due.unresolved'),
+    dueProvenanceDerived: t('work.due_provenance.derived'),
+    dueProvenanceUnresolved: t('work.due_provenance.unresolved'),
     blocking: t('work.blocking'),
     // Reused as the per-cell labels below lg, where the column header row is
     // hidden and each field has to name itself.

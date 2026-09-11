@@ -49,9 +49,17 @@ interface Props {
 // Below lg everything stacks; the columns only exist on wide screens.
 export function WorkTableRow({ task, labels, relations, taskOptions, editorOptions, today, rank, urgency, whyNow, unlocks, phaseLabel, stageLabel, projectHref, highlight }: Props) {
   const [open, setOpen] = useState(false);
-  const dueState = task.due && today
+  const rawDueState = task.due && today
     ? task.due < today ? 'overdue' : task.due === today ? 'now' : 'future'
     : task.due ? 'future' : null;
+  // 0027: a derived/unresolved due is an estimate, not a deadline — it must
+  // never render as the alarming Overdue/Now treatment. Legacy null
+  // provenance (every task before this feature) keeps today's exact
+  // behavior; only a due explicitly tagged non-'explicit' softens.
+  const dueUnconfirmed = task.due_provenance === 'derived' || task.due_provenance === 'unresolved';
+  const dueState = dueUnconfirmed && (rawDueState === 'overdue' || rawDueState === 'now')
+    ? 'estimated' as const
+    : rawDueState;
   // Impact on process, not urgency. Falls back to priority only while the task
   // is unclassified — see isBlockingTask.
   const blocking = isBlockingTask(task);
@@ -156,13 +164,22 @@ export function WorkTableRow({ task, labels, relations, taskOptions, editorOptio
             {labels.colDue}
           </span>
           {dueState === 'overdue' && (
-            <span className="rounded-[6px] bg-sk-salmon px-2 py-0.5 font-mono text-[10px] text-sk-salmon-text">{labels.dueOverdue ?? fmtDate(task.due)}</span>
+            <span className="rounded-[6px] bg-sk-salmon px-2 py-0.5 font-mono text-[10px] text-sk-salmon-text">{labels.dueOverdue ?? 'Overdue'} · {fmtDate(task.due)}</span>
           )}
           {dueState === 'now' && (
-            <span className="rounded-[6px] bg-sk-amber-halo px-2 py-0.5 font-mono text-[10px] text-sk-amber">{labels.dueNow ?? fmtDate(task.due)}</span>
+            <span className="rounded-[6px] bg-sk-amber-halo px-2 py-0.5 font-mono text-[10px] text-sk-amber">{labels.dueNow ?? 'Now'} · {fmtDate(task.due)}</span>
           )}
           {dueState === 'future' && (
             <span className="whitespace-nowrap font-mono text-[10px] text-sk-text">{fmtDate(task.due)}</span>
+          )}
+          {/* 0027: an estimate/unconfirmed date never gets the alarming
+              Overdue/Now treatment — muted, and always names the date
+              instead of hiding behind a single word (Noa's F-3). */}
+          {dueState === 'estimated' && (
+            <span className="rounded-[6px] bg-inset px-2 py-0.5 font-mono text-[10px] text-ink3">
+              {task.due_provenance === 'unresolved' ? (labels.dueUnresolved ?? 'Unconfirmed') : (labels.dueEstimated ?? 'Estimated')}
+              {task.due ? ` · ${fmtDate(task.due)}` : ''}
+            </span>
           )}
         </div>
 
@@ -201,6 +218,16 @@ export function WorkTableRow({ task, labels, relations, taskOptions, editorOptio
             <section>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.evidence}</p>
               <p className="mt-1">{task.source ?? labels.noEvidence}{whyNow ? ` · ${whyNow}` : ''}</p>
+              {/* 0027: an estimate must always name itself as one — never
+                  let a derived guess or an unclassified-conflict date read
+                  as settled fact in the same place Noa reads reasoning. */}
+              {task.due && task.due_provenance && task.due_provenance !== 'explicit' && (
+                <p className="mt-1 text-ink3">
+                  {task.due_provenance === 'derived'
+                    ? (labels.dueProvenanceDerived ?? '').replace('{date}', task.due_source_date ? fmtDate(task.due_source_date) : '?')
+                    : labels.dueProvenanceUnresolved}
+                </p>
+              )}
             </section>
             <section>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{labels.relationship}</p>

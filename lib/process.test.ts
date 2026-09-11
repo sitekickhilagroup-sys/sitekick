@@ -22,6 +22,7 @@ function task(over: Partial<Task> & { id: string }): Task {
     merged_into: null, merged_at: null, merged_by: null, latest_note: null,
     substage_template_id: null, workstream_id: null, category: 'project',
     is_test: false,
+    due_provenance: null, due_source_document_id: null, due_source_date: null,
     ...over,
   };
 }

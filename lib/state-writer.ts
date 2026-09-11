@@ -2,8 +2,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { matchExistingTask } from './dedup.ts';
 import { BLOCKER_KINDS } from './blockers.ts';
+import { laDate } from './date.ts';
 import type { BlockerKind } from './types.ts';
 import type { AgentProposal, Task } from './types.ts';
+
+/** 0027: the SOURCE communication's own date for a proposal's document, if
+ *  any — lets a viewer see how stale a derived/unresolved due estimate is,
+ *  independent of what `due` itself now holds. Null when the proposal has no
+ *  linked document (e.g. a manually-typed correction). */
+async function resolveDueSourceDate(admin: SupabaseClient, documentId: string | null): Promise<string | null> {
+  if (!documentId) return null;
+  const { data } = await admin.from('documents').select('received_at').eq('id', documentId).maybeSingle();
+  return data?.received_at ? laDate(data.received_at as string) : null;
+}
 
 /**
  * The newest activity_log row id for one entity — the concurrency guard a
@@ -87,6 +98,16 @@ export async function applyProposal(
       if (pay[k] !== undefined && pay[k] !== null) patch[k] = pay[k];
     }
     if (pay.waiting_for !== undefined) patch.waiting_for = (pay.waiting_for as string) || null;
+    // 0027: a human just approved this due date (a human reviewing and
+    // accepting the proposal is itself the confirmation), but the value
+    // underneath may still only be an estimate the extractor tagged
+    // 'derived'/'unresolved' — record that instead of assuming 'explicit'
+    // just because a human clicked Approve on the proposal as a whole.
+    if (patch.due !== undefined) {
+      patch.due_provenance = (pay.due_provenance as string | undefined) ?? 'unresolved';
+      patch.due_source_document_id = p.document_id ?? null;
+      patch.due_source_date = await resolveDueSourceDate(admin, p.document_id);
+    }
     const { data: before } = await admin.from('tasks').select('*').eq('id', p.target_task_id).maybeSingle();
     const { error } = await admin.from('tasks').update(patch).eq('id', p.target_task_id);
     if (error) return { error: error.message };
@@ -139,9 +160,21 @@ export async function applyProposal(
       (open ?? []) as Task[],
     );
     if (!match) return { error: 'no matching open task' };
-    const { error } = await admin.from('tasks').update({ due: pay.new_due, last_touched: today }).eq('id', match.id);
+    // 0027: same reasoning as task_update above — approving the proposal
+    // confirms the CHANGE, not that the underlying date is an explicit
+    // commitment; carry the extractor's own tag through, conservatively
+    // defaulting to 'unresolved' rather than assuming 'explicit'.
+    const dueProvenance = (pay.due_provenance as string | undefined) ?? 'unresolved';
+    const dueSourceDate = await resolveDueSourceDate(admin, p.document_id);
+    const patch = {
+      due: pay.new_due, last_touched: today,
+      due_provenance: dueProvenance,
+      due_source_document_id: p.document_id ?? null,
+      due_source_date: dueSourceDate,
+    };
+    const { error } = await admin.from('tasks').update(patch).eq('id', match.id);
     if (error) return { error: error.message };
-    await logActivity(admin, { entity_type: 'task', entity_id: match.id, actor, action: 'accept:deadline_update', after: { due: pay.new_due } });
+    await logActivity(admin, { entity_type: 'task', entity_id: match.id, actor, action: 'accept:deadline_update', after: patch });
     return { ok: true };
   }
   if (p.type === 'relationship_create') {

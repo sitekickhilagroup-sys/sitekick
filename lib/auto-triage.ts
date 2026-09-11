@@ -131,10 +131,27 @@ export function isSafeEnrichment(payload: Record<string, unknown>, task: TargetT
   if (s(payload.status) === 'done') return false;                         // closing needs a human (or a learned class)
   const due = s(payload.due);
   if (due && task.due && due !== task.due) return false;                  // moves a real date
+  // 0027: filling a previously-empty due is still genuinely NEW information
+  // (re-asserting the SAME value below is a no-op either way), and it only
+  // auto-applies structurally when the model itself tagged it 'explicit'. A
+  // derived/unresolved/untagged due is exactly the "silent estimate becomes
+  // a business Due date" case this migration exists to prevent.
+  if (due && !task.due && s(payload.due_provenance) !== 'explicit') return false;
   const owner = s(payload.owner);
   if (owner && task.owner && owner.toLowerCase() !== task.owner.trim().toLowerCase()) return false;
   if (s(payload.priority) === 'critical' && task.priority !== 'critical') return false; // escalation
   return true;
+}
+
+/** True when a proposal asserts a due-date value (task_update/task_done's
+ *  `due`, or deadline_update's `new_due`) without the model having tagged it
+ *  'explicit'. Gates the LEARNED auto-apply threshold below — a class can
+ *  earn a high acceptance rate for good reasons (Noa reliably approves real
+ *  date moves) while still containing individual derived/unconfirmed
+ *  guesses that must not ride along into an automatic write. */
+function assertsUnconfirmedDue(type: string, payload: Record<string, unknown>): boolean {
+  const dueValue = type === 'deadline_update' ? s(payload.new_due) : s(payload.due);
+  return !!dueValue && s(payload.due_provenance) !== 'explicit';
 }
 
 /** PROVABLE no-op: every field the update asserts is either empty or exactly
@@ -179,6 +196,13 @@ export function classifyProposal(
     if (st.accepted / st.n >= AUTO_APPLY_RATE) {
       if ((p.type === 'task_update' || p.type === 'task_done') && (!targetTask || targetTask.status !== 'open')) {
         return { action: 'review', reason: 'learned-accept class but the target task is not open', classKey };
+      }
+      // 0027: the class overall being trustworthy (Noa usually accepts
+      // "dates" moves) does not make THIS instance's date trustworthy — an
+      // unconfirmed/derived date must still reach a human even inside an
+      // otherwise-auto-applying class.
+      if (assertsUnconfirmedDue(p.type, pay)) {
+        return { action: 'review', reason: 'learned-accept class, but this date is derived/unconfirmed — needs human confirmation', classKey };
       }
       return { action: 'auto_apply', reason: `learned: ${st.accepted}/${st.n} of this class accepted`, classKey };
     }

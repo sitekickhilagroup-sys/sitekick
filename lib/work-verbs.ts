@@ -25,7 +25,10 @@ export function verbToPatch(
     case 'delayed':
     case 'scheduled':
       if (!DATE_RE.test(text)) return { error: 'invalid date' };
-      return { patch: { due: text, ...base }, action };
+      // 0027: a human typing a date directly into this verb is as confirmed
+      // as Edit details' own due field — see lib/task-details.ts's identical
+      // stamp for the same reasoning.
+      return { patch: { due: text, due_provenance: 'explicit', due_source_document_id: null, due_source_date: null, ...base }, action };
     case 'note':
       if (!text) return { error: 'input required' };
       return { patch: { latest_note: text, ...base }, action };
@@ -41,6 +44,10 @@ export const UNDO_RESTORE_KEYS = [
   // title + category are editable in Edit details, so an Undo of a rename or a
   // category change must be able to restore them from the snapshot too.
   'title', 'category',
+  // 0027: `due`'s classification travels with it — an Undo that restores an
+  // older due date without also restoring its provenance/source would leave
+  // the row showing the NEW date's metadata against the OLD date's value.
+  'due_provenance', 'due_source_document_id', 'due_source_date',
 ] as const;
 
 /**

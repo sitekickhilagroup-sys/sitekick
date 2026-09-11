@@ -46,9 +46,15 @@ describe('buildDetailsPatch', () => {
   });
 
   it('accepts a YYYY-MM-DD due date, rejects a malformed one, allows clearing to null', () => {
-    expect(buildDetailsPatch({ due: '2026-09-01' })).toEqual({ clean: { due: '2026-09-01' } });
+    // 0027: a human typing a due date directly is stamped 'explicit' with no
+    // document source — see the identical stamp in lib/work-verbs.ts.
+    expect(buildDetailsPatch({ due: '2026-09-01' })).toEqual({
+      clean: { due: '2026-09-01', due_provenance: 'explicit', due_source_document_id: null, due_source_date: null },
+    });
     expect(buildDetailsPatch({ due: 'not-a-date' })).toEqual({ error: 'invalid date' });
-    expect(buildDetailsPatch({ due: null })).toEqual({ clean: { due: null } });
+    expect(buildDetailsPatch({ due: null })).toEqual({
+      clean: { due: null, due_provenance: null, due_source_document_id: null, due_source_date: null },
+    });
   });
 
   it('accepts any of the six impact values, rejects anything else, allows clearing to null', () => {
@@ -72,6 +78,7 @@ describe('buildDetailsPatch', () => {
       clean: {
         owner: 'Rowan', waiting_for: 'City', due: '2026-09-01', project_id: 'p1',
         substage_template_id: 's1', workstream_id: 'w1', process_impact: 'verify',
+        due_provenance: 'explicit', due_source_document_id: null, due_source_date: null,
       },
     });
   });

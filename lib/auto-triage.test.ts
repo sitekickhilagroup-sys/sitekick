@@ -25,8 +25,17 @@ const openTask = (over: Partial<T> = {}): T => ({
 const noStats = new Map<string, ClassStats>();
 
 describe('isSafeEnrichment', () => {
-  it('accepts pure additions — description, waiting_for, filling an empty due', () => {
-    expect(isSafeEnrichment({ description: 'x', waiting_for: 'Rowan', due: '2026-09-01' }, openTask())).toBe(true);
+  it('accepts pure additions — description, waiting_for', () => {
+    expect(isSafeEnrichment({ description: 'x', waiting_for: 'Rowan' }, openTask())).toBe(true);
+  });
+  // 0027: filling a previously-empty due is only a safe structural
+  // enrichment when the model tagged it 'explicit' — an untagged (or
+  // derived/unresolved) due is exactly the "silent estimate becomes a
+  // business Due date" gap this migration exists to close.
+  it('filling an empty due needs due_provenance explicit — untagged is not safe', () => {
+    expect(isSafeEnrichment({ due: '2026-09-01' }, openTask())).toBe(false);
+    expect(isSafeEnrichment({ due: '2026-09-01', due_provenance: 'derived' }, openTask())).toBe(false);
+    expect(isSafeEnrichment({ due: '2026-09-01', due_provenance: 'explicit' }, openTask())).toBe(true);
   });
   it('rejects closing, moving a real date, flipping owner, escalating to critical', () => {
     expect(isSafeEnrichment({ status: 'done' }, openTask())).toBe(false);
@@ -127,14 +136,29 @@ describe('learned class thresholds', () => {
   it('accepted due-moves teach due-moves — and only due-moves', () => {
     const dueMoves: HistoryRow[] = Array.from({ length: 6 }, () => ({
       type: 'task_update', reasoning: 'model matched existing task', state: 'accepted',
-      decided_by: 'noa@x.com', payload: { due: '2026-09-05' },
+      decided_by: 'noa@x.com', payload: { due: '2026-09-05', due_provenance: 'explicit' },
     }));
     const stats = computeClassStats(dueMoves);
     // a due-move now auto-applies (learned)…
-    expect(classifyProposal(matchedUpdate({ due: '2026-09-09' }), openTask({ due: '2026-09-01' }), stats).action)
+    expect(classifyProposal(matchedUpdate({ due: '2026-09-09', due_provenance: 'explicit' }), openTask({ due: '2026-09-01' }), stats).action)
       .toBe('auto_apply');
     // …but a completion learned nothing from it
     expect(classifyProposal({ ...matchedUpdate({ status: 'done' }), type: 'task_done' }, openTask(), stats).action)
+      .toBe('review');
+  });
+  // 0027: the CLASS being trustworthy (Noa reliably accepts "dates" moves)
+  // must not carry an individual unconfirmed date past a human — even
+  // inside an otherwise-85%+-accepted class, an untagged/derived due move
+  // still needs review.
+  it('a learned-accept due-move class still sends an unconfirmed date to review', () => {
+    const dueMoves: HistoryRow[] = Array.from({ length: 6 }, () => ({
+      type: 'task_update', reasoning: 'model matched existing task', state: 'accepted',
+      decided_by: 'noa@x.com', payload: { due: '2026-09-05', due_provenance: 'explicit' },
+    }));
+    const stats = computeClassStats(dueMoves);
+    expect(classifyProposal(matchedUpdate({ due: '2026-09-09' }), openTask({ due: '2026-09-01' }), stats).action)
+      .toBe('review');
+    expect(classifyProposal(matchedUpdate({ due: '2026-09-09', due_provenance: 'derived' }), openTask({ due: '2026-09-01' }), stats).action)
       .toBe('review');
   });
   it('≥85% rejection auto-ignores, and agent decisions never teach', () => {

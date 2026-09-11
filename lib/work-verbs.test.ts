@@ -16,8 +16,11 @@ describe('verbToPatch', () => {
     expect(verbToPatch('waiting', '  ', TODAY)).toEqual({ error: 'input required' });
   });
   it('delayed/scheduled require a YYYY-MM-DD date and set due', () => {
+    // 0027: a human typing this date directly is stamped 'explicit' with no
+    // document source — same reasoning as Edit details' own due field.
     expect(verbToPatch('delayed', '2026-09-01', TODAY)).toEqual({
-      patch: { due: '2026-09-01', last_touched: TODAY }, action: 'verb:delayed',
+      patch: { due: '2026-09-01', due_provenance: 'explicit', due_source_document_id: null, due_source_date: null, last_touched: TODAY },
+      action: 'verb:delayed',
     });
     expect(verbToPatch('scheduled', 'not-a-date', TODAY)).toEqual({ error: 'invalid date' });
   });

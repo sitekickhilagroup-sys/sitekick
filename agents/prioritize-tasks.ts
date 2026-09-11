@@ -25,7 +25,7 @@ You receive every OPEN task (grouped by project) plus each project's phase, acti
 Score every task 0-100 for "how urgent is it to act on this TODAY", assign an urgency tier, and give ONE short reason grounded in that task's own facts.
 
 Ranking factors, in rough weight order:
-1. HARD DEADLINES — permit/plan-check expirations, city appointment dates, payment due dates. Overdue or ≤7 days out dominates everything. A dated commitment inside the next 48 hours outranks ANY undated blocker, however severe — an undated blocker is still there the day after tomorrow; a missed filing fee is not. Among "now" items, earlier hard date first.
+1. HARD DEADLINES — permit/plan-check expirations, city appointment dates, payment due dates. Overdue or ≤7 days out dominates everything. A dated commitment inside the next 48 hours outranks ANY undated blocker, however severe — an undated blocker is still there the day after tomorrow; a missed filing fee is not. Among "now" items, earlier hard date first. A due date tagged (derived) or (unresolved) in the task line below is NOT a hard deadline — it is someone's estimate or an unconfirmed date, not a confirmed commitment. Never call such a task "Overdue" or "committed" in your reason; weight it far below a genuinely (explicit) or untagged date, and phrase it with the source's own hedge language (can have / expects / targeting) if the description carries it.
 2. BLOCKS THE PROCESS — the task stops a phase/sub-stage from advancing (process_impact primary_blocker/workstream_blocker, or it feeds an active blocker's release).
 3. FINANCIAL / LEGAL RISK — claims, disputed payments, expiring extensions, penalties, anything with a dollar amount and a counterparty.
 4. UNBLOCKS OTHERS — completing it releases other listed tasks (dependencies).
@@ -35,7 +35,7 @@ Ranking factors, in rough weight order:
 Tiers: "now" = act today, deadline-critical or blocking (top ~5-8 tasks overall). "high" = this week. "medium" = soon, nothing forces it. "low" = background/paperwork with no time pressure.
 
 Rules:
-- REASON: one tight sentence, concrete facts from the task itself ("PC extension expires 9/1 — filing appointment must precede it"), never generic filler ("this is important").
+- REASON: one tight sentence, concrete facts from the task itself ("PC extension expires 9/1 — filing appointment must precede it"), never generic filler ("this is important"). Never upgrade an estimate into a commitment: if the task's own facts say someone "can have"/"expects"/"is targeting" a date, your reason must use that same hedge — never "committed", "confirmed" or "will". Never call a (derived) or (unresolved) due date "Overdue" — say it plainly ("estimated due date has passed, not confirmed") instead.
 - Use the engine_score hint as a starting signal but override it when the text says otherwise — a task whose title carries a real date the engine can't parse should rank on that date.
 - Administrative tasks (category=admin) rank on their own merits — an unpaid invoice blocking a consultant's deliverable can outrank project paperwork.
 - Score EVERY task exactly once. Never invent ids, never skip one.
@@ -58,7 +58,10 @@ function taskLine(t: Task, engineScore: number): string {
   const bits = [
     `[${t.id}]`,
     t.title,
-    t.due ? `due ${t.due}` : null,
+    // 0027: the tag is the ONLY signal the model has for whether this due
+    // date is a real commitment or someone's estimate — see the HARD
+    // DEADLINES rule above. Untagged (legacy, pre-0027) reads as before.
+    t.due ? `due ${t.due}${t.due_provenance ? ` (${t.due_provenance})` : ''}` : null,
     t.follow_up_date ? `follow-up ${t.follow_up_date}` : null,
     t.waiting_for ? `waiting on ${t.waiting_for}` : null,
     t.owner ? `owner ${t.owner}` : null,

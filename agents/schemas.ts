@@ -10,6 +10,14 @@ import { z } from 'zod';
 export const PHASE_KEYS = ['planning', 'plan_check', 'bidding', 'financing', 'construction'] as const;
 const PhaseKey = z.enum(PHASE_KEYS);
 
+// 0027 date provenance: what KIND of date a due/new_due value is. 'explicit'
+// — the text states an outright calendar date. 'derived' — inferred from
+// relative language ("end of week") resolved against REFERENCE_DATE.
+// 'unresolved' only applies to a task's own due (no date could be pinned
+// down at all) — a deadline_update always carries a concrete new_due, so it
+// is never 'unresolved'.
+const DueProvenance = z.enum(['explicit', 'derived', 'unresolved']);
+
 export const TaskOpSchema = z.object({
   op: z.enum(['create', 'update']),
   existing_id: z.string().optional(),
@@ -22,6 +30,10 @@ export const TaskOpSchema = z.object({
   owner: z.string().optional(),
   waiting_for: z.string().optional(),
   due: z.string().optional(),
+  // Required whenever `due` is set (see the RELATIVE DATES / EXPLICIT vs
+  // DERIVED rule in extract-comms.ts's SYSTEM prompt) — never assume a due
+  // date is a firm commitment when the model didn't say so explicitly.
+  due_provenance: DueProvenance.optional(),
   // Required-nullable like project_name: on a 47K-char bundle the model
   // skipped every optional stage_key; forcing the field forces the choice.
   stage_key: PhaseKey.nullable(),
@@ -84,6 +96,9 @@ export const DeadlineUpdateSchema = z.object({
   project_name: z.string().nullable(),
   task_match: z.string().min(1),
   new_due: z.string(),
+  // A deadline_update always has a concrete new_due, so provenance is
+  // 'explicit' or 'derived' only (never 'unresolved' — see DueProvenance).
+  due_provenance: z.enum(['explicit', 'derived']).optional(),
   // min(1) — agent bug #3: '' satisfied the old contract and produced a
   // "Deadline change" proposal with nothing to judge.
   evidence: z.string().min(1),

@@ -123,6 +123,6 @@ export async function processDocument(
   // review queue, never a direct live insert. Staff-authored transcripts/notes
   // (kind !== 'email') keep the existing one-step auto-create.
   return applyExtractResult(admin, doc.id, result, {
-    projects, openTasks, allowAutoCreate: doc.kind !== 'email',
+    projects, openTasks, allowAutoCreate: doc.kind !== 'email', docReceivedAt: doc.received_at,
   });
 }

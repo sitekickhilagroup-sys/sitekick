@@ -161,6 +161,22 @@ export interface Task {
    *  under a project whose own is_test is set, even when this column itself
    *  is false — see selectOpenTasksExcludingTest's project-cascade join. */
   is_test: boolean;
+  /** 0027 — what kind of date `due` actually is: 'explicit' (the source
+   *  stated an outright calendar date, or a human typed it directly),
+   *  'derived' (inferred from relative language like "end of week"),
+   *  'unresolved' (no evidence ties the stored `due` to a specific date —
+   *  e.g. it predates this classification, or a source conflict was found).
+   *  Null = not yet classified (every task before this feature, until
+   *  something writes through the classified paths). Never treat a
+   *  derived/unresolved due date as a firm commitment or as evidence for
+   *  "Overdue" — see components/work/work-table-row.tsx. */
+  due_provenance: 'explicit' | 'derived' | 'unresolved' | null;
+  /** 0027 — the document this due date's classification came from, if any. */
+  due_source_document_id: string | null;
+  /** 0027 — the date of the SOURCE communication itself (not the resolved
+   *  due date) — lets a viewer see how stale a derived/unresolved estimate
+   *  is, independent of what `due` currently holds. */
+  due_source_date: string | null;
 }
 
 // AI prioritization (0022, brief §3–4): one run = one suggested ordering,
