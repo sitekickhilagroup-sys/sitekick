@@ -125,6 +125,46 @@ export interface PrioritizeRunSummary {
   unknown: number;
 }
 
+const COMMITMENT_WORD = /\b(committed|confirmed|guarantee[d]?|promise[ds]?)\b/gi;
+// A negation within this many characters BEFORE the word means the sentence
+// is already correctly hedged ("not yet confirmed", "never confirmed") —
+// exactly the phrasing this whole feature wants, not a violation of it.
+const NEGATION_WINDOW = 20;
+const NEGATION_NEARBY = /\b(not|never|isn't|wasn't|hasn't|haven't|no)\b/i;
+
+function hasUnhedgedCommitmentLanguage(reason: string): boolean {
+  COMMITMENT_WORD.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = COMMITMENT_WORD.exec(reason))) {
+    const before = reason.slice(Math.max(0, m.index - NEGATION_WINDOW), m.index);
+    if (!NEGATION_NEARBY.test(before)) return true;
+  }
+  return false;
+}
+
+/**
+ * Server-side reconciliation for the model's own reasoning text — same
+ * philosophy as extractComms's "even if the model said 'create'..." (an LLM
+ * instruction is a strong nudge, never a guarantee). Live-caught 2026-09-11:
+ * the SYSTEM prompt above already forbids "committed"/"Overdue" language for
+ * a derived/unresolved due date, and it usually works — but a real back-to-
+ * back pair of production runs on the SAME task showed one clean run
+ * ("expects... unconfirmed") followed by one that reverted to "Greg...
+ * committed to revise..." No prompt wording fixes a probabilistic model
+ * 100% of the time, so this closes the gap deterministically: for exactly
+ * the tasks where a confirmed reading would be wrong, flag any residual
+ * unhedged commitment language with an explicit, visible correction rather
+ * than trusting the prompt alone.
+ */
+export function sanitizeReason(reason: string, dueProvenance: Task['due_provenance']): string {
+  if (dueProvenance !== 'derived' && dueProvenance !== 'unresolved') return reason;
+  if (!hasUnhedgedCommitmentLanguage(reason)) return reason;
+  const suffix = ' (estimate only, not a confirmed date)';
+  const maxBase = 300 - suffix.length;
+  const base = reason.length > maxBase ? `${reason.slice(0, maxBase - 1)}…` : reason;
+  return `${base}${suffix}`;
+}
+
 /** Deterministic rank derivation + persistence: scores → global_rank and
  *  per-project project_rank. Ties break by due date (earlier first), then
  *  engine score, then id — stable across reruns of the same scores. */
@@ -176,7 +216,7 @@ export async function applyPrioritization(
       project_rank: pRank,
       score: Math.round(r.score),
       urgency: r.urgency,
-      reason: r.reason.slice(0, 300),
+      reason: sanitizeReason(r.reason, t.due_provenance).slice(0, 300),
     };
   });
   if (rows.length) {
