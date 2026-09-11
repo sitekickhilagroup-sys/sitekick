@@ -2,6 +2,13 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { createUploadUrl } from '@/app/actions/upload';
+import { supabaseBrowser } from '@/lib/supabase/client';
+
+// Vercel Functions hard-cap request bodies at 4.5MB on every plan — leave
+// real headroom under that (multipart framing + the project field also take
+// a few bytes) rather than cutting it exactly at the limit.
+const SAFE_DIRECT_LIMIT = 4 * 1024 * 1024;
 
 export interface DropzoneLabels {
   drop: string; processing: string; done: string; failed: string;
@@ -68,44 +75,102 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
     return null;
   }
 
+  // Shared tail for both send() and sendStaged() below — same response
+  // shape either way, /api/upload doesn't distinguish how it got the bytes.
+  function applyResult(res: Response, json: Record<string, unknown>, fallbackLabel: string) {
+    if (res.ok && json.ok !== false) {
+      // .mp4 is stored and linked only — no transcription runs — so it must
+      // not claim "Processed" or promise a review that never comes. A
+      // dedup hit on a document a *previous* attempt stored but never
+      // finished processing is the same shape of problem: the row is real,
+      // but nothing ran, so this must not claim "Processed" either — see
+      // route.ts's `stored_unprocessed` branches.
+      setState(
+        json.type === 'recording' ? 'stored'
+        : json.type === 'stored_unprocessed' ? 'unprocessed'
+        : 'done',
+      );
+      setReport(reportFor(json));
+    } else {
+      setState('error');
+      setDetail((json.error as string | undefined) ?? fallbackLabel);
+    }
+    // Either way, a `documents` row can now exist that didn't before —
+    // ingestDocument's insert runs before processing does, so a failure
+    // here doesn't mean nothing was stored. Refresh so the queue (item 19)
+    // never looks unchanged while a real row sits behind it.
+    router.refresh();
+  }
+
   // One file = today's flow. Two files = a summary + raw-transcript pair of
   // the same meeting, sent in ONE request so the agent reads them together.
-  async function send(files: File[]) {
+  // Only used for files that fit a normal request body (see sendStaged for
+  // anything past SAFE_DIRECT_LIMIT).
+  async function send(files: File[], progressLabel?: string) {
     last.current = files;
     setState('busy');
-    setDetail(files.map((f) => f.name).join(' + '));
+    setDetail(progressLabel ?? files.map((f) => f.name).join(' + '));
     setReport(null);
     const fd = new FormData();
     for (const f of files) fd.append('file', f);
     if (project) fd.append('project', project);
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const json = await res.json();
-      if (res.ok && json.ok !== false) {
-        // .mp4 is stored and linked only — no transcription runs — so it must
-        // not claim "Processed" or promise a review that never comes. A
-        // dedup hit on a document a *previous* attempt stored but never
-        // finished processing is the same shape of problem: the row is real,
-        // but nothing ran, so this must not claim "Processed" either — see
-        // route.ts's `stored_unprocessed` branches.
-        setState(
-          json.type === 'recording' ? 'stored'
-          : json.type === 'stored_unprocessed' ? 'unprocessed'
-          : 'done',
-        );
-        setReport(reportFor(json));
-      } else {
-        setState('error');
-        setDetail(json.error ?? files.map((f) => f.name).join(' + '));
-      }
-      // Either way, a `documents` row can now exist that didn't before —
-      // ingestDocument's insert runs before processing does, so a failure
-      // here doesn't mean nothing was stored. Refresh so the queue (item 19)
-      // never looks unchanged while a real row sits behind it.
-      router.refresh();
+      applyResult(res, await res.json(), files.map((f) => f.name).join(' + '));
     } catch (e) {
       setState('error');
       setDetail(String(e));
+    }
+  }
+
+  // Data Inbox bulk-upload fix: a file over SAFE_DIRECT_LIMIT never reaches
+  // /api/upload as a normal request — Vercel rejects the request body itself
+  // before any app code runs. Goes straight to Supabase Storage from the
+  // browser instead (createUploadUrl mints a one-time signed token), then
+  // tells /api/upload where to find it. Single-file only — a pair (see
+  // send() above) needs both files in one request to be bundled together,
+  // which direct-to-storage doesn't change.
+  async function sendStaged(file: File, progressLabel?: string) {
+    last.current = [file];
+    setState('busy');
+    setDetail(progressLabel ?? file.name);
+    setReport(null);
+    try {
+      const staged = await createUploadUrl(file.name);
+      if ('error' in staged) { setState('error'); setDetail(staged.error); return; }
+      const { error: upErr } = await supabaseBrowser().storage
+        .from('documents').uploadToSignedUrl(staged.path, staged.token, file);
+      if (upErr) { setState('error'); setDetail(upErr.message); return; }
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stagedPath: staged.path, fileName: file.name, project: project || undefined }),
+      });
+      applyResult(res, await res.json(), file.name);
+    } catch (e) {
+      setState('error');
+      setDetail(String(e));
+    }
+  }
+
+  // Real multi-file selection: a genuine summary+transcript pair (exactly 2
+  // files, both small enough for one request) keeps today's bundled
+  // behavior unchanged; anything else — 1 file, 3+ files, or a "pair" where
+  // one file is too big to bundle — is sent one at a time in sequence, so
+  // "select 20 files" actually means 20 uploads, not silently the first 2.
+  async function sendBatch(files: File[]) {
+    if (files.length === 2 && files.every((f) => f.size <= SAFE_DIRECT_LIMIT)) {
+      await send(files);
+      return;
+    }
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const label = files.length > 1 ? `(${i + 1}/${files.length}) ${f.name}` : undefined;
+      if (f.size > SAFE_DIRECT_LIMIT) {
+        await sendStaged(f, label);
+      } else {
+        await send([f], label);
+      }
     }
   }
 
@@ -135,7 +200,7 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
           setDragging(false);
           if (busy) return;
           const files = Array.from(e.dataTransfer.files ?? []);
-          if (files.length) void send(files.slice(0, 2));
+          if (files.length) void sendBatch(files);
         }}
         aria-busy={busy}
         className={`flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-[12px] border border-dashed px-5 py-8 text-center transition-colors ${
@@ -179,7 +244,7 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
         {state === 'error' && (
           <button
             type="button"
-            onClick={() => { const f = last.current; if (f?.length) void send(f); }}
+            onClick={() => { const f = last.current; if (f?.length) void sendBatch(f); }}
             className="min-h-11 cursor-pointer rounded-[8px] border border-sage-line px-3 py-1.5 text-[10px] font-[650] leading-none text-sk-green sm:min-h-0"
           >
             {labels.retry}
@@ -198,7 +263,7 @@ export function Dropzone({ projects, labels, accept, title, formats, project, on
         ref={input} type="file" accept={accept} multiple className="hidden"
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
-          if (files.length) void send(files.slice(0, 2));
+          if (files.length) void sendBatch(files);
           e.target.value = '';
         }}
       />

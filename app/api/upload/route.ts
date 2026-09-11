@@ -52,6 +52,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const admin = supabaseAdmin();
+
+  // Staged path (app/actions/upload.ts's createUploadUrl): the browser has
+  // already put the file's bytes directly into Storage, bypassing Vercel's
+  // 4.5MB function-body limit entirely — this request is a small JSON body
+  // naming where they landed, not the bytes themselves. Only single-file;
+  // the summary+transcript pair below stays multipart-only (pairs are always
+  // small text files, never the reason a file needed staging).
+  const contentType = req.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const body = await req.json() as { stagedPath?: string; fileName?: string; project?: string };
+    if (!body.stagedPath || !body.fileName) {
+      return NextResponse.json({ error: 'stagedPath/fileName missing' }, { status: 400 });
+    }
+    const { data: blob, error: dlError } = await admin.storage.from('documents').download(body.stagedPath);
+    if (dlError || !blob) {
+      return NextResponse.json({ error: dlError?.message ?? 'staged file not found' }, { status: 400 });
+    }
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    // Best-effort cleanup of the staging copy — the real content is either
+    // re-stored under its own path below (pdf/mp4) or extracted to raw_text
+    // (everything else), so nothing depends on this blob surviving.
+    admin.storage.from('documents').remove([body.stagedPath]).catch(() => {});
+    // Direct-to-storage only bypasses Vercel's 4.5MB function-body ceiling —
+    // the app's own business-logic cap (zip-based formats can inflate a lot)
+    // still applies, same limit and message as the multipart path below.
+    if (buffer.length > MAX_UPLOAD_BYTES) {
+      return NextResponse.json({ error: 'file too large (max 20MB)' }, { status: 413 });
+    }
+    return processUploadedFile(admin, { name: body.fileName, buffer }, body.project ?? null);
+  }
+
   const form = await req.formData();
   const allFiles = form.getAll('file').filter((f): f is File => f instanceof File);
   const file = allFiles[0];
@@ -67,8 +99,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'file too large (max 20MB)' }, { status: 413 });
     }
   }
-
-  const admin = supabaseAdmin();
 
   // Summary + raw transcript of the SAME meeting, uploaded together — one
   // communication, one agent pass. Both files must be text-like; anything
@@ -111,12 +141,27 @@ export async function POST(req: NextRequest) {
     }
   }
   const buffer = Buffer.from(await file.arrayBuffer());
-  const name = file.name.toLowerCase();
-  const dedupKey = `upload:${file.name}:${buffer.length}`;
+  return processUploadedFile(admin, { name: file.name, buffer }, projectHint);
+}
+
+/**
+ * The single-file processing that used to be the tail of POST() directly —
+ * pulled out so both the ordinary multipart path above and the staged
+ * (direct-to-storage) path can share it verbatim. Takes bytes already in
+ * hand; does not care where they came from.
+ */
+async function processUploadedFile(
+  admin: ReturnType<typeof supabaseAdmin>,
+  input: { name: string; buffer: Buffer },
+  projectHint: string | null,
+): Promise<NextResponse> {
+  const buffer = input.buffer;
+  const name = input.name.toLowerCase();
+  const dedupKey = `upload:${input.name}:${buffer.length}`;
 
   try {
     if (name.endsWith('.pdf')) {
-      const path = `uploads/${Date.now()}-${file.name}`;
+      const path = `uploads/${Date.now()}-${input.name}`;
       await admin.storage.from('documents').upload(path, buffer, {
         contentType: 'application/pdf', upsert: false,
       });
@@ -145,7 +190,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (name.endsWith('.mp4')) {
-      const path = `recordings/${Date.now()}-${file.name}`;
+      const path = `recordings/${Date.now()}-${input.name}`;
       await admin.storage.from('documents').upload(path, buffer, {
         contentType: 'video/mp4', upsert: false,
       });
