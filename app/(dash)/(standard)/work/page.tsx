@@ -21,6 +21,7 @@ import type { RelationRow } from '@/components/work/relation-editor';
 import type { TaskEditorOptions } from '@/components/work/task-editor';
 import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relationship, SubstageTemplate, Task, TaskRank, Vendor, Workstream } from '@/lib/types';
 import { fmtDate } from '@/lib/format';
+import { ScrollToTask } from '@/components/work/scroll-to-task';
 
 export const dynamic = 'force-dynamic';
 // "Refresh priorities" is a server action invoked from this page — it runs the
@@ -75,8 +76,6 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   const t = getT(locale);
   const today = laToday();
 
-  const rawView = typeof sp.view === 'string' ? sp.view : '';
-  const view: WorkView = (VIEWS as string[]).includes(rawView) ? (rawView as WorkView) : 'today';
   // C2 deep links from the process page: ?substage= narrows the list to one
   // sub-stage's tasks (validated below, once substage_templates is loaded —
   // an id that matches no real template is dropped, never honored blind);
@@ -84,6 +83,14 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // value is harmless on its own (no row matches, nothing highlights).
   const rawSubstage = typeof sp.substage === 'string' ? sp.substage : '';
   const spTask = typeof sp.task === 'string' ? sp.task : '';
+  const rawView = typeof sp.view === 'string' ? sp.view : '';
+  // F-10: a bare `?task=<uuid>` (no explicit `?view=`) used to default to
+  // 'today' regardless — if the task wasn't in today's subset, its row never
+  // rendered at all, so nothing to highlight or scroll to. Only the
+  // `?view=all&task=…` form every internal caller already builds worked. A
+  // deep link naming a specific task should find it regardless of which view
+  // it'd normally sort into.
+  const view: WorkView = (VIEWS as string[]).includes(rawView) ? (rawView as WorkView) : (spTask ? 'all' : 'today');
   // Brief §2: category filter — everything / project work / administrative.
   const rawCat = typeof sp.cat === 'string' ? sp.cat : '';
   const cat: 'all' | 'project' | 'admin' = rawCat === 'project' || rawCat === 'admin' ? rawCat : 'all';
@@ -727,6 +734,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
 
   return (
     <div className="sk-page mx-auto w-full max-w-[1060px] space-y-4 px-2 pb-16 sm:px-4">
+      {spTask && <ScrollToTask taskId={spTask} />}
       {/* register-hero (centered) + the Add-action button. */}
       <div className="relative pt-2 text-center">
         <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-sk-muted">{t('work.title')}</p>
