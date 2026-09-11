@@ -1,5 +1,67 @@
 # Live Functional QA — handoff (in progress)
 
+## Session 2026-09-11 (continuation 2) — Inbox package re-verified unchanged; fresh prioritization run closes the residual "committed" gap
+
+### Re-verification of the Agent Review Inbox package (no code changes this block)
+
+Re-checked everything from the prior block live, cold, from scratch: `/inbox` still shows **Needs
+review 99 / Not sure 0 / Approved 0 / Applied automatically 94**, matching a fresh SQL count exactly
+(99 business-pending). Re-ran the dry-run preview a second time: toast confirmed **"Preview of 99
+pending: would apply 0, would ignore 0, 99 would stay for review — nothing was changed"**, and the
+pending count was unchanged before/after (99→99) — zero drift, nothing regressed since the last
+deploy (`8520619`).
+
+**One item explicitly not live-tested, by design, stated honestly:** whether auto-triage's
+`task_create` insert branch correctly stamps `due_provenance` on a REAL learned-threshold auto-apply
+was verified by code review + typecheck/lint + the adjacent unit tests on `classifyProposal`'s
+gating logic only — NOT by a live trigger. That path only fires once a class has ≥5 prior human
+decisions at ≥85% agreement, and `classifyProposal`'s class key is not scoped by project, so a
+QA-only decision would count toward the SAME learned statistics real proposals use — deliberately
+avoided rather than risk polluting real learned-class data to manufacture a live test.
+
+### Fresh prioritization run — closes the Greg/Rinconia residual gap
+
+Triggered via My Work's real "Refresh priorities" button (not a script, not a cron simulation).
+
+**Before (captured first, for a clean comparison):** the previous run (`91a48621…`, 2026-09-10
+18:40 UTC) had Greg/Rinconia's reason as *"Greg **committed** to revise and respond by end of this
+week (human correction supersedes stale 9/8 due date)..."* — the exact fabrication Noa's F-2 flagged,
+confirmed still live going into this run.
+
+**After — new run `7e220737-3680-45e2-9d67-85f25dce82f9`, created 2026-09-11 13:45:58 UTC ("Priorities
+updated 09/11/26" shown live on My Work):** Greg/Rinconia's reason now reads: *"Greg (per 9/9
+correction) now **expects** to revise and respond by end of this week, not the earlier
+**unconfirmed** 9/8 date — addendum still needed to unblock Plan Check."* Score dropped 45→40,
+urgency stayed "high" (not "now" — no longer overclaiming). **Live-verified in the browser**
+(My Work → Details, hard-reloaded): EVIDENCE section shows this exact sentence plus the static
+disclaimer line, **"This date is not confirmed by any source. Treat as needing review, not as a
+commitment."** — the residual gap flagged at the end of the previous block is now fully closed,
+system-wide (the prompt fix applies to every task, not just this one).
+
+**Task coverage — a real number, with an honest caveat:** 93 tasks ranked, down from 129 in the
+previous run. This is NOT a new regression from anything in this session — it's the
+**already-known, already-flagged** NULL-project-id bug in `lib/open-tasks.ts`'s
+`selectOpenTasksExcludingTest` (filed as background task `task_ae4422a2`, which the Product Owner
+started fixing in a separate session during this run) still silently excluding the 40 real open
+tasks that have `project_id IS NULL` (confirmed via SQL: 136 open non-test tasks total, 40 with no
+project). 133 ungated candidates − 40 wrongly excluded ≈ the observed 93. Once `task_ae4422a2` lands
+and a prioritization run is triggered again, coverage should return to the full candidate set.
+
+**Spot-checked reasoning quality beyond Greg/Rinconia:** the top of "Most Urgent Across Projects"
+(3375 Blair Dr's Plan Check/PC-extension items) reads with specific, grounded dates ("current PC
+still set to expire 9/1/2026", "5th PC extension must cover to 9/1/2027 given ZAD not effective
+until July 2027") — no fabricated commitments, consistent with the prompt fix holding generally, not
+narrowly patched for one record.
+
+**Not verified this pass:** exhaustively which `verifiedNotesBlock` (human-confirmed-facts feedback)
+entries this specific run consumed — the mechanism itself was already exercised and confirmed live
+in an earlier session (the `priority_feedback.voided` undo-exclusion test); re-deriving the exact
+prompt content sent for this one run was out of scope for "verify the reasons."
+
+**Next task:** re-run prioritization once more after `task_ae4422a2` deploys, to confirm the 40
+previously-orphaned tasks now appear ranked; otherwise proceed to whichever of Notes Center,
+duplicate/dedup safety, or Project Process consistency the Product Owner picks next.
+
 ## Session 2026-09-11 (continuation) — Date provenance CLOSED (with one known residual), Agent Review Inbox audit + safe fixes
 
 ### Item 0 — Date provenance: CLOSED, one residual gap flagged honestly
