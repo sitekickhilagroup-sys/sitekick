@@ -5,6 +5,15 @@ export function laToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date());
 }
 
+/** Formats an arbitrary stored instant as an LA-local YYYY-MM-DD date — the
+ *  same civil timezone laToday() uses for "now", applied to any ISO instant
+ *  (e.g. documents.received_at, used as extractComms' relative-date anchor
+ *  so re-processing the same content later resolves "end of week" the same
+ *  way every time, not against whenever the retry happens to run). */
+export function laDate(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date(iso));
+}
+
 /**
  * Formats a stored instant (activity_log.created_at, a UTC timestamptz) as
  * LA-local "YYYY-MM-DD HH:mm" — the same civil timezone laToday() uses for

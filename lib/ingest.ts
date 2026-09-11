@@ -71,7 +71,16 @@ export async function ingestDocument(
 // Route a stored document through the right agent.
 export async function processDocument(
   admin: SupabaseClient,
-  doc: { id: string; kind: DocKind; raw_text?: string | null; pdf_base64?: string; project_hint?: string | null },
+  doc: {
+    id: string; kind: DocKind; raw_text?: string | null; pdf_base64?: string; project_hint?: string | null;
+    /** documents.received_at — threaded to extractComms as the anchor for
+     *  resolving relative dates ("end of week"), so a document processed
+     *  again later (a retried import-queue batch) resolves them the same
+     *  way as the first attempt would have. Omitted callers (a document
+     *  being processed for the first time, right after creation) fall back
+     *  to the real current date, which is correct for them too. */
+    received_at?: string;
+  },
 ): Promise<unknown> {
   const [projectsQ, tasksQ, vendorsQ] = await Promise.all([
     // city_case rides along for extract-comms' project-attribution rules —
@@ -102,7 +111,7 @@ export async function processDocument(
     loadMatchDecisions(admin),
   ]);
   const result = await extractComms(
-    { id: doc.id, project_hint: doc.project_hint, raw_text: doc.raw_text ?? '' },
+    { id: doc.id, project_hint: doc.project_hint, raw_text: doc.raw_text ?? '', received_at: doc.received_at },
     {
       projects, openTasks, rejectedPatterns,
       verifiedNotesBlock: renderVerifiedNotes(verifiedNotes),

@@ -113,12 +113,12 @@ export async function processImportBatch(admin: SupabaseClient, batchSize: numbe
   // queue doesn't starve a whole batch down to zero real attempts.
   const { data: candidates } = await admin
     .from('documents')
-    .select('id, kind, raw_text, storage_path')
+    .select('id, kind, raw_text, storage_path, received_at')
     .is('processed_at', null)
     .order('received_at', { ascending: true })
     .limit(batchSize + permanentlyFailed.size + 1);
   const rows = (candidates ?? []) as {
-    id: string; kind: DocKind; raw_text: string | null; storage_path: string | null;
+    id: string; kind: DocKind; raw_text: string | null; storage_path: string | null; received_at: string;
   }[];
   const { batch, more } = selectBatch(rows, permanentlyFailed, batchSize);
 
@@ -154,9 +154,9 @@ export async function processImportBatch(admin: SupabaseClient, batchSize: numbe
         const { data: file, error: dlError } = await admin.storage.from(STORAGE_BUCKET).download(doc.storage_path);
         if (dlError || !file) throw new Error(`storage download failed: ${dlError?.message ?? 'no file'}`);
         const buffer = Buffer.from(await file.arrayBuffer());
-        await processDocument(admin, { id: doc.id, kind: doc.kind, pdf_base64: buffer.toString('base64') });
+        await processDocument(admin, { id: doc.id, kind: doc.kind, pdf_base64: buffer.toString('base64'), received_at: doc.received_at });
       } else {
-        await processDocument(admin, { id: doc.id, kind: doc.kind, raw_text: doc.raw_text });
+        await processDocument(admin, { id: doc.id, kind: doc.kind, raw_text: doc.raw_text, received_at: doc.received_at });
       }
       // Claim already set processed_at — success just leaves it as is.
       succeeded++;
