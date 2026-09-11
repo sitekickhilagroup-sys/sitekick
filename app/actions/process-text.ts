@@ -26,7 +26,12 @@ export type PasteResult =
 const ReadingSchema = z.object({
   title: z.string().describe('The action this update is about, as a short imperative task title'),
   owner: z.string().nullable().describe('Person responsible, if the text names one'),
-  due: z.string().nullable().describe('Due date as YYYY-MM-DD, only if the text states one'),
+  due: z.string().nullable().describe('Due date as YYYY-MM-DD, if the text states or clearly implies one — see due_provenance'),
+  // 0027: this path has no REFERENCE_DATE anchor (a pasted update is always
+  // "received" right now), but the explicit/derived distinction still
+  // matters — see extract-comms.ts's identical rule. Null when due is null.
+  due_provenance: z.enum(['explicit', 'derived', 'unresolved']).nullable()
+    .describe("'explicit' only if the text states an outright calendar date or exact day name; 'derived' if resolved from relative language (\"end of week\"); 'unresolved' if a date is mentioned but not pin-downable. Null when due is null."),
   completion: z.boolean().describe('True only if the text says the work is finished'),
   summary: z.string().describe('One sentence a project manager would keep as the latest update'),
 });
@@ -54,6 +59,7 @@ async function read(text: string): Promise<Reading | null> {
       job: 'extract',
       system: 'You read one project update written by a construction project manager and report what it is about. '
         + 'Report only what the text states. Never invent a date, an owner or a completion. '
+        + 'Never phrase an estimate ("can have", "expects", "targeting") as a commitment. '
         + 'Keep the title under 12 words and the summary to one sentence.',
       messages: [{ role: 'user', content: text }],
       schema: ReadingSchema,
@@ -149,6 +155,7 @@ export async function processPastedUpdate(text: string): Promise<PasteResult> {
       title,
       owner: reading?.owner ?? null,
       due: reading?.due ?? null,
+      due_provenance: reading?.due ? (reading?.due_provenance ?? null) : null,
       stage_key: matched?.task.stage_key ?? null,
       summary,
     },
