@@ -1,5 +1,81 @@
 # Live Functional QA — handoff (in progress)
 
+## Session 2026-09-11 (later) — Date provenance + Greg/Rinconia: STOPPED at the required pre-code gate, no code changed
+
+Scoped task: implement explicit/derived/unresolved date provenance, source-document/date storage,
+and consistent Details/My-Work-reasoning/Due-Overdue display, using the Greg/Rinconia record as the
+acceptance case. Per Rotem's own instructions this session, two checks are required before writing
+any code, and both stopped the task before implementation started — no application code, migration,
+or business data was touched.
+
+**Check 1 — no other deployment/tester active, two-tab My Work interactivity:** could not be
+performed. This session's sandboxed Browser pane is not signed in to SiteKick (would need entering
+credentials, which is prohibited), and `mcp__claude-in-chrome__*` (the tool used in every prior
+session's live testing, against Rotem's own already-authenticated Chrome) reported **"Claude in
+Chrome is not connected"** in this session. No live browser check of any kind was performed as a
+result — this is a genuine access gap in this session, not a finding about the app.
+**Next session needs:** either the Claude-in-Chrome extension connected and signed in, or Rotem to
+run the two-tab hard-reload + "Add action" open/cancel check himself and report the result.
+
+**Check 2 — is `0027_date_provenance.sql` applied:** **NOT applied.** Verified two ways:
+- `select column_name, data_type from information_schema.columns where table_name='tasks' and column_name like 'due_%'` → **zero rows** (no `due_provenance`/`due_source_document_id`/`due_source_date` on `tasks`).
+- `mcp__supabase__list_migrations` → tracked history stops at `0021`; `0027` was never sent to the DB (matches the prior handoff: prepared and sent to Rotem as a file, never run).
+
+Per instruction, stopping here rather than guessing at a workaround. Guarded SQL (additive-only,
+nullable, no backfill, no change to any existing read/write path) and the verification query to
+confirm it landed:
+
+```sql
+alter table tasks add column if not exists due_provenance text
+  check (due_provenance in ('explicit', 'derived', 'unresolved'));
+
+alter table tasks add column if not exists due_source_document_id uuid
+  references documents(id) on delete set null;
+
+alter table tasks add column if not exists due_source_date date;
+
+create index if not exists idx_tasks_due_source_document_id
+  on tasks(due_source_document_id) where due_source_document_id is not null;
+```
+
+Verification query (run after, expect exactly 3 rows):
+```sql
+select column_name, data_type from information_schema.columns
+where table_name = 'tasks' and column_name like 'due_%'
+order by column_name;
+```
+
+**Read-only fact-finding done ahead of the blocker (no data changed), to save the next session a step —
+the Greg/Rinconia acceptance-case record itself:**
+- `tasks.id = 33677f42-d238-4348-a5bb-9b42839a98cb`, title "LADBS returned the soils report — Bob to
+  review and resubmit an addendum", `source='next_steps:2650 Rinconia:2'`, `project_id=cbec1c85-c2d2-4ef8-824c-99b733023168`.
+- Current stored state: `due='2026-09-08'`, `status='open'`, `last_touched='2026-09-11'`.
+- Current stored `latest_note` (2026-09-04, verbatim): *"Greg Byrne of Grover-Hollingsworth confirmed
+  on 26/8 he can have the addendum response ready late next week or early the week after."* — no
+  occurrence of "committed" or "end of this week" anywhere in the stored note.
+- **Implication for the next session:** the F-2 gap Noa found ("can have"/"expects" rendered as
+  "committed", with an unanchored "end of this week") is confirmed to be a reasoning/evidence-display
+  fabrication, not corrupted or overwritten stored data — `tasks.due`/`latest_note` themselves are
+  intact and match the source. The fix belongs in whatever renders the prioritization "evidence
+  block" text and the Due/Overdue badge, not in a data-repair step. This still needs the 0027 columns
+  to express "this due date is derived/unresolved, do not phrase it as a commitment" structurally
+  rather than via prompt wording alone.
+
+**Exact next task, in order, once both gates are clear:**
+1. Confirm the two-tab My Work interactivity check passes on the current build (Rotem or a
+   connected Claude-in-Chrome session).
+2. Rotem runs the guarded SQL above; re-run the verification query here to confirm 3 columns exist.
+3. Implement: `extractComms` output → `due_provenance`/`due_source_document_id`/`due_source_date`
+   write path; consistent display across task Details, My Work reasoning/evidence text, and the
+   Due/Overdue badge; derived/unresolved dates never silently become `tasks.due`; "can have"/"expects"
+   language never rendered as "committed". Acceptance case: reload the Greg/Rinconia record
+   (`33677f42-…`) live and show its actual due date + provenance, with Overdue shown only if a
+   confirmed (explicit) due date supports it.
+4. Targeted tests → typecheck/lint → full suite → deploy → live browser verification → update this
+   handoff with files/commit/deployment/evidence/rollback, same as every other item above.
+
+No code, schema, or business data was changed in this session block.
+
 ## ✅ שוחזר ואומת — LLC task incident closed
 
 Real task `afac2f3b-f4f2-4ca0-bb98-f60e82dcd72f` ("Set up LLC bank account and credit card") had a QA test note written to it by my automation mistake (see INCIDENT section below). Rotem ran the guarded revert (`guarded-revert-llc-task.sql`) at 2026-09-10 20:52:53 UTC. Verified two independent ways immediately after:
