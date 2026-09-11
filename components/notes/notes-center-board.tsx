@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { retargetComment, promoteHistoricalNote } from '@/app/actions/comments';
-import type { CommentIntent } from '@/lib/comment-intent';
+import { INTENTS, type CommentIntent } from '@/lib/comment-intent';
 import type { NoteSource, NoteState } from '@/lib/notes-center';
 
 export interface NotesCenterRow {
@@ -30,8 +30,6 @@ const FILTERS: { key: 'needs_review' | 'associated' | 'general' | 'all'; labelKe
   { key: 'general', labelKey: 'filterGeneral' },
   { key: 'all', labelKey: 'filterAll' },
 ];
-
-const INTENTS: CommentIntent[] = ['fact', 'preference', 'instruction'];
 
 export function NotesCenterBoard({ rows, counts, taskOptions, projectOptions, blockerOptions, labels }: {
   rows: NotesCenterRow[];

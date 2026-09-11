@@ -4,9 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { saveComment, correctCommentIntent, type CommentRow } from '@/app/actions/comments';
-import type { CommentIntent } from '@/lib/comment-intent';
-
-const INTENTS: CommentIntent[] = ['preference', 'instruction', 'fact'];
+import { INTENTS } from '@/lib/comment-intent';
 
 type LinkType = 'general' | 'task' | 'project' | 'invoice' | 'blocker';
 
