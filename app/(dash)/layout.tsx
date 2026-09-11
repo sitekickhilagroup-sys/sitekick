@@ -81,6 +81,7 @@ export default async function DashLayout({ children }: { children: React.ReactNo
     'intent.preference': t('notes.intent_preference'),
     'intent.instruction': t('notes.intent_instruction'),
     'intent.fact': t('notes.intent_fact'),
+    'intent.issue': t('notes.intent_issue'),
   };
 
   return (

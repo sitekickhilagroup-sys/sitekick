@@ -10,7 +10,7 @@
 // instruction must never be treated as a standing rule (that is exactly why the
 // three intents are kept distinct and human-correctable).
 
-export type CommentIntent = 'preference' | 'instruction' | 'fact';
+export type CommentIntent = 'preference' | 'instruction' | 'fact' | 'issue';
 
 // v2 (Noa's report §3): the v1 heuristic classified any note containing a time
 // word ("this week"/"השבוע") as an instruction, so a fact ABOUT A THIRD PARTY —
@@ -19,7 +19,13 @@ export type CommentIntent = 'preference' | 'instruction' | 'fact';
 // READER (an imperative / "remind me" / "please …"); and a request that is
 // merely quoted inside a report ("Greg said 'send it this week'") is still a
 // fact. Time words no longer classify anything.
-export const INTENT_CLASSIFIER_VERSION = 'v2-directional';
+//
+// v3 (2026-09-11, Rotem's ask): a fourth intent, 'issue' — Noa reporting
+// something broken in the app itself, not a fact/preference/instruction about
+// her real-estate work. Checked right after preference and before the
+// instruction/request cues, since a bug report phrased as a request ("please
+// fix the X, it's broken") should read as an issue, not a generic to-do.
+export const INTENT_CLASSIFIER_VERSION = 'v3-issue';
 
 // A standing rule ("I always chase Crest at month-end"). Checked first: a
 // preference outranks a same-sentence directive, because mis-filing a standing
@@ -35,6 +41,19 @@ const PREFERENCE_CUES = [
 // English imperative with no marker falls to the safe default (fact), which the
 // human can still correct — the error the brief warns against is the reverse,
 // a fact mis-read as an instruction.
+// A report that something in the APP is broken — not a fact about the real
+// estate work, not a standing preference. Kept to unambiguous "this doesn't
+// work" phrasing, English + Hebrew, so a plain status note ("the appraisal
+// broke down") is never mistakenly caught — every cue here names the app/UI
+// failing, not a deal falling through.
+const ISSUE_CUES = [
+  'bug', "doesn't work", 'does not work', "isn't working", 'is not working',
+  'not working', 'broken button', 'button is broken', 'keeps crashing', 'app crashed',
+  'error message', 'stuck loading', 'won’t save', 'wont save', "won't load", 'wont load',
+  'תקלה', 'לא עובד', 'לא עובדת', 'לא עובדים', 'תקוע', 'תקועה', 'נתקע', 'נתקעת',
+  'קרס', 'קורס', 'באג', 'שגיאה', 'הודעת שגיאה', 'לא נשמר', 'לא נטען',
+];
+
 const REQUEST_CUES = [
   'remind me', 'please', "let's ", 'lets ', 'make sure', "don't forget", 'do not forget',
   'can you', 'could you', 'need you to', 'i need you to', 'do this', 'do that', 'prioriti',
@@ -70,6 +89,7 @@ const firstIndex = (haystack: string, cues: string[]): number =>
 export function classifyIntent(text: string): CommentIntent {
   const t = (text ?? '').toLowerCase();
   if (has(t, PREFERENCE_CUES)) return 'preference';
+  if (has(t, ISSUE_CUES)) return 'issue';
   const reqIdx = firstIndex(t, REQUEST_CUES);
   if (reqIdx === Infinity) return 'fact';
   // A request cue exists — but if a report cue comes first, the request is being
@@ -79,5 +99,5 @@ export function classifyIntent(text: string): CommentIntent {
   return 'instruction';
 }
 
-export const INTENTS: CommentIntent[] = ['preference', 'instruction', 'fact'];
+export const INTENTS: CommentIntent[] = ['preference', 'instruction', 'fact', 'issue'];
 export const isIntent = (v: string): v is CommentIntent => (INTENTS as string[]).includes(v);

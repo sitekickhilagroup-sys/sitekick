@@ -191,3 +191,54 @@ export async function promoteHistoricalNote(input: {
   revalidatePath('/work');
   return { ok: true, id: data.id as string };
 }
+
+export interface IssueBacklogItem {
+  id: string;
+  body: string;
+  entityType: EntityType;
+  entityId: string | null;
+  timeEstimate: string | null;
+  significance: 'low' | 'medium' | 'high' | 'critical' | null;
+  triaged: boolean;
+  createdBy: string;
+  createdAt: string;
+}
+
+const SIGNIFICANCE_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+/**
+ * Rotem's on-demand backlog: every open "Report a problem" note, most
+ * significant first. Untriaged items (the twice-daily cron hasn't reached
+ * them yet) sort last within their tier, with no time estimate — real
+ * status, not silently promised. Never returns a QA-project note.
+ */
+export async function listIssueBacklog(): Promise<{ ok: true; items: IssueBacklogItem[] } | { error: string }> {
+  await requireUser();
+  const admin = supabaseAdmin();
+  const { data, error } = await admin
+    .from('comments')
+    .select('id, body, entity_type, entity_id, time_estimate, significance, triaged_at, created_by, created_at')
+    .eq('intent', 'issue')
+    .eq('is_test', false)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) return { error: error.message };
+  const rows = (data ?? []) as {
+    id: string; body: string; entity_type: EntityType; entity_id: string | null;
+    time_estimate: string | null; significance: IssueBacklogItem['significance']; triaged_at: string | null;
+    created_by: string; created_at: string;
+  }[];
+  const items: IssueBacklogItem[] = rows.map((r) => ({
+    id: r.id, body: r.body, entityType: r.entity_type, entityId: r.entity_id,
+    timeEstimate: r.time_estimate, significance: r.significance,
+    triaged: !!r.triaged_at, createdBy: r.created_by, createdAt: r.created_at,
+  }));
+  items.sort((a, b) => {
+    const ra = a.significance ? SIGNIFICANCE_RANK[a.significance] : 99;
+    const rb = b.significance ? SIGNIFICANCE_RANK[b.significance] : 99;
+    if (ra !== rb) return ra - rb;
+    return a.createdAt < b.createdAt ? 1 : -1; // newest first within a tier
+  });
+  return { ok: true, items };
+}

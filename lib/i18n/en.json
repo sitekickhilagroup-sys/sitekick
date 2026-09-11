@@ -27,6 +27,7 @@
   "notes.intent_preference": "General preference",
   "notes.intent_instruction": "One-off instruction",
   "notes.intent_fact": "Fact / context",
+  "notes.intent_issue": "Report a problem",
   "notes.center_link": "Notes Center",
   "notes_center.kicker": "NOTES CENTER",
   "notes_center.title": "Every note, one place to review",

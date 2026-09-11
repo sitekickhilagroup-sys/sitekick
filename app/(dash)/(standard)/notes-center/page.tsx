@@ -146,6 +146,7 @@ export default async function NotesCenterPage() {
     'intent.preference': t('notes.intent_preference'),
     'intent.instruction': t('notes.intent_instruction'),
     'intent.fact': t('notes.intent_fact'),
+    'intent.issue': t('notes.intent_issue'),
     whereBelongs: t('notes_center.where_belongs'),
     searchPlaceholder: t('notes_center.search_placeholder'),
     linkTask: t('nav.work'),

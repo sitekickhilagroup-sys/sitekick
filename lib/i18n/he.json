@@ -27,6 +27,7 @@
   "notes.intent_preference": "העדפה כללית",
   "notes.intent_instruction": "הוראה חד-פעמית",
   "notes.intent_fact": "עובדה / הקשר",
+  "notes.intent_issue": "דיווח על תקלה",
   "notes.center_link": "מרכז הערות",
   "notes_center.kicker": "מרכז הערות",
   "notes_center.title": "כל הערה, במקום אחד לבדיקה",

@@ -39,15 +39,28 @@ describe('classifyIntent — first-pass note interpretation (v2, correctable)', 
   });
   it('is stable on empty input, and reports its version', () => {
     expect(classifyIntent('')).toBe('fact');
-    expect(INTENT_CLASSIFIER_VERSION).toBe('v2-directional');
+    expect(INTENT_CLASSIFIER_VERSION).toBe('v3-issue');
+  });
+
+  // v3: a bug report reads as 'issue', even when phrased as a request to fix
+  // it (a request cue alone would otherwise route it to 'instruction').
+  it('reads an app malfunction as an issue, not a fact or instruction (EN + HE)', () => {
+    expect(classifyIntent("the save button doesn't work")).toBe('issue');
+    expect(classifyIntent('please fix this, the app keeps crashing')).toBe('issue');
+    expect(classifyIntent('לא עובד לי כפתור השמירה')).toBe('issue');
+    expect(classifyIntent('תתקן בבקשה, יש תקלה במסך')).toBe('issue');
+  });
+  it('does not misread an ordinary status update as an issue', () => {
+    expect(classifyIntent('the appraisal fell through, lender pulled out')).toBe('fact');
   });
 });
 
 describe('isIntent guard', () => {
-  it('accepts the three intents and rejects others', () => {
+  it('accepts the four intents and rejects others', () => {
     expect(isIntent('preference')).toBe(true);
     expect(isIntent('instruction')).toBe(true);
     expect(isIntent('fact')).toBe(true);
+    expect(isIntent('issue')).toBe(true);
     expect(isIntent('anything')).toBe(false);
   });
 });

@@ -2,6 +2,7 @@
 // Markdown file in docs/). Kept out of the page/server action so the merge,
 // dedup, candidate-ranking and state rules are unit-testable without a DB.
 import { tokenize, titleSimilarity } from './dedup.ts';
+import type { CommentIntent } from './comment-intent.ts';
 
 export type NoteSource = 'assistant' | 'historical_attributed';
 export type NoteState = 'needs_review' | 'associated' | 'general';
@@ -21,8 +22,8 @@ export interface NoteCard {
    *  items (that's where latest_note lives), separate from entityId/Type
    *  (which is what a promoted note may be RE-targeted to). */
   sourceTaskId: string | null;
-  suggestedIntent: 'fact' | 'instruction' | 'preference';
-  intent: 'fact' | 'instruction' | 'preference';
+  suggestedIntent: CommentIntent;
+  intent: CommentIntent;
   state: NoteState;
 }
 
