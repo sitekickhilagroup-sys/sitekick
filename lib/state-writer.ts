@@ -9,8 +9,11 @@ import type { AgentProposal, Task } from './types.ts';
 /** 0027: the SOURCE communication's own date for a proposal's document, if
  *  any — lets a viewer see how stale a derived/unresolved due estimate is,
  *  independent of what `due` itself now holds. Null when the proposal has no
- *  linked document (e.g. a manually-typed correction). */
-async function resolveDueSourceDate(admin: SupabaseClient, documentId: string | null): Promise<string | null> {
+ *  linked document (e.g. a manually-typed correction). Exported: also used
+ *  by app/actions/proposals.ts's decideProposal, a SEPARATE task-patch write
+ *  path (update_existing/new_task/keep_both_linked) that doesn't route
+ *  through applyProposal below. */
+export async function resolveDueSourceDate(admin: SupabaseClient, documentId: string | null): Promise<string | null> {
   if (!documentId) return null;
   const { data } = await admin.from('documents').select('received_at').eq('id', documentId).maybeSingle();
   return data?.received_at ? laDate(data.received_at as string) : null;

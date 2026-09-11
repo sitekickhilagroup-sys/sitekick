@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
 import { laToday } from '@/lib/date';
-import { applyProposal, logActivity } from '@/lib/state-writer';
+import { applyProposal, logActivity, resolveDueSourceDate } from '@/lib/state-writer';
 import { attributionTokens, runFullTriage } from '@/lib/auto-triage';
 import { defaultTreatment, targetTaskError } from '@/lib/review-treatments';
 import type { AgentProposal, ChangeType, Task } from '@/lib/types';
@@ -45,6 +45,33 @@ const clean = (v: string | undefined): string | null => {
   const t = (v ?? '').trim();
   return t ? t : null;
 };
+
+/** 0027: this drawer's three task-writing treatments (new_task,
+ *  keep_both_linked, update_existing/complete_existing/…) build their own
+ *  taskPatch/insert directly rather than routing through applyProposal — see
+ *  the note on resolveDueSourceDate. When they write a due date, it needs
+ *  the same classification applyProposal already gives every other path: if
+ *  the human's edited value in the drawer differs from what the agent
+ *  proposed, a human just typed it (as confirmed as Edit details' own due
+ *  field); otherwise the agent's own tag carries through, defaulting to the
+ *  conservative 'unresolved' rather than assuming 'explicit'. */
+async function dueProvenanceFields(
+  admin: ReturnType<typeof supabaseAdmin>,
+  p: AgentProposal,
+  due: string | null,
+): Promise<Record<string, unknown>> {
+  if (!due) return {};
+  const payloadDue = typeof p.payload.due === 'string' ? p.payload.due : null;
+  if (due !== payloadDue) {
+    return { due_provenance: 'explicit', due_source_document_id: null, due_source_date: null };
+  }
+  const payloadProvenance = typeof p.payload.due_provenance === 'string' ? p.payload.due_provenance : null;
+  return {
+    due_provenance: payloadProvenance ?? 'unresolved',
+    due_source_document_id: p.document_id ?? null,
+    due_source_date: await resolveDueSourceDate(admin, p.document_id),
+  };
+}
 
 function revalidateReview() {
   revalidatePath('/'); revalidatePath('/work'); revalidatePath('/inbox'); revalidatePath('/upload');
@@ -149,6 +176,8 @@ export async function decideProposal(
   const owner = clean(edits.owner);
   let undoId: string | null = null;
 
+  const dueProvenanceFieldsFor = (due: string | null) => dueProvenanceFields(admin, p, due);
+
   if (changeType === 'apply_as_stated') {
     // Not a task edit. A blocker, a relationship, a decision, a due date or
     // a phase — applyProposal is the one writer that knows which. The drawer
@@ -168,6 +197,7 @@ export async function decideProposal(
       description: note,
       owner,
       due,
+      ...(await dueProvenanceFieldsFor(due)),
       stage_key: typeof p.payload.stage_key === 'string' ? p.payload.stage_key : null,
       substage_template_id: edits.substageTemplateId || null,
       category: p.payload.category === 'admin' ? 'admin' : 'project',
@@ -194,6 +224,7 @@ export async function decideProposal(
       description: note,
       owner,
       due,
+      ...(await dueProvenanceFieldsFor(due)),
       stage_key: typeof p.payload.stage_key === 'string' ? p.payload.stage_key : null,
       substage_template_id: edits.substageTemplateId || null,
       category: p.payload.category === 'admin' ? 'admin' : 'project',
@@ -239,7 +270,10 @@ export async function decideProposal(
     // updateFieldsPreview exactly, so what the drawer showed is what is written.
     if (title && changeType === 'update_existing' && title !== (before.title ?? '')) taskPatch.title = title;
     if (owner) taskPatch.owner = owner;
-    if (due) taskPatch.due = due;
+    if (due) {
+      taskPatch.due = due;
+      Object.assign(taskPatch, await dueProvenanceFieldsFor(due));
+    }
     if (note) taskPatch.description = note;
     // Sub-stage (and the Phase derived from it) only when it actually changed —
     // the drawer always sends the current value, and writing an unchanged one
@@ -382,7 +416,12 @@ export async function undoProposalDecision(logId: string): Promise<{ ok: true } 
   } else if (entry.entity_type === 'task' && entry.before_json) {
     const before = entry.before_json;
     const restore: Record<string, unknown> = {};
-    for (const k of ['title', 'description', 'owner', 'due', 'status', 'waiting_for', 'stage_key', 'substage_template_id', 'last_touched', 'document_id'] as const) {
+    // 0027: due's classification travels with it — restoring `due` from the
+    // snapshot without also restoring due_provenance/due_source_* would
+    // leave the row showing the NEW date's metadata against the OLD value,
+    // the same mismatch lib/work-verbs.ts's UNDO_RESTORE_KEYS guards against
+    // for the other undo path.
+    for (const k of ['title', 'description', 'owner', 'due', 'status', 'waiting_for', 'stage_key', 'substage_template_id', 'last_touched', 'document_id', 'due_provenance', 'due_source_document_id', 'due_source_date'] as const) {
       restore[k] = before[k] ?? null;
     }
     const { error } = await admin.from('tasks').update(restore).eq('id', entry.entity_id);
