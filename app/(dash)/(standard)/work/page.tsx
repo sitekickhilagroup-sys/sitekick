@@ -171,10 +171,20 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // told apart via 'unrelated' — see lib/dedup.ts's findDuplicatePairs) and
   // later for unlocksFor's blocks-edge lookup.
   const allRels = (relsQ.data ?? []) as Relationship[];
+  const projects = (projectsQ.data ?? []) as Project[];
+  // F-5: findDuplicatePairs has no notion of is_test — nothing before this
+  // fix stopped a QA test task from matching (and offering to merge with) a
+  // real one, the same class of gap already fixed for task counts/Inbox/
+  // auto-triage/open-tasks this session, missed here. Resolve test project
+  // ids from data already loaded (no extra query) and exclude before dedup
+  // runs, not after — same pattern as selectOpenTasksExcludingTest.
+  const testProjectIdsForDedup = projects.filter((p) => p.is_test).map((p) => p.id);
+  const dedupCandidates = testProjectIdsForDedup.length
+    ? tasks.filter((t) => !t.project_id || !testProjectIdsForDedup.includes(t.project_id))
+    : tasks;
   // Header claim (below) is computed from this, not asserted — Dor #47 saw
   // "Nothing is duplicated" above a real General/project duplicate pair.
-  const dupPairs = findDuplicatePairs(tasks, allRels);
-  const projects = (projectsQ.data ?? []) as Project[];
+  const dupPairs = findDuplicatePairs(dedupCandidates, allRels);
   const blockers = (blockersQ.data ?? []) as Blocker[];
   // 0027 follow-up (Inbox audit): a QA-project proposal inflated this badge
   // and the /inbox list identically — neither had ever excluded test data,
