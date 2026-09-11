@@ -3,6 +3,109 @@
 **This is a dated snapshot, not a living guarantee. Refresh it whenever relevant evidence
 changes — see `WORKFLOW.md` for when to update.**
 
+**2026-09-11 (Claude application session, "3-track work plan — learning M1.5, My Work
+completeness, Data Inbox"):** Continuing directly from the 09-09/10 session below — everything in
+that entry is still current; this adds on top of it. Full commit range `b72c950..HEAD` (18
+commits), every one pushed to `main` (this repo deploys off `origin/main`) and individually
+verified live in production via `gh api .../status` + a real browser/SQL check, not assumed from
+"the page loaded."
+
+- **Deploy-verification methodology gap, found and closed:** `3e81b62` ("Report a problem": the
+  4th Notes Assistant intent + its cron) was pushed and the site kept working fine on reload —
+  but the deploy had actually **failed** (Vercel Hobby plan rejects any cron scheduled more than
+  once/day; the feature's `0 6,18 * * *` schedule violated that, and Vercel fails the *entire*
+  deployment, not just that route). A stale deploy silently keeps serving old code, so "reload and
+  it works" is not proof of a successful deploy — confirmed via `gh api repos/.../commits/<sha>/status`
+  from here on. Fixed in `4a56a8d` (once/day schedule) — see `DECISIONS.md`.
+- **Live-caught same night:** the 4th intent's own UI never actually shipped — both
+  `components/notes/notes-assistant.tsx` and `notes-center-board.tsx` had redeclared their own
+  local `INTENTS` constant instead of importing `lib/comment-intent.ts`'s real one, so neither
+  dropdown could show or select "Report a problem" even once the backend was live. Fixed in
+  `eced8c6`, both components now import the shared array — closes off the same class of drift for
+  any future 5th intent. Verified live via the accessibility tree, not just a screenshot.
+- **Learning model, Milestone 1.5 (`715f727`):** `pinTask`/`snoozeTask` existed and already logged
+  correctly (per the design draft below) but had **zero UI callers** — confirmed via grep before
+  touching anything. Added "Move to top" / "Unpin" to My Work's verb menu; `pinTask` now also
+  writes a `priority_feedback` row (`event='reordered'`) when actually pinning. Verified live
+  end-to-end: pinned a real task, confirmed the `priority_feedback` row via SQL
+  (`proposed_global_rank: 2`, `event: 'reordered'`), then unpinned and confirmed the task's
+  `manual_priority` returned to `null` — no production data left dirtied. See
+  `docs/ai/handoffs/NOA_LEARNING_PIN_GUIDE_2026-09-11.md` (written for Noa's Claude session, per
+  Rotem's ask) and `LEARNING_MODEL_IMPROVEMENT_DRAFT.md` for the fuller design this implements one
+  slice of. `priority_feedback` collection itself (Path B action-derived signals) has been live
+  since a prior session — 9 rows total as of this check, `LEARNING_COLLECT=1` confirmed set in
+  prod (inferred: the table has rows at all). Still true, unchanged: **nothing in the product
+  reads `priority_feedback` yet** — collection only, no surfaced confidence, no automation.
+- **My Work completeness — 4 real bugs found and fixed, not just "checked":**
+  - **F-10** (`81d3f11`) — a bare `?task=<uuid>` deep link (no `?view=`) defaulted to the `today`
+    view regardless, so if the task wasn't in today's subset its row never rendered — nothing to
+    highlight or scroll to. Fixed: defaults to `view=all` when `?task=` is present with no explicit
+    `?view=`; added a client-side scroll effect (`components/work/scroll-to-task.tsx`) so the query
+    param alone is sufficient, independent of whether the `#task-<uuid>` hash survived transit
+    (email clients / link previews can strip fragments).
+  - **F-5** (`183e579`) — `findDuplicatePairs` (the "possible duplicate" merge suggester) ran over
+    the *unfiltered* open-tasks list; `is_test` was never checked, so a QA test task could be
+    offered as a merge candidate against a real one. Same bug class as three earlier fixes this
+    week (My Work badge, `/inbox`, `lib/open-tasks.ts`), missed here because `dupPairs` was
+    computed one statement before `projects`/`testProjectIds` even existed in scope. Confirmed the
+    real QA project (`1d3f44cd-…`) exists in prod before fixing.
+  - **Notes Center reinterpretation** (`5b106cd`) — changing "We read this as…" for a real
+    (assistant-source) note showed a live preview (e.g. "Fact → Preference") and Save reported
+    success, but `save()` only ever called `retargetComment` (association-only, no intent
+    parameter) — the reinterpretation was silently discarded. Only historical-note promotion
+    actually persisted intent (it's part of the insert), which is what hid this. Fixed: also calls
+    `correctCommentIntent` when the intent differs. **Not live-UI-verified** — the same
+    long-standing blocker as prior sessions: no QA-safe note reachable in Notes Center's own
+    filters to test against without touching real data; code-reviewed, type-checked, reuses the
+    already-proven `correctCommentIntent` action (verified live earlier the same night for the
+    'issue'-intent fix). **Known, undone gap, stated not hidden:** Notes Center's save flow still
+    has no Undo at all (unlike My Work's verb menu) — both writes still log to `activity_log`
+    normally, so a manual revert via History remains possible, just not from this drawer.
+  - **F-8** (`20d517f`) — `blockers.days_stuck` is a static value from whenever the row was
+    created; nothing anywhere ever advanced it. Confirmed live via SQL before fixing: a blocker
+    created 22 real days ago still read `days_stuck=9`. This fed not just display but
+    `lib/priority.ts`'s `scoreBlocker` (meant to reward longer-stuck blockers — couldn't, since the
+    number never grew) and the text handed to the prioritization model. Added
+    `effectiveDaysStuck`/`withEffectiveDaysStuck` (`lib/blockers.ts`) — adds real elapsed time to
+    the stored estimate; wired into all 4 fetch sites (`work/page.tsx`, `lib/queries.ts`,
+    `daily-digest.ts`, `prioritize-tasks.ts`). Live-verified: the UI now shows "31d stuck" for the
+    same blocker that read "9d" before the fix, matching the SQL-computed corrected value exactly.
+  - **F-7 root-caused, not yet fixed** — Project Process can show a sub-stage as "Not activated"
+    (`lib/process.ts`'s `activated: !!instance` — purely whether a `project_substages` row exists)
+    while a real, open task is already tagged with that exact `substage_template_id` (set via
+    `app/actions/proposals.ts`'s task_update apply path or `updateTaskDetails`, neither of which
+    creates the corresponding instance row). Confirmed reachable by reading both write paths; not
+    yet reproduced against a specific live record. **Deliberately not fixed same-session**: the
+    obvious fix (auto-activate on tag) is riskier than the other four — `activateSubstage`'s
+    upsert would silently reset an already-`done`/otherwise-advanced sub-stage's status back to
+    `active` if called blindly on every task write, which would be a new, worse bug. A correct fix
+    needs a "create the instance only if one doesn't already exist" path, not a reuse of
+    `activateSubstage` as-is, across at least 2 call sites. Scoped but not started.
+  - **Still open, per the last QA handoff, not touched this round:** import-queue draining/cron
+    firing in practice, `FEEDBACK_USE=off` kill-switch, undo-of-undo (chained revert), and the
+    Workstream field (needs a QA project with workstream options configured to test meaningfully).
+- **Validation baseline for this whole round:** 1019/1019 tests passing (+4 net over the
+  09-09/10 session's 1015 — `effectiveDaysStuck`/`withEffectiveDaysStuck`'s coverage; the
+  `isCapturedEvent` extension edited an existing test in place), `npm run typecheck` and `npx
+  eslint` clean on every changed file, no `next build` run this round (relied on Vercel's own
+  build succeeding as the build signal, confirmed per-commit via deploy status).
+- **Next planned, per Rotem's explicit sequencing (2 → 1 → 3), not yet started:** Track 3, Data
+  Inbox bulk upload for Noa. Root cause already confirmed via Vercel's own docs before this round
+  paused: the app's `/api/upload` route claims a 20MB per-file cap, but Vercel Functions hard-cap
+  request bodies at **4.5MB on every plan** (not just Hobby) — anything 4.5–20MB fails with a raw
+  `413` before the app's own code ever runs. The UI also hard-caps at 2 files client- and
+  server-side (no real multi-select), and large-archive processing is throttled to 15 docs/day
+  (once-daily cron, same Hobby constraint as the learning-model cron). Planned fix, not built:
+  direct-to-Supabase-Storage upload via signed URL (Vercel's own documented pattern, bypasses the
+  function body limit entirely) + real multi-file selection + an on-demand "process all now"
+  trigger independent of the daily cron.
+- **Two questions from Rotem, asked, not yet answered as of this snapshot:** his own reaction to
+  this session's build and whether a 3rd-party tool could simplify the issue-report pipeline built
+  earlier the same night; and the Data Inbox design above is the substantive answer to his second
+  question, informally — a written response synthesizing both is still owed.
+
+---
+
 **2026-09-09/10 (Claude, extended session, "operational readiness"):** Root-caused and fixed a
 production bug that made My Work silently show a stale, day-old prioritization run — an unordered
 multi-run `task_priorities` fetch was truncating at PostgREST's default 1000-row cap in physical
