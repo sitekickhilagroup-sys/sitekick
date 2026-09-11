@@ -17,9 +17,12 @@ export function isCollectionEnabled(): boolean {
   return process.env.LEARNING_COLLECT === '1';
 }
 
-/** Only these task events carry a prioritization signal worth capturing. */
+/** Only these task events carry a prioritization signal worth capturing.
+ *  'reordered' (Milestone 1.5): Noa pinning a task to the top is the
+ *  strongest, most unambiguous correction signal there is — see
+ *  docs/ai/handoffs/LEARNING_MODEL_IMPROVEMENT_DRAFT.md §9.6. */
 const CAPTURED_EVENTS: readonly PriorityEvent[] = [
-  'completed', 'not_applicable', 'waiting', 'delayed', 'scheduled',
+  'completed', 'not_applicable', 'waiting', 'delayed', 'scheduled', 'reordered',
 ];
 
 export function isCapturedEvent(verb: string): verb is PriorityEvent {

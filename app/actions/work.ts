@@ -162,9 +162,49 @@ export async function snoozeTask(taskId: string, until: string) {
 export async function pinTask(taskId: string, manualPriority: number | null) {
   const user = await requireUser();
   const admin = supabaseAdmin();
+  const { data: before } = await admin.from('tasks').select('manual_priority').eq('id', taskId).maybeSingle();
   const { error } = await admin.from('tasks').update({ manual_priority: manualPriority }).eq('id', taskId);
   if (error) return { error: error.message };
-  await logActivity(admin, { entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id, action: 'pin', after: { manualPriority } });
+  const logId = await logActivity(admin, {
+    entity_type: 'task', entity_id: taskId, actor: user.email ?? user.id,
+    action: 'pin', before, after: { manualPriority },
+  });
+  // Learning V1 (Milestone 1.5): a pin is Noa saying "this belongs above
+  // these others" — the strongest, unambiguous ranking correction there is
+  // (see docs/ai/handoffs/LEARNING_MODEL_IMPROVEMENT_DRAFT.md §9.6). Only
+  // recorded on an actual pin, not on unpin (manualPriority === null) — an
+  // unpin retracts a placement, it doesn't itself assert a new one. Known
+  // gap, not yet handled: pinning then immediately undoing (see pinToTop's
+  // caller) does not void this row the way undoWorkVerb does for verbs —
+  // harmless today since nothing reads priority_feedback yet.
+  if (manualPriority != null) {
+    try {
+      await recordPriorityFeedback(admin, {
+        taskId, verb: 'reordered', sourceActivityLogId: logId, decidedBy: user.email ?? user.id,
+      });
+    } catch (e) {
+      console.error('[priority-feedback] pinTask collect failed (non-fatal)', { taskId, error: e });
+    }
+  }
   revalidatePath('/'); revalidatePath('/work');
   return { ok: true };
+}
+
+/**
+ * "Pin to top" (Milestone 1.5) — the one-click version of pinTask for the
+ * common case: put this task above every other pinned task, no number to
+ * pick. Computes the next value server-side (deterministic, not the model's
+ * opinion) and reuses pinTask for the actual write + audit + learning-signal
+ * capture, so there is exactly one place that does any of that.
+ */
+export async function pinToTop(taskId: string) {
+  await requireUser();
+  const admin = supabaseAdmin();
+  const { data } = await admin.from('tasks').select('manual_priority')
+    .not('manual_priority', 'is', null)
+    .order('manual_priority', { ascending: true })
+    .limit(1);
+  const current = (data?.[0] as { manual_priority: number } | undefined)?.manual_priority;
+  const next = current != null ? current - 1 : 1;
+  return pinTask(taskId, next);
 }

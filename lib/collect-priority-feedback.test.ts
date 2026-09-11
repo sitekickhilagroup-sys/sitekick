@@ -21,8 +21,8 @@ describe('isCollectionEnabled — the kill-switch', () => {
 });
 
 describe('isCapturedEvent — only prioritization dispositions are captured', () => {
-  it('captures the five disposition verbs', () => {
-    for (const v of ['completed', 'not_applicable', 'waiting', 'delayed', 'scheduled']) {
+  it('captures the five disposition verbs plus an explicit reorder', () => {
+    for (const v of ['completed', 'not_applicable', 'waiting', 'delayed', 'scheduled', 'reordered']) {
       expect(isCapturedEvent(v)).toBe(true);
     }
   });

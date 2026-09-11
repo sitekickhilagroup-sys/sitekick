@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
-import { applyWorkVerb, undoWorkVerb } from '@/app/actions/work';
+import { applyWorkVerb, undoWorkVerb, pinToTop, pinTask } from '@/app/actions/work';
 import type { WorkVerb } from '@/lib/work-verbs';
 import type { Task } from '@/lib/types';
 import { SavedChip } from './saved-chip';
@@ -44,6 +44,11 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
   // A failed Undo click — most commonly a real conflict (the task changed
   // since this action, and undoWorkVerb is guarded against clobbering that).
   const [undoError, setUndoError] = useState<string | null>(null);
+  // M1.5 pin/unpin — a separate lightweight result, not routed through
+  // applyWorkVerb/undoWorkVerb (a pin is a manual_priority write, not a
+  // WorkVerb). `previous` is what manual_priority was right before this
+  // action, so Undo can restore it with one more pinTask call.
+  const [pinResult, setPinResult] = useState<{ message: string; previous: number | null } | null>(null);
   const [pending, start] = useTransition();
 
   const run = (verb: WorkVerb, input: string | null) => start(async () => {
@@ -68,10 +73,28 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
     setResult(null);
   });
 
-  if (result) {
+  const pinTop = () => start(async () => {
+    const previous = task?.manual_priority ?? null;
+    const res = await pinToTop(taskId);
+    if (!('error' in res)) { setOpen(false); setPinResult({ message: labels['msg.pin'] ?? '', previous }); }
+  });
+  const unpin = () => start(async () => {
+    const previous = task?.manual_priority ?? null;
+    const res = await pinTask(taskId, null);
+    if (!('error' in res)) { setOpen(false); setPinResult({ message: labels['msg.unpin'] ?? '', previous }); }
+  });
+  const undoPin = () => start(async () => {
+    if (!pinResult) return;
+    await pinTask(taskId, pinResult.previous);
+    setPinResult(null);
+  });
+
+  if (result || pinResult) {
+    const message = result ? result.message : pinResult!.message;
     return (
-      <SavedChip message={result.message} undoId={result.undoId} pending={pending} error={undoError}
-        onUndo={undo} onDismiss={() => { setResult(null); setUndoError(null); }} labels={labels} />
+      <SavedChip message={message} undoId={result ? result.undoId : 'pin'} pending={pending} error={undoError}
+        onUndo={result ? undo : undoPin}
+        onDismiss={() => { setResult(null); setPinResult(null); setUndoError(null); }} labels={labels} />
     );
   }
 
@@ -138,6 +161,25 @@ export function VerbMenu({ taskId, labels, task, editorOptions }: Props) {
                   className="min-h-11 rounded px-2 py-1.5 text-start text-xs text-ink2 hover:bg-card2 hover:text-ink disabled:opacity-50 sm:min-h-0">
                   {labels.editDetails}
                 </button>
+                {/* M1.5 — the missing explicit-correction control (design doc
+                    §9.6): pinTask/snoozeTask existed and already logged
+                    correctly, but no UI ever called them, so this signal was
+                    structurally impossible to produce. Opt-in via label
+                    presence so callers that don't pass these keys (e.g. the
+                    Project Process screen's own VerbMenu reuse) are unaffected. */}
+                {labels.pinToTop && (
+                  task.manual_priority == null ? (
+                    <button type="button" role="menuitem" disabled={pending} onClick={pinTop}
+                      className="min-h-11 rounded px-2 py-1.5 text-start text-xs text-ink2 hover:bg-card2 hover:text-ink disabled:opacity-50 sm:min-h-0">
+                      {labels.pinToTop}
+                    </button>
+                  ) : (
+                    <button type="button" role="menuitem" disabled={pending} onClick={unpin}
+                      className="min-h-11 rounded px-2 py-1.5 text-start text-xs text-ink2 hover:bg-card2 hover:text-ink disabled:opacity-50 sm:min-h-0">
+                      {labels.unpin}
+                    </button>
+                  )
+                )}
               </>
             )}
           </span>
