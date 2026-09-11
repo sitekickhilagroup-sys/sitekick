@@ -23,6 +23,7 @@ import type { Blocker, Invoice, Phase, PhaseKey, Project, ProjectStage, Relation
 import { fmtDate } from '@/lib/format';
 import { ScrollToTask } from '@/components/work/scroll-to-task';
 import { withEffectiveDaysStuck } from '@/lib/blockers';
+import { selectOpenTasksExcludingTest } from '@/lib/open-tasks';
 
 export const dynamic = 'force-dynamic';
 // "Refresh priorities" is a server action invoked from this page — it runs the
@@ -100,7 +101,13 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
   // Relationships ride the same batch (table is small — filter in memory
   // below) so the page costs one database round trip, not two.
   const [tasksQ, projectsQ, blockersQ, proposalsQ, approvedInvoicesQ, relsQ, phasesQ, stageMapQ, projectStagesQ, vendorsQ, substageTemplatesQ, workstreamsQ, closedQ, taskCommentsQ] = await Promise.all([
-    supabase.from('tasks').select('*').eq('status', 'open'),
+    // Noa's own QA acceptance run (comment d67d7331, item 4) confirmed live:
+    // a QA-project task rendered in the real "All" view and counted in every
+    // view-tab badge — this was the raw, unfiltered query every business-
+    // critical path already avoided via selectOpenTasksExcludingTest (the
+    // daily digest, prioritize-tasks, extractComms), just never applied here,
+    // the one place Noa actually looks at every day.
+    selectOpenTasksExcludingTest(supabase),
     supabase.from('projects').select('*'),
     // F-8: no longer ordered at the query level — days_stuck as stored is a
     // stale creation-time snapshot (lib/blockers.ts's effectiveDaysStuck),
@@ -774,6 +781,7 @@ export default async function WorkPage({ searchParams }: PageProps<'/work'>) {
               save: t('common.save'),
               cancel: t('common.cancel'),
               error: t('common.error_save'),
+              errTitleEmpty: t('work.err_title_empty'),
               back: t('common.cancel'),
               dupKicker: t('work.dup_kicker'),
               dupTitle: t('work.dup_title'),
