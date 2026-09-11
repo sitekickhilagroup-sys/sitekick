@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { runImportBatch } from '@/app/actions/import-queue';
+import { fetchImportQueueStats, runImportBatch } from '@/app/actions/import-queue';
 import type { ImportQueueStats } from '@/lib/import-queue';
 
 interface Labels {
@@ -41,15 +41,16 @@ export function ImportQueuePanel({ initialStats, labels }: Props) {
     try {
       const res = await runImportBatch(15);
       setResult({ succeeded: res.succeeded, failed: res.failed, more: res.more });
-      // Reflect the batch immediately without waiting for a full page
-      // reload — the server action already revalidated /upload for the
-      // next real navigation, this just keeps THIS render in sync too.
-      setStats((s) => ({
-        ...s,
-        processed: s.processed + res.succeeded,
-        waiting: Math.max(0, s.waiting - res.succeeded - res.failed),
-        failed: s.failed + res.failed,
-      }));
+      // Live-caught bug: `res.failed` counts attempts that failed THIS
+      // batch — not the same thing as stats.failed (documents that hit
+      // MAX_ATTEMPTS and stopped being retried). A doc's first failure
+      // should still show up under Waiting, not Failed; approximating that
+      // split client-side without knowing each document's running failure
+      // count got it wrong. Refetching the real, server-computed stats
+      // (same getImportQueueStats the page itself renders from) is the
+      // only way to keep this correct — cheap enough to always do.
+      const fresh = await fetchImportQueueStats();
+      setStats(fresh);
     } catch (e) {
       setError(e instanceof Error ? e.message : labels.errorSave);
     }

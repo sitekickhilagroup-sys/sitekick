@@ -9,6 +9,16 @@ import { getImportQueueStats } from '@/lib/import-queue';
 import type { DocumentRow, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+// Next.js Server Actions inherit their timeout from the PAGE they're
+// invoked on, not the action file itself. runImportBatch (app/actions/
+// import-queue.ts) is a serial loop of up to 15 LLM extraction passes — a
+// live run of it took 6+ minutes for one batch (invoice_pdf's extra
+// storage download, or just a slow model response, can stretch a single
+// document well past a few seconds). Without this, the platform default
+// timeout risks killing the request mid-document, leaving that one
+// document claimed (processed_at set) but never actually processed or
+// released for retry.
+export const maxDuration = 300;
 
 // Data Inbox: route-specific shell, one intake surface at a time, a vertical
 // workflow panel and a processing queue bound to real `documents` rows.
