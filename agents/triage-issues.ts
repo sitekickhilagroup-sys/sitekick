@@ -3,8 +3,9 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { runStructured } from '../lib/claude.ts';
 
-// Twice-daily automated pass over "Report a problem" notes (the Notes
-// Assistant's 4th intent, 0028). Rotem's explicit ask: he wants a
+// Daily automated pass over "Report a problem" notes (the Notes Assistant's
+// 4th intent, 0028) — once/day, not twice, per Vercel Hobby plan's cron
+// limit (see vercel.json). Rotem's explicit ask: he wants a
 // prioritized, plain-language backlog he can read on demand — not raw notes,
 // and not something that decides anything on its own. This agent ONLY
 // classifies (time estimate + significance); nothing here writes code,

@@ -208,7 +208,7 @@ const SIGNIFICANCE_RANK: Record<string, number> = { critical: 0, high: 1, medium
 
 /**
  * Rotem's on-demand backlog: every open "Report a problem" note, most
- * significant first. Untriaged items (the twice-daily cron hasn't reached
+ * significant first. Untriaged items (the daily cron hasn't reached
  * them yet) sort last within their tier, with no time estimate — real
  * status, not silently promised. Never returns a QA-project note.
  */
