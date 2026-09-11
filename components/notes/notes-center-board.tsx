@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { retargetComment, promoteHistoricalNote } from '@/app/actions/comments';
+import { retargetComment, promoteHistoricalNote, correctCommentIntent } from '@/app/actions/comments';
 import { INTENTS, type CommentIntent } from '@/lib/comment-intent';
 import type { NoteSource, NoteState } from '@/lib/notes-center';
 
@@ -90,12 +90,26 @@ export function NotesCenterBoard({ rows, counts, taskOptions, projectOptions, bl
     const id = forceGeneral ? null : (kind === 'general' ? null : targetId);
     if (!forceGeneral && kind !== 'general' && !id) { setToast(labels.error); return; }
     start(async () => {
-      const res = selected.source === 'assistant'
-        ? await retargetComment(selected.id, kind, id)
-        : await promoteHistoricalNote({
-            taskId: selected.sourceTaskId as string, body: selected.body, intent, entityType: kind, entityId: id,
-          });
-      if ('error' in res) { setToast(`${labels.error}: ${res.error}`); return; }
+      if (selected.source === 'assistant') {
+        // Two independent writes for a real comment row: the association
+        // (retargetComment) and, if the "We read this as…" select was
+        // changed from what it already was, the reinterpretation
+        // (correctCommentIntent) — retargetComment has no intent field at
+        // all, so this was previously silently discarded: the preview text
+        // below the select ("Fact → Preference") would show, Save would
+        // report success, and the intent would never actually change.
+        const res = await retargetComment(selected.id, kind, id);
+        if ('error' in res) { setToast(`${labels.error}: ${res.error}`); return; }
+        if (intent !== selected.intent) {
+          const intentRes = await correctCommentIntent(selected.id, intent);
+          if ('error' in intentRes) { setToast(`${labels.error}: ${intentRes.error}`); return; }
+        }
+      } else {
+        const res = await promoteHistoricalNote({
+          taskId: selected.sourceTaskId as string, body: selected.body, intent, entityType: kind, entityId: id,
+        });
+        if ('error' in res) { setToast(`${labels.error}: ${res.error}`); return; }
+      }
       setToast(labels.saved);
       setSelected(null);
     });
