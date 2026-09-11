@@ -175,6 +175,10 @@ export default async function UploadPage() {
             result: t('upload.batch_result'),
             more: t('upload.batch_more'),
             errorSave: t('common.error_save'),
+            processAll: t('upload.process_all'),
+            runningAll: t('upload.processing_all'),
+            allResult: t('upload.all_result'),
+            allMore: t('upload.all_more'),
           }}
         />
 

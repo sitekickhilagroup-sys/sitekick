@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { fetchImportQueueStats, runImportBatch } from '@/app/actions/import-queue';
+import { fetchImportQueueStats, runImportBatch, processAllPending } from '@/app/actions/import-queue';
 import type { ImportQueueStats } from '@/lib/import-queue';
 
 interface Labels {
@@ -16,6 +16,11 @@ interface Labels {
   result: string;
   more: string;
   errorSave: string;
+  processAll: string;
+  runningAll: string;
+  /** "{succeeded} processed, {failed} failed, over {batches} batches" */
+  allResult: string;
+  allMore: string;
 }
 
 interface Props {
@@ -32,12 +37,15 @@ interface Props {
 export function ImportQueuePanel({ initialStats, labels }: Props) {
   const [stats, setStats] = useState(initialStats);
   const [result, setResult] = useState<{ succeeded: number; failed: number; more: boolean } | null>(null);
+  const [allResult, setAllResult] = useState<{ succeeded: number; failed: number; batches: number; timedOut: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [pendingAll, startAll] = useTransition();
 
   const runBatch = () => start(async () => {
     setError(null);
     setResult(null);
+    setAllResult(null);
     try {
       const res = await runImportBatch(15);
       setResult({ succeeded: res.succeeded, failed: res.failed, more: res.more });
@@ -56,16 +64,42 @@ export function ImportQueuePanel({ initialStats, labels }: Props) {
     }
   });
 
+  // "Process all now" can run for minutes on a large backlog (up to
+  // /upload's own 300s function budget) — the button stays disabled and
+  // labeled `runningAll` the whole time; there's nothing to poll mid-run
+  // since drainPending only returns once at the very end.
+  const runAll = () => startAll(async () => {
+    setError(null);
+    setResult(null);
+    setAllResult(null);
+    try {
+      const res = await processAllPending();
+      setAllResult({ succeeded: res.succeeded, failed: res.failed, batches: res.batches, timedOut: res.timedOut });
+      const fresh = await fetchImportQueueStats();
+      setStats(fresh);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : labels.errorSave);
+    }
+  });
+
   return (
     <section className="rounded-[15px] border border-line bg-sk-surface p-5 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.title}</p>
-        <button
-          type="button" disabled={pending} onClick={runBatch}
-          className="min-h-11 cursor-pointer rounded-full bg-sage px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-        >
-          {pending ? labels.running : labels.runBatch}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button" disabled={pending || pendingAll} onClick={runBatch}
+            className="min-h-11 cursor-pointer rounded-full bg-sage px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {pending ? labels.running : labels.runBatch}
+          </button>
+          <button
+            type="button" disabled={pending || pendingAll} onClick={runAll}
+            className="min-h-11 cursor-pointer rounded-full border border-sage-line px-3 py-1.5 text-xs font-semibold text-sage disabled:opacity-50"
+          >
+            {pendingAll ? labels.runningAll : labels.processAll}
+          </button>
+        </div>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {([
@@ -84,6 +118,15 @@ export function ImportQueuePanel({ initialStats, labels }: Props) {
         <p role="status" className="mt-3 text-[11px] text-sk-muted">
           {labels.result.replace('{succeeded}', String(result.succeeded)).replace('{failed}', String(result.failed))}
           {result.more && ` ${labels.more}`}
+        </p>
+      )}
+      {allResult && (
+        <p role="status" className="mt-3 text-[11px] text-sk-muted">
+          {labels.allResult
+            .replace('{succeeded}', String(allResult.succeeded))
+            .replace('{failed}', String(allResult.failed))
+            .replace('{batches}', String(allResult.batches))}
+          {allResult.timedOut && ` ${labels.allMore}`}
         </p>
       )}
       {error && <p role="alert" className="mt-3 text-[11px] font-semibold text-coral">{error}</p>}

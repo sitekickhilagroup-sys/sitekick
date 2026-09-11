@@ -93,6 +93,56 @@ export interface BatchResult {
   more: boolean;
 }
 
+export interface DrainResult {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  /** How many processImportBatch calls it took. */
+  batches: number;
+  /** True if the loop stopped because the time budget ran out, not because
+   *  the queue actually emptied — the caller should say "there's more,
+   *  click again" rather than implying the backlog is fully drained. */
+  timedOut: boolean;
+}
+
+/**
+ * "Process all now" — the once-daily cron (Vercel Hobby plan doesn't allow
+ * more frequent crons; see vercel.json) only ever drains 15/day, so a large
+ * backlog (a big .zip/.olm import) can sit for over a week. This repeats
+ * processImportBatch until either the queue empties or a time budget runs
+ * out, so a single click can drain everything eligible in one go instead.
+ *
+ * Takes `runBatch` as a parameter (the caller binds it to a real `admin`
+ * client — see app/actions/import-queue.ts) rather than calling
+ * processImportBatch directly, so this loop/budget logic is unit-testable
+ * with a fake batch function and a fake clock, no database involved.
+ */
+export async function drainPending(
+  runBatch: (batchSize: number) => Promise<BatchResult>,
+  opts: { batchSize?: number; budgetMs?: number; now?: () => number } = {},
+): Promise<DrainResult> {
+  const batchSize = opts.batchSize ?? 15;
+  const budgetMs = opts.budgetMs ?? 270_000; // under /upload's 300s maxDuration, with margin
+  const now = opts.now ?? Date.now;
+  const start = now();
+
+  let attempted = 0, succeeded = 0, failed = 0, batches = 0, more = true;
+  let consecutiveEmpty = 0;
+  while (more && now() - start < budgetMs) {
+    const res = await runBatch(batchSize);
+    attempted += res.attempted; succeeded += res.succeeded; failed += res.failed;
+    batches++;
+    more = res.more;
+    // A batch that claimed nothing while more is still true means every
+    // candidate lost its atomic-claim race (a concurrent cron/click) —
+    // real, but not a reason to spin for the whole time budget. Two in a
+    // row with no progress is treated as "nothing left this run can do."
+    consecutiveEmpty = res.attempted === 0 ? consecutiveEmpty + 1 : 0;
+    if (consecutiveEmpty >= 2) break;
+  }
+  return { attempted, succeeded, failed, batches, timedOut: more };
+}
+
 /**
  * Processes up to `batchSize` waiting documents, oldest first. Never
  * re-uploads or re-inserts anything — it only calls the SAME processDocument
