@@ -1,6 +1,148 @@
 # Live Functional QA — handoff (in progress)
 
-## Session 2026-09-11 (later) — Date provenance + Greg/Rinconia: STOPPED at the required pre-code gate, no code changed
+## Session 2026-09-11 (continuation) — Date provenance CLOSED (with one known residual), Agent Review Inbox audit + safe fixes
+
+### Item 0 — Date provenance: CLOSED, one residual gap flagged honestly
+
+Migration `0027_date_provenance.sql` applied by Rotem; verified via `information_schema` (3
+columns present). Two-tab Production preflight passed (identical build hash both tabs, both opened
+and cancelled "+ Add action" cleanly) before any code.
+
+**Implemented and live-verified** (commits `3043568`, `5b64646`, `7b5a5c1`, `283d479`):
+- `due_provenance` ('explicit'/'derived'/'unresolved') + `due_source_document_id` + `due_source_date`
+  stamped on every write path that can set a task's `due`: `extractComms`'s autoCreates,
+  `applyProposal` (task_update/task_done/deadline_update — the human-approval Apply path),
+  `app/actions/process-text.ts`'s separate "Paste an update" path (found live, not in the original
+  extractComms-only scope), Edit details, the Delayed/Scheduled verbs, and — found live, a real bug —
+  the Inbox drawer's own `decideProposal` taskPatch construction, which bypassed `applyProposal`
+  entirely for the `update_existing`/`new_task`/`keep_both_linked` treatments (the DEFAULT treatment
+  for a matched task_update). Fixed in `283d479` with a shared `dueProvenanceFields()` helper; also
+  fixed `undoProposalDecision`'s own separate hardcoded restore-key list (missing the 3 new columns).
+- `auto-triage.ts`: a due date without `due_provenance:'explicit'` can no longer auto-apply, even
+  inside an otherwise learned-accept class (`isSafeEnrichment` + a new `assertsUnconfirmedDue` gate
+  on the learned-threshold path) — closes the one truly "silent" path (auto-apply with no human in
+  the loop at all).
+- Display: My Work's Due badge never renders a derived/unresolved date as Overdue/Now (shows
+  "Estimated"/"Unconfirmed · <date>" instead, and always names the actual date — also fixes Noa's
+  F-3, "DUE column shows only the word Overdue, never the date"); the Details/evidence section
+  states plainly "Estimated from a note dated X — not a confirmed commitment" / "not confirmed by
+  any source" for non-explicit dates; `whyNowFor`'s deterministic Overdue/Now append respects the
+  same gate.
+
+**Live-tested on the QA task (`0656c6be-…`) via the real pipeline, not simulated:**
+- Explicit: "Delayed to…" verb, past date → `due_provenance='explicit'`, badge showed
+  **"Overdue · 09/01/26"** (full alarm treatment, correctly preserved).
+- Derived: pasted "expects to send... by end of this week" → resolved to a concrete date,
+  `due_provenance='derived'`, hedge language preserved in the proposal's summary → Approved via the
+  real Inbox drawer → **live bug caught and fixed** (see above) → re-tested clean: task landed with
+  `due_provenance='derived'`, correct `due_source_document_id`/`due_source_date`; Details showed
+  **"Estimated from a note dated 09/11/26 — not a confirmed commitment."**
+- Genuinely ambiguous range ("late next week or early the week after") → model correctly left `due`
+  null rather than guessing, kept hedge language in the summary — stronger proof than a forced
+  'derived' tag would have been.
+
+**Greg/Rinconia acceptance case — CLOSED, DB + browser evidence:**
+Rotem ran the audited classification SQL (guarded, `rows_updated=1`, `log_rows_inserted=1`,
+`actor='rotmmeir22@gmail.com'`, `action='manual:date_provenance_classification'`). `tasks.due` is
+untouched at `2026-09-08`. Live-verified in My Work + Details (`/work?view=all#task-33677f42-…`):
+Due badge now shows **"Unconfirmed · 09/08/26"** (was "Overdue"); Details' EVIDENCE section adds
+**"This date is not confirmed by any source. Treat as needing review, not as a commitment."**
+
+**Known residual gap, not silently closed:** the SAME Details EVIDENCE section still also shows a
+STALE AI-generated reasoning sentence from a prioritization run that predates this fix —
+*"Greg committed to revise and respond by end of this week (human correction supersedes stale 9/8
+due date)... Overdue"* — the exact fabrication Noa's F-2 flagged. The prompt that generates this
+text (`agents/prioritize-tasks.ts`) IS already fixed (forbids "committed", forbids calling a
+derived/unresolved date "Overdue", now reads a `due_provenance` tag per task) and is live — but the
+stored `task_priorities.reason` text itself is cached from the last real prioritization run and only
+regenerates the next time one runs. Running a full prioritization pass re-ranks all 136 tasks
+system-wide — a bigger, separate action than "close this one record," and was intentionally NOT
+triggered in this pass (belongs with the later "run one normal prioritization, verify reasons"
+item). Until that next run, this ONE stale sentence remains visible on this record specifically.
+
+### Item 1 — Agent Review Inbox: read-only audit + safe fixes shipped
+
+**Audit findings (read-only, before any change):**
+- 100 pending at session start; header badge matched exactly.
+- By type: task_create 44, relationship_create 24, blocker_create 22, deadline_update 6,
+  task_update 3, task_done 1.
+- Confidence is a near-constant per type/reasoning-family, not a real per-item signal:
+  blocker_create always 0.70, relationship_create always 0.50, deadline_update always 0.60 (all
+  hardcoded in `routeExtractResult`) — task_create splits 37×0.50 / 7×0.40 by reasoning family.
+- **Zero exact-duplicate identity groups** among pending items (checked task_create titles and
+  relationship_create from/to pairs per project — every one is textually unique). The existing
+  ingest-time dedup (`filterDuplicateProposals`) is doing its job; there is no low-hanging duplicate
+  cleanup available in the current backlog.
+- Target status: 96 of 100 have no `target_task_id` at all (only task_update/task_done/deadline_update
+  types carry one) — of the 4 that do, all 4 point at a still-`open` task. Zero point at a
+  done/missing task.
+- 2 of 100 were QA-project proposals (both created live during this session's own testing).
+- Age: 58 created 2026-09-10, 42 created 2026-09-11 — all from the import-queue backlog drain
+  (documents dated 2026-08-23 through 2026-09-04 being processed now), not new incoming mail.
+  **Confirms the import batches are the real driver of the backlog's size**, not a broken dedup.
+- `/api/cron/triage` exists in code but is **not** in `vercel.json`'s cron list — auto-triage only
+  ever runs inline at ingest time (on the rows one document just produced) or via the manual
+  "Auto-triage now" button. **No scheduled sweep exists at all.**
+- **Structural finding:** almost the entire backlog (95-99 of ~100) can never be provably
+  auto-ignored (no-op/target-closed checks only apply to task_update/task_done with a target) —
+  the ONLY route out of "needs review" for a blocker/relationship/task_create/deadline_update claim
+  is the LEARNED-THRESHOLD mechanism (≥5 prior human decisions in the exact same class, ≥85%
+  agree/reject). This is by design (client handoff: "reduce to almost nothing — no guessing,
+  learning only"), not a bug — but it means the backlog size is fundamentally a function of how much
+  Noa has decided so far, not something a smarter dedup pass alone would shrink.
+
+**Fixes shipped (commits `f6dec4d`, `9da98d5`), each typecheck/lint/test-clean before deploy:**
+1. **QA excluded from the real Agent Review** — neither the My Work "Agent review inbox · N" badge
+   nor `/inbox`'s own pending/history queries had ever excluded test-project proposals (same gap
+   Notes Center had, fixed earlier this session). The existing 4-way split (Needs review / Not sure
+   / Approved / Applied automatically — this UI element ALREADY EXISTED, contrary to first
+   assumption) derives from the same filtered row set, so one fix corrects the badge, the list, and
+   all 4 tab counts together.
+2. **Live-caught regression in that same fix, fixed within the hour:** `.not('project_id','in',(…))`
+   silently drops every row where `project_id IS NULL` too (SQL: `NULL NOT IN (...)` is neither true
+   nor false) — the My Work badge read 79 instead of the real 99 immediately after deploying fix #1,
+   because it silently hid the 20 real "no project evidence" proposals — exactly the ones most
+   needing a human. Fixed with `.or('project_id.is.null,project_id.not.in.(...)')` in both call
+   sites. Re-verified: badge now correct.
+3. **Safe, genuine dry-run for "Auto-triage now"**, per explicit instruction not to sweep the real
+   backlog this hour: `runAutoTriage`/`runFullTriage` gained a `dryRun` option (classifies exactly
+   as a real run would; skips every write) plus a `previewAutoTriage()` action and a **"Preview (no
+   changes)"** button next to the existing button in the Inbox UI. Also: the real sweep (dry or not)
+   now excludes QA-project rows entirely, so it can never touch this session's own test proposals.
+4. **Closed a 6th due-write gap found while wiring the dry-run**: auto-triage's own `task_create`
+   insert (the learned-threshold auto-apply branch) never stamped `due_provenance` at all.
+5. **`isSafeEnrichment`/learned-threshold auto-apply already gated against unconfirmed dates** (see
+   item 0) — directly answers "never auto-approve a business deadline change" for the one path that
+   actually could have done so silently.
+
+**Separate, pre-existing bug found and flagged (not fixed — out of today's bounded scope):** the
+exact same NULL-handling flaw exists in `lib/open-tasks.ts`'s `selectOpenTasksExcludingTest` (used
+by prioritization, the daily digest, and extraction dedup context) — confirmed live via SQL that 40
+real, open, non-test tasks currently have `project_id IS NULL` and are therefore silently invisible
+to all three. Filed as a background task (`task_ae4422a2`) rather than fixed inline, since it's a
+materially bigger, separate concern than "diagnose the Inbox."
+
+**Dry-run live-verified in Production against the REAL backlog (zero risk, zero writes — the whole
+point):** clicked the new "Preview (no changes)" button on `/inbox`. Toast: **"Preview of 99
+pending: would apply 0, would ignore 0, 99 would stay for review — nothing was changed."** Badge
+count confirmed unchanged (99 before, 99 after). This is direct, live, empirical proof of the audit
+finding above — not a code-reading inference: with today's learned-class stats, literally nothing
+in the real backlog qualifies for auto-apply or auto-ignore right now.
+
+**What's left for Noa, and why it needs a human, not a bigger sweep:** with QA now excluded, the
+real queue is **99 items** (58 created 9/10, 41 created 9/11 — one of the original 42 was the
+`task_done` that's since resolved). None of them are duplicates, none target an already-closed or
+vanished task, and virtually none qualify for a provable no-op — by the system's own "learning
+only, no guessing" design, every one of them is waiting on either (a) Noa's own attribution for the
+20 unattributed items, or (b) enough of her prior decisions in that exact claim-shape to teach the
+learned-threshold mechanism. **Not run this pass, deliberately:** the real "Auto-triage now" sweep
+itself (only the safe dry-run preview and QA-only exclusion were exercised) — running it for real
+against the 99 real items is a decision for Rotem/Noa, not something to trigger unilaterally in a
+diagnostic pass.
+
+**Not yet reached this pass:** item 2 (QA regression pass on My Work — Add Action, field edits,
+Done/Reopen, two-tab concurrent-edit conflict, Undo/Undo-of-undo) — pending remaining time in this
+session.
 
 Scoped task: implement explicit/derived/unresolved date provenance, source-document/date storage,
 and consistent Details/My-Work-reasoning/Due-Overdue display, using the Greg/Rinconia record as the
