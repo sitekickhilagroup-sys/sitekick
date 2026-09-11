@@ -1,5 +1,62 @@
 # Live Functional QA — handoff (in progress)
 
+## Session 2026-09-11 (continuation 3) — prompt compliance proven unreliable live; deterministic backstop shipped
+
+Ran "Refresh priorities" three more times in a row on real production data — this alone surfaced a
+real bug the previous block's single clean run had missed, and a separate session's own
+`task_ae4422a2` fix landed and was verified mid-stream.
+
+**Run 2 (`dd54d610…`, 2026-09-11 13:57): a live regression, not hypothetical.** With zero code
+changes since the previous block's clean run, Greg/Rinconia's reason reverted to *"Greg (per team
+correction) **committed** to revise and respond by end of this week..."* — the exact fabrication
+Noa's F-2 flagged, rendered live in Details directly beside this session's own disclaimer ("not a
+confirmed commitment") — an internally contradictory panel. **Conclusion: the SYSTEM prompt rule
+added earlier this session reduces the fabrication but does not reliably prevent it — LLM
+instruction-following is probabilistic, proven by a real back-to-back pair of production runs on
+the identical task, not assumed from reading the prompt.**
+
+**Fix shipped (`410fb50`):** `sanitizeReason()` in `agents/prioritize-tasks.ts` — a deterministic,
+pure, unit-tested backstop (same "server-side reconciliation" philosophy as `extractComms`'s belt-
+and-braces project matching). For any task whose `due_provenance` is `'derived'`/`'unresolved'`, it
+scans the model's own reason text for unhedged commitment language (committed/confirmed/
+guaranteed/promised), correctly skipping phrasing already hedged by a nearby negation ("not yet
+confirmed"), and appends a visible, explicit correction when found. `explicit`/legacy (`null`)
+provenance is untouched — zero behavior change for every task this doesn't apply to. 7 new unit
+tests, including the literal fabricated sentence observed live. 510/510 total passing, typecheck/
+lint/build clean.
+
+**Run 3 (`f04cc450…`, 2026-09-11 14:06, post-deploy): clean, but an honest caveat.** The model this
+time produced *"Greg told the team he will revise and respond by end of this week (per 9/9
+correction) — the 9/8 date on the task is **not his commitment**..."* — already correctly hedged
+(negated "commitment"), so `sanitizeReason` had nothing to catch. **This run does not by itself prove
+the backstop intervenes correctly in production** — it only proves the guard didn't need to fire.
+The function's correctness is proven by its unit tests (using the exact real fabricated text from
+Run 2) and by code review of the call site (`sanitizeReason(r.reason, t.due_provenance)` inside
+`applyPrioritization`), not yet by directly witnessing it correct a live violation post-deploy.
+Stated honestly rather than overclaimed — the next time a raw model run reproduces unhedged
+"committed"/"confirmed" language on a derived/unresolved task, that will be the first direct live
+proof.
+
+**`task_ae4422a2` (the NULL-project coverage bug) confirmed fixed and live, verified independently
+of the session that fixed it:** task coverage across the three runs tracked exactly as expected —
+93 tasks (pre-fix, matches the known bug), then 134 (first run after that session's fix deployed),
+then 133 (one task closed/changed status in between — expected variance, not a regression). Spot-
+checked 5 previously-invisible no-project tasks (mailbox renewals, a 90+-day-overdue invoice, a fund
+transfer) — all now genuinely ranked with grounded, specific reasons.
+
+**Current live state:** Production `410fb50`. Latest real prioritization run `f04cc450-ca0a-45c7-
+b10f-13f63526ad2f`, 2026-09-11 14:06 UTC, 133 tasks ranked, shown live as "Priorities updated
+09/11/26". Greg/Rinconia (`33677f42-…`) now displays consistently everywhere: Due badge "Unconfirmed
+· 09/08/26", Details EVIDENCE reads Greg's actual hedged language with no fabrication, plus the
+static disclaimer — the ORIGINAL acceptance case for this entire feature is fully closed, with the
+underlying mechanism now hardened against the one failure mode a single run couldn't have caught.
+
+**Exact next task:** none required immediately — this closes the date-provenance feature end to
+end, proven across multiple real runs rather than one. If the Product Owner wants further
+confidence, the next most valuable action is simply running "Refresh priorities" a few more times
+over the coming days and spot-checking Details on any task with non-explicit provenance for
+fabricated commitment language — that's the actual failure mode now, not "no guardrail exists."
+
 ## Session 2026-09-11 (continuation 2) — Inbox package re-verified unchanged; fresh prioritization run closes the residual "committed" gap
 
 ### Re-verification of the Agent Review Inbox package (no code changes this block)
