@@ -20,16 +20,24 @@ export function AddAction({ projects, labels }: Props) {
   const [waiting, setWaiting] = useState('');
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Noa's own QA report (comment d67d7331, item 5): clicking Save with an
+  // empty name "does nothing and explains nothing" — the button was simply
+  // `disabled`, silent by construction, no different from the app looking
+  // frozen. TaskEditor's Edit-details form already handles this correctly
+  // (a visible errTitleEmpty message on an actual click); mirrored here
+  // instead of leaving Save inert with no explanation.
+  const [titleError, setTitleError] = useState(false);
   const [pending, start] = useTransition();
 
   const reset = () => {
     setOpen(false);
     setTitle(''); setOwner(''); setDue(''); setWaiting('');
-    setDuplicates(null); setFailed(false);
+    setDuplicates(null); setFailed(false); setTitleError(false);
   };
 
   const submit = (force: boolean) => start(async () => {
     setFailed(false);
+    if (!title.trim()) { setTitleError(true); return; }
     const res = await createTaskChecked({
       projectId: projectId || null,
       title, owner, due: due || null, waitingFor: waiting, force,
@@ -81,7 +89,7 @@ export function AddAction({ projects, labels }: Props) {
               <input
                 autoFocus
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => { setTitle(e.target.value); if (titleError) setTitleError(false); }}
                 placeholder={labels.titlePh}
                 aria-label={labels.titlePh}
                 className="min-h-11 w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-sage"
@@ -124,7 +132,7 @@ export function AddAction({ projects, labels }: Props) {
             <div className="mt-4 flex items-center gap-2">
               <button
                 type="button"
-                disabled={pending || !title.trim()}
+                disabled={pending}
                 onClick={() => submit(false)}
                 className="min-h-11 cursor-pointer rounded-[9px] bg-sage px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:min-h-0"
               >
@@ -137,6 +145,7 @@ export function AddAction({ projects, labels }: Props) {
               >
                 {labels.cancel}
               </button>
+              {titleError && <span role="alert" className="text-xs text-coral">{labels.errTitleEmpty}</span>}
               {failed && <span role="alert" className="text-xs text-coral">{labels.error}</span>}
             </div>
           </>

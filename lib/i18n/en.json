@@ -290,6 +290,7 @@
   "digest.archive": "Archive",
   "digest.generate": "Generate now",
   "digest.empty": "No digest yet — generate one or wait for the 07:00 cron",
+  "digest.stale": "{n} days old — not today's digest",
   "directory.role": "Role",
   "directory.contact": "Contact",
   "directory.projects": "Projects",

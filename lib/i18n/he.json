@@ -290,6 +290,7 @@
   "digest.archive": "ארכיון",
   "digest.generate": "הפקה עכשיו",
   "digest.empty": "אין תקציר עדיין — אפשר להפיק או לחכות לריצה של 07:00",
+  "digest.stale": "ישן ב-{n} ימים — לא התקציר של היום",
   "directory.role": "תפקיד",
   "directory.contact": "איש קשר",
   "directory.projects": "פרויקטים",
