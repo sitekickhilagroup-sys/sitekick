@@ -11,6 +11,7 @@ import { buildUndoRestorePatch, UNDO_RESTORE_KEYS } from '@/lib/work-verbs';
 import { voidPriorityFeedback } from '@/lib/collect-priority-feedback';
 import { buildTaskHistoryEntries, type TaskHistoryRow, type TaskHistoryEntryShape } from '@/lib/task-history';
 import { syncTaskIntoOpenReview } from '@/app/actions/weekly';
+import { ensureSubstageActivated } from '@/app/actions/process';
 import type { ProcessImpact, Task } from '@/lib/types';
 
 export type { TaskDetailsPatch };
@@ -436,6 +437,19 @@ export async function updateTaskDetails(
   } catch (e) {
     console.error('[weekly-sync] updateTaskDetails: failed to sync task into open review', { taskId, error: e });
     syncWarning = true;
+  }
+  // F-7: picking a sub-stage here must not leave it reading "Not activated"
+  // on the project's own process page. Best-effort — see ensureSubstageActivated's
+  // own doc comment for why this never resets an already-advanced instance.
+  if (effectiveSubstageId && effectiveProjectId) {
+    try {
+      await ensureSubstageActivated({
+        projectId: effectiveProjectId, substageTemplateId: effectiveSubstageId,
+        workstreamId: effectiveWorkstreamId,
+      });
+    } catch (e) {
+      console.error('[process] updateTaskDetails: ensureSubstageActivated failed (non-fatal)', { taskId, error: e });
+    }
   }
   return { ok: true as const, undoId, ...(syncWarning ? { syncWarning: true as const } : {}) };
 }

@@ -230,6 +230,42 @@ export async function activateSubstage(projectId: string, substageTemplateId: st
   return { ok: true };
 }
 
+/**
+ * F-7: a task can be tagged with a substage_template_id — via
+ * updateTaskDetails's Edit-details form, or a task_update proposal's apply
+ * path (app/actions/proposals.ts) — without a project_substages instance for
+ * it ever being created. Project Process then shows that sub-stage as "Not
+ * activated" (lib/process.ts: activated = !!instance) while a real, open
+ * task is already working against it — confirmed reachable by reading both
+ * write paths, neither of which touched project_substages at all.
+ *
+ * Deliberately NOT activateSubstage above: that upsert always resets
+ * status/activated_at, so calling it on every task write would silently
+ * reset an already-`done` (or otherwise advanced) sub-stage back to
+ * 'active' — a worse bug than the one this closes. ignoreDuplicates makes
+ * this a true "create only if missing" — an existing instance is untouched,
+ * including its status — so it is safe to call unconditionally whenever a
+ * task carries a non-null substage_template_id, not just the first time.
+ * Best-effort by design (callers wrap it, never let it fail the task write
+ * it rides along with) — same contract as syncTaskIntoOpenReview.
+ */
+export async function ensureSubstageActivated(input: {
+  projectId: string; substageTemplateId: string; workstreamId?: string | null;
+}): Promise<void> {
+  const admin = supabaseAdmin();
+  const { error } = await admin.from('project_substages').upsert(
+    {
+      project_id: input.projectId,
+      substage_template_id: input.substageTemplateId,
+      workstream_id: input.workstreamId ?? null,
+      status: 'active',
+      activated_at: laToday(),
+    },
+    { onConflict: 'project_id,substage_template_id', ignoreDuplicates: true },
+  );
+  if (error) console.error('[ensureSubstageActivated] failed (non-fatal)', { input, error });
+}
+
 export async function setCurrentPhase(projectId: string, phaseKey: PhaseKey) {
   const user = await requireUser();
   if (!VALID_PHASES.includes(phaseKey)) return { error: 'invalid phase' };

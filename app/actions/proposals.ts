@@ -7,6 +7,7 @@ import { laToday } from '@/lib/date';
 import { applyProposal, logActivity, resolveDueSourceDate } from '@/lib/state-writer';
 import { attributionTokens, runFullTriage, type TriageItemOutcome } from '@/lib/auto-triage';
 import { defaultTreatment, targetTaskError } from '@/lib/review-treatments';
+import { ensureSubstageActivated } from '@/app/actions/process';
 import type { AgentProposal, ChangeType, Task } from '@/lib/types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -210,6 +211,16 @@ export async function decideProposal(
       entity_type: 'task', entity_id: created.id, actor,
       action: 'review:new_task', after: { proposal_id: id, created: true },
     });
+    // F-7: a new task can arrive already tagged with a sub-stage (edits.
+    // substageTemplateId) — best-effort, see ensureSubstageActivated's doc
+    // comment.
+    if (edits.substageTemplateId && chosenProject) {
+      try {
+        await ensureSubstageActivated({ projectId: chosenProject, substageTemplateId: edits.substageTemplateId });
+      } catch (e) {
+        console.error('[process] decideProposal(new_task): ensureSubstageActivated failed (non-fatal)', { id, error: e });
+      }
+    }
   } else if (changeType === 'keep_both_linked') {
     // Not a duplicate: two steps of one chain, like Soils Addendum → LADBS
     // Review → Soil Approval Letter. The corrections doc is explicit that
@@ -253,6 +264,14 @@ export async function decideProposal(
       action: 'review:keep_both_linked',
       after: { proposal_id: id, created: true, linked_to: effectiveTargetTaskId },
     });
+    // F-7: same as new_task above.
+    if (edits.substageTemplateId && chosenProject) {
+      try {
+        await ensureSubstageActivated({ projectId: chosenProject, substageTemplateId: edits.substageTemplateId });
+      } catch (e) {
+        console.error('[process] decideProposal(keep_both_linked): ensureSubstageActivated failed (non-fatal)', { id, error: e });
+      }
+    }
   } else if (changeType === 'information_only') {
     undoId = await logActivity(admin, {
       entity_type: 'proposal', entity_id: id, actor,
@@ -290,6 +309,18 @@ export async function decideProposal(
       entity_type: 'task', entity_id: effectiveTargetTaskId, actor,
       action: `review:${changeType}`, before, after: { ...taskPatch, proposal_id: id },
     });
+    // F-7: a sub-stage tagged onto an existing task through this drawer must
+    // not leave it reading "Not activated" either — before.project_id, not
+    // chosenProject, since this branch never reassigns the task's project.
+    if (typeof taskPatch.substage_template_id === 'string' && before.project_id) {
+      try {
+        await ensureSubstageActivated({
+          projectId: before.project_id, substageTemplateId: taskPatch.substage_template_id,
+        });
+      } catch (e) {
+        console.error('[process] decideProposal(existing): ensureSubstageActivated failed (non-fatal)', { id, error: e });
+      }
+    }
   }
 
   patch.state = 'accepted';
