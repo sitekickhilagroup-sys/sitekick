@@ -3,6 +3,111 @@
 **This is a dated snapshot, not a living guarantee. Refresh it whenever relevant evidence
 changes — see `WORKFLOW.md` for when to update.**
 
+**2026-09-12 (same Claude application session, continued — Track 3 completed, F-7 shipped, a live
+production incident found and reported):** Directly continues the 09-11 entry below — nothing in
+it is superseded, this adds on top. Commit range `ad72ded..2bdd121`, every commit pushed to `main`
+and individually verified live (deploy status + real browser/SQL checks), matching the same
+discipline as the round before.
+
+- **🔴 Active production incident, not yet resolved — needs Rotem's action, not code.** The
+  Anthropic API key configured for this app (`ANTHROPIC_API_KEY` in Vercel's env vars) ran out of
+  credit balance mid-session — discovered when "Process all now" (below) returned **0 succeeded,
+  324 failed**, every failure `"Your credit balance is too low to access the Anthropic API."` This
+  blocks **every** feature that calls Claude server-side: Data Inbox processing, the daily digest,
+  prioritization runs, the "Report a problem" triage cron, PDF invoice classification, "Infer from
+  emails." Nothing else is affected — the rest of the app (My Work, Notes Center, Project Process,
+  Invoices, task editing) works normally, and no data was lost (every failed attempt is caught and
+  leaves the record `waiting`, never corrupted). **One real side effect that needs follow-up once
+  credits are restored:** 106 of the ~129 previously-waiting `documents` rows hit `MAX_ATTEMPTS`
+  during this incident and are now flagged permanently-failed — nothing today can reset that flag,
+  so they will **not** auto-retry even after billing is fixed; a "reset attempts" mechanism was
+  proposed but not built (Rotem chose to keep working on non-API-dependent items instead). Action
+  needed from Rotem: add a payment method / credit at `console.anthropic.com` (**not** claude.ai —
+  confirmed these are separate billing systems) for the account that key belongs to, or swap in a
+  new key from a funded account + Vercel "Redeploy." No code fix exists for this.
+- **Track 3 (Data Inbox bulk upload) — all 3 planned parts shipped and live-verified with real
+  files, not just code review:**
+  - **Direct-to-storage upload** (`e5d0ac2`) — `app/actions/upload.ts`'s `createUploadUrl` mints a
+    Supabase Storage signed upload token; the browser uploads straight to Storage with it,
+    bypassing Vercel's 4.5MB function-body ceiling entirely (confirmed against Vercel's own docs
+    earlier in this session). `/api/upload` gained a second, JSON-body branch that downloads the
+    staged blob and hands it to `processUploadedFile` — extracted from the old handler's tail so
+    both branches share every existing per-type case verbatim. **Live-verified twice**, real files
+    through the QA project: a 5MB `.txt` (text-extraction path, no permanent storage) and a 5MB
+    `.pdf` (the other path — permanently re-stored under `uploads/`, confirmed via
+    `documents.storage_path`) both processed successfully end-to-end.
+  - **Real multi-file selection** (`e5d0ac2`) — the hard 2-file cap in `dropzone.tsx` is gone; a
+    genuine 2-file summary+transcript pair still bundles into one request exactly as before,
+    anything else sends sequentially with a "(i/n)" progress label. **Live-verified**: 3 files
+    dropped together all landed correctly, in order, confirmed via `documents.raw_text`.
+  - **"Process all now"** (`f29bec6`) — `lib/import-queue.ts`'s new `drainPending` loops the
+    existing `processImportBatch` until the queue actually empties or a 270s time budget runs out
+    (5 new unit tests: multi-batch drain, time-budget cutoff, empty-queue no-op, gives up after 2
+    consecutive no-progress batches instead of spinning, accumulates partial failures correctly).
+    Wired to a second button next to "Process next batch." **This is what surfaced the API-credit
+    incident above** when run against the real 129-document backlog — the mechanism itself (looping,
+    counting, giving up correctly) is proven correct; it just can't succeed until credits exist.
+- **F-7 shipped and live-verified on real production data** (`2bdd121`) — `app/actions/process.ts`'s
+  new `ensureSubstageActivated` (an upsert with `ignoreDuplicates`, deliberately NOT the existing
+  `activateSubstage`, which would reset an already-`done` instance back to `active` if called
+  blindly) is now called from all 4 real write sites: `updateTaskDetails` and the 3 task_update
+  branches in `proposals.ts`'s `decideProposal`. **Verified on a real, pre-existing instance of the
+  bug**, not a synthetic one: task `a1e34702` ("Retain civil engineer for Rinconia grading") had
+  carried `substage_template_id` pointing at "Corrections round" since 09-10 while that sub-stage
+  still read "Not activated" on Rinconia's own Plan Check page. Re-saved the task's Edit-details
+  form (through the real UI, not SQL) — confirmed a `project_substages` row was created
+  (`status: active`) and the sub-stage now shows correctly in the real list, no stray side effects
+  left behind.
+- **Noa's own QA acceptance-run note (`comments` row `d67d7331`) — all 6 items now closed or
+  explained, not just the first 3 covered in the prior round:**
+  - **Item 4, QA tasks visible/counted in real My Work** (`ad72ded`) — confirmed live before
+    fixing: a QA-project task rendered in the "All" view and counted in every badge. Root fix, not
+    another patch: `work/page.tsx`'s bespoke, unfiltered task query now goes through
+    `lib/open-tasks.ts`'s `selectOpenTasksExcludingTest` — the same shared function the digest and
+    prioritize-tasks already used, just never applied to the one screen Noa looks at daily. Makes
+    the F-5 dedup-specific filter from the prior round redundant (harmless, left in place).
+  - **Item 5, silent empty-name Save** (`fbf93ed`) — `add-action.tsx`'s Save button was
+    `disabled={pending || !title.trim()}`, so clicking it with an empty name did nothing with no
+    explanation. Mirrors `TaskEditor`'s already-correct pattern: Save is no longer pre-emptively
+    disabled on title alone; an empty submit now shows "Task name can't be empty."
+  - **Item 3, digest served stale with no marker** (`825ac52`) — `/digest` now shows an amber age
+    badge whenever the latest digest is more than 1 day old, computed against `laToday()`, no
+    threshold-guessing about what "fresh" means.
+  - Items 1 (fabricated "committed" language / due with no date), 2 (dedup crossing the QA
+    boundary), and 6 (broken deep link) were closed in the prior round (`183e579`, `81d3f11`) or
+    traced to already-fixed/dead code — see that entry below.
+  - **Two real business-data corrections made directly from Noa's own note content** (not a code
+    fix — she asked for these explicitly): task `f475bee5` ("Plan Check extension exhausted…") had
+    `waiting_for = "test"` (leftover QA data on a real record, exactly as she flagged) — cleared to
+    null through the real Edit-details UI. Its title was also stale per her note (modification
+    #12055 filed 09-09, fee paid 09-10) — reworded to
+    "Plan Check extension: modification #12055 filed 09-09 (fee paid 09-10); written confirmation
+    still needed before expiration," staying close to her exact wording rather than inventing
+    framing.
+- **Four smaller open items from the older QA handoff, investigated (not all fixable today):**
+  - `FEEDBACK_USE=off` kill-switch — verified correct via the existing 44 passing unit tests plus a
+    direct read of the gate (`lib/feedback-context.ts`'s `loadVerifiedNotes` checks
+    `feedbackUseEnabled` first thing, unconditionally). No bug, nothing touched.
+  - Undo-of-undo (chained revert) — verified via code read, not a live click-through:
+    `revertTaskHistoryEntry` deliberately snapshots the **live** row (not `entry.before_json`)
+    specifically so the new `undo:history` row it writes is itself a fully independent, correctly
+    revertible entry — the developer comment names this exact scenario. `lib/task-history.ts`'s
+    `canUndo` is positional (newest row only) and requires a real `before_json`, which the new row
+    has, so redo is offered automatically with no action-type special-casing. Design intent, strong
+    evidence, not separately live-tested this round.
+  - Import queue actually draining in practice — see the "Process all now" mechanism above; proven
+    correct, blocked only by the API-credit incident. Did **not** re-trigger the cron manually while
+    the outage stands — that would only burn more of the 106 already-struggling documents' retry
+    budget for no new information.
+  - Workstream field — **structurally blocked, not just short on test data.** Searched the entire
+    codebase (including the other concurrent worktree, `.claude/worktrees/modest-ritchie-43c244`):
+    there is **no server action anywhere that creates a `workstreams` row** — every call site only
+    ever selects from that table. Cannot be tested without either a direct DB write (this session's
+    Supabase connection is read-only) or building that missing capability first, which is a scope
+    decision, not a bug fix.
+
+---
+
 **2026-09-11 (Claude application session, "3-track work plan — learning M1.5, My Work
 completeness, Data Inbox"):** Continuing directly from the 09-09/10 session below — everything in
 that entry is still current; this adds on top of it. Full commit range `b72c950..HEAD` (18
