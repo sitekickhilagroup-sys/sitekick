@@ -17,9 +17,9 @@ import {
 // '@/lib/data-inbox' instead (see components/upload/data-inbox-triage.tsx).
 export type { DataInboxTriage, PilotRunResult, TriageDocument, PilotOutcome, PilotDocResult } from '@/lib/data-inbox';
 
-export async function getDataInboxTriage(): Promise<DataInboxTriage> {
+export async function getDataInboxTriage(offset = 0): Promise<DataInboxTriage> {
   await requireUser();
-  return getDataInboxTriageFor(supabaseAdmin());
+  return getDataInboxTriageFor(supabaseAdmin(), offset);
 }
 
 export async function processSelectedDocuments(documentIds: string[]): Promise<PilotRunResult> {

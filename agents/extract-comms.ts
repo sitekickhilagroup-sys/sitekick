@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type Anthropic from '@anthropic-ai/sdk';
-import { runStructured, MODELS } from '../lib/claude.ts';
+import { runStructured, MODELS, type BudgetScope } from '../lib/claude.ts';
 import { laDate, laToday } from '../lib/date.ts';
 import type { AgentProposal, Project, Task } from '../lib/types.ts';
 import { ExtractResultSchema, type ExtractResult } from './schemas.ts';
@@ -197,6 +197,11 @@ export interface ExtractContext {
   verifiedNotesBlock?: string;
   matchDecisionsBlock?: string;
   client?: Anthropic;
+  /** Demo Safety Gate: a caller-scoped sub-budget (e.g. the Data Inbox
+   *  pilot's $2 across up to 5 documents) — forwarded to runStructured,
+   *  which enforces it against the REAL payload and mutates its spentUsd
+   *  with the real post-call cost. See lib/claude.ts's BudgetScope. */
+  budgetScope?: BudgetScope;
 }
 
 export async function extractComms(
@@ -252,6 +257,7 @@ export async function extractComms(
     toolName: 'report_extraction',
     toolDescription: 'Report the extracted operational state from this communication.',
     client: ctx.client,
+    budgetScope: ctx.budgetScope,
   });
 }
 

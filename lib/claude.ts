@@ -90,6 +90,20 @@ export class BudgetExceededError extends Error {
   }
 }
 
+/** Fail-CLOSED variant (Rotem, hardening round, 2026-09-13): thrown when
+ *  current spend cannot be verified at all (the usage-log client couldn't be
+ *  resolved, or the spend query itself failed) — a hard $30-account demo
+ *  must never let a call through on "couldn't check, so assume it's fine."
+ *  Distinct from BudgetExceededError (verified spend that's actually over
+ *  cap) so callers/logs can tell "we know it's too expensive" apart from
+ *  "we don't know and won't guess." */
+export class BudgetUnverifiableError extends Error {
+  constructor(reason: string) {
+    super(`Demo budget cannot be verified (${reason}) — call blocked rather than risk unmetered spend.`);
+    this.name = 'BudgetUnverifiableError';
+  }
+}
+
 /** Real, current all-time spend — client-side sum over llm_usage_log rather
  *  than a DB-side aggregate, so this needs no new SQL function and stays
  *  simple to fake in tests. Fine at demo scale (dozens-hundreds of rows over
@@ -97,6 +111,23 @@ export class BudgetExceededError extends Error {
 async function currentSpentUsd(admin: SupabaseClient): Promise<number> {
   const { data } = await admin.from('llm_usage_log').select('estimated_cost_usd').limit(20000);
   return (data ?? []).reduce((sum: number, r: { estimated_cost_usd: number | null }) => sum + (r.estimated_cost_usd ?? 0), 0);
+}
+
+/**
+ * A tighter, scoped sub-budget layered on top of the global DEMO_BUDGET_USD
+ * cap — e.g. the Data Inbox pilot run's $2 ceiling across up to 5 documents.
+ * `spentUsd` is mutated by runStructured itself after every REAL attempt
+ * (whether it succeeded, failed, or is about to retry) using the ACTUAL
+ * response.usage-derived cost, not the pre-call estimate — so a caller
+ * threading the same scope object through multiple runStructured calls
+ * (possibly several documents, each possibly retrying once) gets true
+ * enforcement against the full real payload and every attempt, not a guess
+ * from raw_text length alone. Pass the SAME object by reference across every
+ * call in the scope; a fresh object starts a fresh $0 baseline.
+ */
+export interface BudgetScope {
+  capUsd: number;
+  spentUsd: number;
 }
 
 interface UsageLogInput {
@@ -174,6 +205,11 @@ export interface RunStructuredOptions<T> {
   documentId?: string;
   runId?: string;
   usageLogClient?: SupabaseClient; // injectable for tests; defaults to supabaseAdmin()
+  // A tighter sub-budget layered on top of the global DEMO_BUDGET_USD cap
+  // (e.g. the Data Inbox pilot run's $2 across up to 5 documents) — pass the
+  // SAME object across every runStructured call in the scope; this function
+  // mutates its spentUsd with the REAL post-call cost after every attempt.
+  budgetScope?: BudgetScope;
 }
 
 function toInputSchema<T>(schema: z.ZodType<T>): Record<string, unknown> {
@@ -194,12 +230,14 @@ export async function runStructured<T>(opts: RunStructuredOptions<T>): Promise<T
   const model = MODELS[opts.job];
   const actionType = opts.actionType ?? opts.job;
   // Resolving the admin client can itself throw (missing env vars in a local
-  // dev/test setup); that must degrade to "skip logging", never break the
-  // actual extraction the caller is waiting on. Under Vitest, only log when a
-  // test explicitly injects usageLogClient — every agent (extract-comms,
-  // parse-invoice, infer-phase, ...) calls runStructured without one, and
-  // without this guard every one of those unit tests would silently attempt
-  // a real write to the production llm_usage_log table.
+  // dev/test setup). Under Vitest with no injected usageLogClient, that's a
+  // test scenario with no real spend to protect — logging AND the budget
+  // check both skip (every agent's own fake-Anthropic-client test relies on
+  // this; forcing them all to inject a usageLogClient just to keep passing
+  // would be a much bigger, unrelated change). Outside Vitest, unresolvable
+  // is a REAL problem — see the fail-closed budget check below, which
+  // treats "no usageLogClient" as "cannot verify spend" rather than
+  // silently skipping.
   let usageLogClient: SupabaseClient | null = null;
   if (opts.usageLogClient) {
     usageLogClient = opts.usageLogClient;
@@ -207,9 +245,10 @@ export async function runStructured<T>(opts: RunStructuredOptions<T>): Promise<T
     try {
       usageLogClient = supabaseAdmin();
     } catch (e) {
-      console.error('[llm-usage] admin client unavailable (non-fatal)', e);
+      console.error('[llm-usage] admin client unavailable', e);
     }
   }
+  const mustVerifyBudget = !!usageLogClient || !process.env.VITEST;
   const logAttempt = (attempt: number, success: boolean, usage: Anthropic.Usage | undefined, errorMessage?: string) => {
     if (!usageLogClient) return Promise.resolve();
     return logUsage(usageLogClient, {
@@ -228,30 +267,44 @@ export async function runStructured<T>(opts: RunStructuredOptions<T>): Promise<T
       tools: [tool],
       tool_choice: { type: 'tool', name: opts.toolName },
     };
-    // Demo Safety Gate: stop BEFORE a call expected to push total spend past
-    // the cap — never after. Re-checked on the validation retry too (attempt
-    // 1), since that is also a real, separately-billed call. Skipped when
-    // usageLogClient itself is unavailable (Vitest with no injected client —
-    // see above: there's no real spend to protect there) or when the spend
-    // query itself fails (fail-open, same philosophy as logUsage's own
-    // best-effort contract — a transient DB error must not brick every
-    // agent in the app; it's logged, not silently ignored).
-    if (usageLogClient) {
-      let spent: number | null = null;
+    // Demo Safety Gate (hardened, 2026-09-13): stop BEFORE a call expected to
+    // push spend past a cap — never after. Re-checked on the validation
+    // retry too (attempt 1), since that is also a real, separately-billed
+    // call. FAIL CLOSED: if spend cannot be verified at all — the client is
+    // unavailable, or the query itself fails — the call is BLOCKED, not
+    // allowed through on "couldn't check, so assume it's fine." A hard
+    // $30-account demo must never spend blind.
+    const estThisCall = estimateCallCostUsd(model, estimateInputChars(opts.system, messages), opts.maxTokens ?? 16000) ?? 0;
+    if (mustVerifyBudget) {
+      if (!usageLogClient) {
+        await logAttempt(attempt, false, undefined, 'budget_unverifiable: usage log client unavailable');
+        throw new BudgetUnverifiableError('usage log client unavailable');
+      }
+      let spent: number;
       try {
         spent = await currentSpentUsd(usageLogClient);
       } catch (e) {
-        console.error('[demo-budget] spend check failed (non-fatal, call proceeds)', e);
+        const reason = e instanceof Error ? e.message : String(e);
+        await logAttempt(attempt, false, undefined, `budget_unverifiable: ${reason}`);
+        throw new BudgetUnverifiableError(reason);
       }
-      if (spent !== null) {
-        const estThisCall = estimateCallCostUsd(model, estimateInputChars(opts.system, messages), opts.maxTokens ?? 16000) ?? 0;
-        if (spent + estThisCall > DEMO_BUDGET_USD) {
-          await logAttempt(
-            attempt, false, undefined,
-            `budget_exceeded: spent $${spent.toFixed(4)} + est $${estThisCall.toFixed(4)} > cap $${DEMO_BUDGET_USD}`,
-          );
-          throw new BudgetExceededError(spent, estThisCall, DEMO_BUDGET_USD);
-        }
+      if (spent + estThisCall > DEMO_BUDGET_USD) {
+        await logAttempt(
+          attempt, false, undefined,
+          `budget_exceeded: spent $${spent.toFixed(4)} + est $${estThisCall.toFixed(4)} > cap $${DEMO_BUDGET_USD}`,
+        );
+        throw new BudgetExceededError(spent, estThisCall, DEMO_BUDGET_USD);
+      }
+      // A tighter caller-scoped cap (e.g. the pilot's $2 across up to 5
+      // documents) — its spentUsd tracks REAL post-call cost (below), so
+      // this is true enforcement against the actual payload and every
+      // attempt, not an upfront guess from raw_text length alone.
+      if (opts.budgetScope && opts.budgetScope.spentUsd + estThisCall > opts.budgetScope.capUsd) {
+        await logAttempt(
+          attempt, false, undefined,
+          `budget_exceeded: scope spent $${opts.budgetScope.spentUsd.toFixed(4)} + est $${estThisCall.toFixed(4)} > scope cap $${opts.budgetScope.capUsd}`,
+        );
+        throw new BudgetExceededError(opts.budgetScope.spentUsd, estThisCall, opts.budgetScope.capUsd);
       }
     }
     // Large max_tokens budgets make the SDK refuse non-streaming calls
@@ -266,6 +319,13 @@ export async function runStructured<T>(opts: RunStructuredOptions<T>): Promise<T
     // response.usage is never discarded past this point — every attempt,
     // success or failure, gets a llm_usage_log row (Cost Controls Release 1).
     const usage = response.usage as Anthropic.Usage | undefined;
+    // A real, billed call just happened — count its ACTUAL cost against the
+    // scope immediately, regardless of what happens next (success, retry, or
+    // final failure), so a caller looping over several documents/attempts
+    // sees true accumulated spend, not just estimates.
+    if (opts.budgetScope) {
+      opts.budgetScope.spentUsd += (usage ? estimateCostUsd(model, usage) : null) ?? 0;
+    }
 
     const toolUse = response.content.find(
       (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === opts.toolName,

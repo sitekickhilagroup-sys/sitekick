@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
   runStructured, StructuredOutputError, MODELS,
-  estimateCallCostUsd, DEMO_BUDGET_USD, BudgetExceededError,
+  estimateCallCostUsd, DEMO_BUDGET_USD, BudgetExceededError, BudgetUnverifiableError,
+  type BudgetScope,
 } from './claude';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -166,10 +167,16 @@ describe('runStructured usage logging', () => {
     expect(rows[0]).toMatchObject({ input_tokens: 0, output_tokens: 0, estimated_cost_usd: null });
   });
 
-  it('never throws when the usage-log insert itself fails', async () => {
+  it('never throws when the usage-log INSERT fails (spend can still be verified via select)', async () => {
     const client = fakeClient([toolUse({ answer: 'ok', score: 1 }, { input_tokens: 1, output_tokens: 1 })]);
+    // select() (the budget spend check) works fine; only insert() (logging)
+    // fails — isolates "logging is best-effort" from the fail-closed budget
+    // check, which is a different operation and must NOT be conflated.
     const throwingClient = {
-      from: () => ({ insert: async () => { throw new Error('db unavailable'); } }),
+      from: () => ({
+        insert: async () => { throw new Error('db unavailable'); },
+        select: () => ({ limit: async () => ({ data: [] }) }),
+      }),
     } as unknown as SupabaseClient;
     const result = await runStructured({ ...base, client, usageLogClient: throwingClient });
     expect(result).toEqual({ answer: 'ok', score: 1 });
@@ -265,5 +272,80 @@ describe('Demo Safety Gate — budget enforcement in runStructured', () => {
     const client = fakeClient([toolUse({ answer: 'ok', score: 1 })]);
     const result = await runStructured({ ...base, client });
     expect(result).toEqual({ answer: 'ok', score: 1 });
+  });
+
+  it('FAILS CLOSED (BudgetUnverifiableError) when a usageLogClient is injected but the spend query itself throws', async () => {
+    const create = vi.fn(async () => toolUse({ answer: 'ok', score: 1 }));
+    const client = { messages: { create } } as unknown as Anthropic;
+    const brokenClient = {
+      from: () => ({ select: () => ({ limit: async () => { throw new Error('connection reset'); } }) }),
+    } as unknown as SupabaseClient;
+    await expect(
+      runStructured({ ...base, client, usageLogClient: brokenClient }),
+    ).rejects.toThrow(BudgetUnverifiableError);
+    expect(create).not.toHaveBeenCalled(); // blocked BEFORE the call — never guessed it was fine
+  });
+});
+
+describe('Demo Safety Gate — BudgetScope (scoped sub-cap, e.g. the pilot $2)', () => {
+  const base = {
+    job: 'extract' as const,
+    system: 'test',
+    messages: [{ role: 'user' as const, content: 'go' }],
+    schema,
+    toolName: 'report',
+  };
+
+  it('blocks when the scope cap would be exceeded even though the global cap has plenty of room', async () => {
+    const create = vi.fn(async () => toolUse({ answer: 'ok', score: 1 }));
+    const client = { messages: { create } } as unknown as Anthropic;
+    const rows: Record<string, unknown>[] = [];
+    const scope: BudgetScope = { capUsd: 0.0001, spentUsd: 0 }; // near-zero scope cap
+    await expect(
+      runStructured({ ...base, client, usageLogClient: fakeUsageLogClient(rows, 0), budgetScope: scope }),
+    ).rejects.toThrow(BudgetExceededError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('accumulates the REAL post-call cost into scope.spentUsd on success, not just the pre-call estimate', async () => {
+    const client = fakeClient([toolUse({ answer: 'ok', score: 1 }, { input_tokens: 1000, output_tokens: 500 })]);
+    const scope: BudgetScope = { capUsd: 2, spentUsd: 0 };
+    await runStructured({ ...base, client, usageLogClient: fakeUsageLogClient([], 0), budgetScope: scope });
+    // claude-sonnet-5: 1000*2e-6 + 500*10e-6 = 0.002 + 0.005 = 0.007
+    expect(scope.spentUsd).toBeCloseTo(0.007, 6);
+  });
+
+  it('accumulates cost even on a FAILED attempt (a real billed call still counts against the scope)', async () => {
+    const client = fakeClient([toolUse({ nope: true }, { input_tokens: 1000, output_tokens: 500 })]);
+    const scope: BudgetScope = { capUsd: 2, spentUsd: 0 };
+    await expect(
+      runStructured({ ...base, client, usageLogClient: fakeUsageLogClient([], 0), budgetScope: scope }),
+    ).rejects.toThrow(StructuredOutputError);
+    expect(scope.spentUsd).toBeGreaterThan(0); // the failed attempts still spent real tokens
+  });
+
+  it('blocks a validation-retry attempt when the first attempt already used up the scope', async () => {
+    const client = fakeClient([
+      toolUse({ answer: 'missing score' }, { input_tokens: 1_000_000, output_tokens: 1 }), // huge first attempt
+      toolUse({ answer: 'ok', score: 1 }, { input_tokens: 10, output_tokens: 10 }),
+    ]);
+    const scope: BudgetScope = { capUsd: 2, spentUsd: 0 };
+    // First attempt's real cost (sonnet: 1e6*2e-6 + 1*10e-6 ≈ $2.00) blows
+    // past the $2 scope cap — the retry (attempt 2) must be blocked before
+    // it's ever made, not allowed through because "attempt 1 already failed
+    // for an unrelated reason."
+    await expect(
+      runStructured({ ...base, client, usageLogClient: fakeUsageLogClient([], 0), budgetScope: scope }),
+    ).rejects.toThrow(BudgetExceededError);
+  });
+
+  it('two scopes are independent — a fresh BudgetScope object starts at $0 regardless of a previous run', async () => {
+    const client = fakeClient([toolUse({ answer: 'ok', score: 1 }, { input_tokens: 10, output_tokens: 10 })]);
+    const scopeA: BudgetScope = { capUsd: 2, spentUsd: 1.999 };
+    const scopeB: BudgetScope = { capUsd: 2, spentUsd: 0 };
+    // scopeA is nearly exhausted; scopeB (a different object) is untouched.
+    const result = await runStructured({ ...base, client, usageLogClient: fakeUsageLogClient([], 0), budgetScope: scopeB });
+    expect(result).toEqual({ answer: 'ok', score: 1 });
+    expect(scopeA.spentUsd).toBe(1.999); // untouched by scopeB's call
   });
 });

@@ -6,7 +6,7 @@ import { ImportQueuePanel } from '@/components/upload/import-queue-panel';
 import { DataInboxTriagePanel } from '@/components/upload/data-inbox-triage';
 import { getImportQueueStats } from '@/lib/import-queue';
 import { getDataInboxTriage } from '@/app/actions/data-inbox';
-import { PILOT_MAX_DOCS, PILOT_BUDGET_USD } from '@/lib/data-inbox';
+import { PILOT_MAX_DOCS, PILOT_BUDGET_USD, TRIAGE_PAGE_SIZE } from '@/lib/data-inbox';
 import { DEMO_BUDGET_USD } from '@/lib/claude';
 import type { Project } from '@/lib/types';
 
@@ -179,6 +179,7 @@ export default async function UploadPage() {
           pilotMaxDocs={PILOT_MAX_DOCS}
           pilotBudgetUsd={PILOT_BUDGET_USD}
           demoBudgetUsd={DEMO_BUDGET_USD}
+          triagePageSize={TRIAGE_PAGE_SIZE}
           labels={{
             help: t('inbox_triage.help'),
             groupCandidate: t('inbox_triage.group_candidate'),
@@ -189,6 +190,7 @@ export default async function UploadPage() {
             groupDoNotProcessD: t('inbox_triage.group_do_not_process_d'),
             empty: t('inbox_triage.empty'),
             reasons: {
+              duplicate: t('inbox_triage.reason_duplicate'),
               no_extractable_text: t('inbox_triage.reason_no_extractable_text'),
               too_large: t('inbox_triage.reason_too_large'),
               project_ambiguous: t('inbox_triage.reason_project_ambiguous'),
@@ -205,6 +207,10 @@ export default async function UploadPage() {
             outcomeBudgetBlocked: t('inbox_triage.outcome_budget_blocked'),
             budgetNote: t('inbox_triage.budget_note'),
             errorSave: t('inbox_triage.error_save'),
+            duplicateOf: t('inbox_triage.duplicate_of'),
+            showingCount: t('inbox_triage.showing_count'),
+            loadMore: t('inbox_triage.load_more'),
+            loading: t('inbox_triage.loading'),
           }}
         />
       </div>

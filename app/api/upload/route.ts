@@ -274,8 +274,11 @@ async function processUploadedFile(
       const sorted = [...emails].sort((a, b) => emailTime(b.date) - emailTime(a.date));
       for (const email of sorted) {
         const raw = dumpEmailToRaw(email);
+        // content_hash (not just external_id) so the same message dedupes
+        // regardless of channel — see lib/mail/gmail.ts's comment.
         const { deduped: dup } = await ingestDocument(admin, {
           kind: 'email', source: 'upload', external_id: email.externalId, raw_text: raw,
+          content_hash: sha256(raw),
         });
         if (dup) { deduped++; continue; }
         stored++;
@@ -311,9 +314,11 @@ async function processUploadedFile(
       const sorted = [...emails].sort((a, b) => emailTime(b.date) - emailTime(a.date));
       for (let i = 0; i < sorted.length; i++) {
         const email = sorted[i];
+        // content_hash (not just external_id) so the same message dedupes
+        // regardless of channel — see lib/mail/gmail.ts's comment.
         const { deduped: dup } = await ingestDocument(admin, {
           kind: 'email', source: 'upload', external_id: email.external_id ?? `${dedupKey}:${i}`,
-          raw_text: email.raw,
+          raw_text: email.raw, content_hash: sha256(email.raw),
         });
         if (dup) { deduped++; continue; }
         stored++;

@@ -6,7 +6,7 @@ import {
   loadVerifiedNotes, loadMatchDecisions, renderVerifiedNotes, renderMatchDecisions,
 } from './feedback-context.ts';
 import { selectOpenTasksExcludingTest } from './open-tasks.ts';
-import { MODELS } from './claude.ts';
+import { MODELS, type BudgetScope } from './claude.ts';
 import type { DocKind, DocSource, Project, Task, Vendor } from './types.ts';
 
 export interface IngestInput {
@@ -88,6 +88,12 @@ export async function processDocument(
      *  no-op for them today — it exists for a future deliberate reprocess
      *  action, which must set this rather than silently resending. */
     force?: boolean;
+    /** Demo Safety Gate: a caller-scoped sub-budget (e.g. the Data Inbox
+     *  pilot's $2 across up to 5 documents) — forwarded to whichever agent
+     *  runs below, and on to runStructured, which enforces it against the
+     *  real payload and accumulates the real post-call cost into it. See
+     *  lib/claude.ts's BudgetScope. */
+    budgetScope?: BudgetScope;
   },
 ): Promise<unknown> {
   if (doc.kind !== 'invoice_pdf' && !doc.force) {
@@ -121,7 +127,7 @@ export async function processDocument(
   if (doc.kind === 'invoice_pdf') {
     const parse = await parseInvoice(
       { id: doc.id, raw_text: doc.raw_text, pdf_base64: doc.pdf_base64 },
-      { projects, vendors },
+      { projects, vendors, budgetScope: doc.budgetScope },
     );
     return applyInvoiceParse(admin, doc.id, parse, { projects });
   }
@@ -141,6 +147,7 @@ export async function processDocument(
       projects, openTasks, rejectedPatterns,
       verifiedNotesBlock: renderVerifiedNotes(verifiedNotes),
       matchDecisionsBlock: renderMatchDecisions(matchDecisions),
+      budgetScope: doc.budgetScope,
     },
   );
   // Trust boundary: email (forwarded, polled, or an uploaded archive of

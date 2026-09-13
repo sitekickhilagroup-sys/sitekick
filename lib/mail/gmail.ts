@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ingestDocument } from '../ingest.ts';
+
+const sha256 = (data: string) => `sha256:${createHash('sha256').update(data).digest('hex')}`;
 
 // Gmail read-only poll via REST (no googleapis dependency).
 // Activates when all GMAIL_* env vars are present.
@@ -69,8 +72,13 @@ export async function run(admin: SupabaseClient): Promise<{ stored: number } | {
     const text = (findPlainText(msg.payload) ?? '').slice(0, 30000);
     const raw = `From: ${h('from')}\nTo: ${h('to')}\nDate: ${h('date')}\nSubject: ${h('subject')}\n\n${text}`;
 
+    // content_hash (not just external_id) so the SAME message polled via a
+    // different channel (forwarded, or a manual .eml upload of it) still
+    // dedupes — Demo Safety Gate hardening: "duplicates must be explicit,"
+    // and the cleanest way is to never let them become two rows at all.
     const { documentId, deduped } = await ingestDocument(admin, {
       kind: 'email', source: 'gmail', external_id: `gmail:${msg.id}`, raw_text: raw,
+      content_hash: sha256(raw),
     });
     if (!deduped && documentId) stored++;
   }

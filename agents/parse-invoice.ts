@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type Anthropic from '@anthropic-ai/sdk';
-import { runStructured } from '../lib/claude.ts';
+import { runStructured, type BudgetScope } from '../lib/claude.ts';
 import type { Project, Vendor } from '../lib/types.ts';
 import { InvoiceParseSchema, type InvoiceParse } from './schemas.ts';
 import { laToday } from '../lib/date.ts';
@@ -25,6 +25,9 @@ export interface InvoiceContext {
   projects: Pick<Project, 'id' | 'name'>[];
   vendors: Pick<Vendor, 'id' | 'name'>[];
   client?: Anthropic;
+  /** Demo Safety Gate: a caller-scoped sub-budget (e.g. the Data Inbox
+   *  pilot's $2 across up to 5 documents) — see lib/claude.ts's BudgetScope. */
+  budgetScope?: BudgetScope;
 }
 
 export async function parseInvoice(
@@ -50,6 +53,7 @@ export async function parseInvoice(
     toolName: 'report_invoice',
     toolDescription: 'Report the parsed invoice fields.',
     client: ctx.client,
+    budgetScope: ctx.budgetScope,
   });
 }
 

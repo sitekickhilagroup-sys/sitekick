@@ -5,8 +5,8 @@
 // supabaseAdmin(), matching the existing pattern in this codebase.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { processDocument } from './ingest.ts';
-import { runPreflight, type PreflightResult, type PreflightGroup } from './preflight.ts';
-import { estimateCallCostUsd, MODELS, BudgetExceededError } from './claude.ts';
+import { runPreflight, findBatchDuplicates, type PreflightResult, type PreflightGroup } from './preflight.ts';
+import { BudgetExceededError, BudgetUnverifiableError, type BudgetScope } from './claude.ts';
 import type { ProjectMatchCandidate } from './project-match.ts';
 import type { DocKind } from './types.ts';
 
@@ -19,7 +19,7 @@ import type { DocKind } from './types.ts';
 export const PILOT_MAX_DOCS = 5;
 export const PILOT_BUDGET_USD = Number(process.env.DEMO_PILOT_BUDGET_USD ?? 2);
 
-const TRIAGE_LIMIT = 200; // a real demo backlog, not "unbounded growth forever"
+export const TRIAGE_PAGE_SIZE = 200; // a real demo-scale page, not "unbounded growth forever"
 
 export interface TriageDocument {
   id: string;
@@ -31,38 +31,69 @@ export interface TriageDocument {
    *  before this rewrite). */
   name: string;
   preflight: PreflightResult;
+  /** Set when findBatchDuplicates matched this document's content_hash
+   *  against an earlier (by received_at) one in the same rendered batch —
+   *  the id to point a "duplicate of" link at. */
+  duplicateOfId?: string;
 }
 
 export interface DataInboxTriage {
   do_not_process: TriageDocument[];
   needs_selection: TriageDocument[];
   candidate: TriageDocument[];
+  /** True count of unprocessed documents, regardless of page size — lets
+   *  the UI say honestly "showing N of TOTAL" instead of silently hiding
+   *  anything past TRIAGE_PAGE_SIZE (Demo Safety Gate hardening: an
+   *  invisible document is its own kind of unreviewed auto-behavior). */
+  totalUnprocessed: number;
+  /** How many rows this page actually returned — offset + shown tells the
+   *  caller whether there's another page to fetch. */
+  shown: number;
+  offset: number;
 }
 
 /** The three-group triage view (Demo Safety Gate item 2) — filtering, not a
  *  business decision: every group is derived from lib/preflight.ts's
  *  deterministic signals alone, nothing here reads document content with a
- *  model. */
-export async function getDataInboxTriage(admin: SupabaseClient): Promise<DataInboxTriage> {
-  const [docsQ, projectsQ] = await Promise.all([
+ *  model. Paged (newest-first, TRIAGE_PAGE_SIZE per page) rather than
+ *  silently capped — see totalUnprocessed/shown/offset above. */
+export async function getDataInboxTriage(admin: SupabaseClient, offset = 0): Promise<DataInboxTriage> {
+  const [docsQ, projectsQ, countQ] = await Promise.all([
     admin.from('documents')
-      .select('id,kind,source,storage_path,raw_text,received_at')
+      .select('id,kind,source,storage_path,raw_text,received_at,content_hash')
       .is('processed_at', null)
       .order('received_at', { ascending: false })
-      .limit(TRIAGE_LIMIT),
+      .range(offset, offset + TRIAGE_PAGE_SIZE - 1),
     admin.from('projects').select('id,name,city_case,address'),
+    admin.from('documents').select('id', { count: 'exact', head: true }).is('processed_at', null),
   ]);
   const projects = (projectsQ.data ?? []) as ProjectMatchCandidate[];
   const docs = (docsQ.data ?? []) as {
     id: string; kind: DocKind; source: string; storage_path: string | null;
-    raw_text: string | null; received_at: string;
+    raw_text: string | null; received_at: string; content_hash: string | null;
   }[];
+  const totalUnprocessed = countQ.count ?? docs.length;
+  // Defensive layer: a TRUE duplicate should never reach here at all
+  // (ingestDocument's own dedup returns the existing row instead of
+  // inserting), but this catches anything ingested before every path set
+  // content_hash. Overrides every other signal — never a candidate,
+  // however clean its project match looks.
+  const duplicateOf = findBatchDuplicates(docs);
 
-  const result: DataInboxTriage = { do_not_process: [], needs_selection: [], candidate: [] };
+  const result: DataInboxTriage = {
+    do_not_process: [], needs_selection: [], candidate: [],
+    totalUnprocessed, shown: docs.length, offset,
+  };
   for (const doc of docs) {
-    const preflight = runPreflight(doc, projects);
+    const dupOriginalId = duplicateOf.get(doc.id);
+    const preflight = dupOriginalId
+      ? { group: 'do_not_process' as const, reasons: ['duplicate' as const], matchedProjectIds: [], sender: null }
+      : runPreflight(doc, projects);
     const name = doc.storage_path?.split('/').pop() ?? doc.source;
-    const entry: TriageDocument = { id: doc.id, kind: doc.kind, source: doc.source, received_at: doc.received_at, name, preflight };
+    const entry: TriageDocument = {
+      id: doc.id, kind: doc.kind, source: doc.source, received_at: doc.received_at, name, preflight,
+      duplicateOfId: dupOriginalId,
+    };
     result[preflight.group as PreflightGroup].push(entry);
   }
   return result;
@@ -88,13 +119,23 @@ export interface PilotRunResult {
  * Manual-selection-only processing (Demo Safety Gate item 3): processes
  * ONLY the documents a human explicitly checked, never "the next N in
  * queue." Hard-capped at PILOT_MAX_DOCS (5) per call — not a UI suggestion,
- * enforced here too. On top of that, tracks its OWN running cost estimate
- * across this invocation and stops selecting further documents once
- * PILOT_BUDGET_USD ($2) would be exceeded — a tighter, per-run sub-cap
- * layered on top of runStructured's unconditional, global DEMO_BUDGET_USD
- * ($20) cap, which still applies to every one of these calls regardless.
- * Every stop this makes (pilot cap or the global cap tripping inside
- * runStructured) is recorded per-document, never a silent skip.
+ * enforced here too.
+ *
+ * Hardening (Rotem, 2026-09-13, round 2):
+ * - Preflight is re-run HERE, server-side, against the SAME projects list
+ *   the triage view uses — a document in the `do_not_process` group is
+ *   rejected regardless of how its id arrived (the UI's own checkboxes
+ *   already disable those, but a request naming the id directly, bypassing
+ *   the UI entirely, must be refused the same way).
+ * - The pilot's $2 cap is enforced by a single BudgetScope object shared
+ *   across every document (and every retry) in this call — passed into
+ *   processDocument -> extractComms/parseInvoice -> runStructured, which
+ *   checks it against the REAL request payload (system + task list +
+ *   document content, not a raw_text-length guess) before every attempt,
+ *   and accumulates the REAL post-call cost into it afterward. There is no
+ *   separate pre-estimate loop here anymore — runStructured's own check
+ *   (real payload) is the only enforcement, so it can't drift out of sync
+ *   with what's actually billed.
  */
 export async function processSelectedDocuments(admin: SupabaseClient, documentIds: string[]): Promise<PilotRunResult> {
   if (documentIds.length === 0) return { attempted: 0, succeeded: 0, failed: 0, budgetBlocked: 0, perDocument: [] };
@@ -102,27 +143,73 @@ export async function processSelectedDocuments(admin: SupabaseClient, documentId
     throw new Error(`Pilot processing is capped at ${PILOT_MAX_DOCS} documents (got ${documentIds.length})`);
   }
 
-  const { data: rows } = await admin
-    .from('documents')
-    .select('id,kind,raw_text,storage_path,received_at,processed_at')
-    .in('id', documentIds);
-  const docs = (rows ?? []) as {
+  const [docsQ, projectsQ] = await Promise.all([
+    admin.from('documents')
+      .select('id,kind,raw_text,storage_path,received_at,processed_at,content_hash')
+      .in('id', documentIds),
+    admin.from('projects').select('id,name,city_case,address'),
+  ]);
+  const docs = (docsQ.data ?? []) as {
     id: string; kind: DocKind; raw_text: string | null; storage_path: string | null;
-    received_at: string; processed_at: string | null;
+    received_at: string; processed_at: string | null; content_hash: string | null;
   }[];
+  const projects = (projectsQ.data ?? []) as ProjectMatchCandidate[];
   const byId = new Map(docs.map((d) => [d.id, d]));
+
+  // Duplicate check against the WHOLE documents table, not just this
+  // selection — a selected doc can duplicate something already fully
+  // processed elsewhere. One query for every non-null content_hash among
+  // the selected docs, keyed by hash so "does ANOTHER row share this" is a
+  // simple lookup per document below.
+  const hashes = [...new Set(docs.map((d) => d.content_hash).filter((h): h is string => !!h))];
+  const byHash = new Map<string, { id: string }[]>();
+  if (hashes.length) {
+    const { data: hashRows } = await admin.from('documents').select('id,content_hash').in('content_hash', hashes);
+    for (const row of (hashRows ?? []) as { id: string; content_hash: string }[]) {
+      const list = byHash.get(row.content_hash) ?? [];
+      list.push({ id: row.id });
+      byHash.set(row.content_hash, list);
+    }
+  }
 
   const perDocument: PilotDocResult[] = [];
   let succeeded = 0, failed = 0, budgetBlocked = 0;
-  let pilotSpentEstimateUsd = 0;
-  let pilotCapTripped = false;
+  const scope: BudgetScope = { capUsd: PILOT_BUDGET_USD, spentUsd: 0 };
+  let scopeTripped = false; // once true, skip remaining docs without even re-attempting (they'd just be blocked again)
 
   for (const id of documentIds) {
     const doc = byId.get(id);
     if (!doc) { perDocument.push({ documentId: id, outcome: 'failed', detail: 'document not found' }); failed++; continue; }
     if (doc.processed_at) { perDocument.push({ documentId: id, outcome: 'failed', detail: 'already processed' }); failed++; continue; }
 
-    if (pilotCapTripped) {
+    // Duplicate against ANY other document (processed or not) sharing the
+    // same content_hash — checked before preflight, since it overrides
+    // every other signal (see findBatchDuplicates).
+    const otherWithSameHash = doc.content_hash
+      ? (byHash.get(doc.content_hash) ?? []).find((r) => r.id !== doc.id)
+      : undefined;
+    if (otherWithSameHash) {
+      perDocument.push({
+        documentId: id, outcome: 'failed',
+        detail: `rejected: duplicate of document ${otherWithSameHash.id}`,
+      });
+      failed++;
+      continue;
+    }
+
+    // Re-run preflight server-side — never trust that an id reaching this
+    // function came from the UI's own (already-filtered) selection list.
+    const preflight = runPreflight(doc, projects);
+    if (preflight.group === 'do_not_process') {
+      perDocument.push({
+        documentId: id, outcome: 'failed',
+        detail: `rejected: in the do-not-process group (${preflight.reasons.join(', ')})`,
+      });
+      failed++;
+      continue;
+    }
+
+    if (scopeTripped) {
       perDocument.push({
         documentId: id, outcome: 'budget_blocked',
         detail: `pilot budget ($${PILOT_BUDGET_USD}) already reached this run — remaining selections skipped`,
@@ -131,47 +218,22 @@ export async function processSelectedDocuments(admin: SupabaseClient, documentId
       continue;
     }
 
-    // Pre-call estimate — same estimator runStructured's own global gate
-    // uses — checked against the tighter pilot sub-cap BEFORE attempting the
-    // call. A PDF has no raw_text to size from yet; 4000 chars is a
-    // deliberately generic small-document floor for that case only — the
-    // REAL, exact check still happens inside runStructured against the
-    // actual request payload (including the PDF bytes) and is what actually
-    // blocks an underestimated call.
-    const estInputChars = doc.raw_text?.length ?? 4000;
-    const estThisCallUsd = estimateCallCostUsd(MODELS.extract, estInputChars, 16000) ?? 0;
-    if (pilotSpentEstimateUsd + estThisCallUsd > PILOT_BUDGET_USD) {
-      perDocument.push({
-        documentId: id, outcome: 'budget_blocked',
-        detail: `estimated ~$${estThisCallUsd.toFixed(4)} would exceed the pilot cap ($${PILOT_BUDGET_USD})`,
-      });
-      budgetBlocked++;
-      pilotCapTripped = true;
-      continue;
-    }
-    // Counted against the pilot cap as soon as we commit to attempting the
-    // call, not only on success — a call that fails AFTER a real, billed
-    // Anthropic request (e.g. extraction succeeded, a later DB write did
-    // not) still spent money; under-counting that would let the pilot
-    // silently exceed its own budget on a run with partial failures.
-    pilotSpentEstimateUsd += estThisCallUsd;
-
     try {
       if (doc.kind === 'invoice_pdf') {
         if (!doc.storage_path) throw new Error('invoice_pdf has no storage_path');
         const { data: file, error: dlError } = await admin.storage.from('documents').download(doc.storage_path);
         if (dlError || !file) throw new Error(`storage download failed: ${dlError?.message ?? 'no file'}`);
         const buffer = Buffer.from(await file.arrayBuffer());
-        await processDocument(admin, { id: doc.id, kind: doc.kind, pdf_base64: buffer.toString('base64'), received_at: doc.received_at });
+        await processDocument(admin, { id: doc.id, kind: doc.kind, pdf_base64: buffer.toString('base64'), received_at: doc.received_at, budgetScope: scope });
       } else {
-        await processDocument(admin, { id: doc.id, kind: doc.kind, raw_text: doc.raw_text, received_at: doc.received_at });
+        await processDocument(admin, { id: doc.id, kind: doc.kind, raw_text: doc.raw_text, received_at: doc.received_at, budgetScope: scope });
       }
       succeeded++;
       perDocument.push({ documentId: id, outcome: 'succeeded' });
     } catch (e) {
-      if (e instanceof BudgetExceededError) {
+      if (e instanceof BudgetExceededError || e instanceof BudgetUnverifiableError) {
         budgetBlocked++;
-        pilotCapTripped = true; // the global cap tripped — no point trying the rest this run either
+        scopeTripped = true; // either cap tripped (or spend became unverifiable) — no point trying the rest this run
         perDocument.push({ documentId: id, outcome: 'budget_blocked', detail: e.message });
       } else {
         failed++;

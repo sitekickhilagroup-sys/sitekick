@@ -1,9 +1,12 @@
+import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { ingestDocument } from '@/lib/ingest';
 import { safeEqual } from '@/lib/cron';
 import { runPreflight } from '@/lib/preflight';
 import type { ProjectMatchCandidate } from '@/lib/project-match';
+
+const sha256 = (data: string) => `sha256:${createHash('sha256').update(data).digest('hex')}`;
 
 export const maxDuration = 300;
 
@@ -44,11 +47,15 @@ export async function POST(req: NextRequest) {
     (body.text ?? '').slice(0, MAX_EMAIL_CHARS),
   ].filter((l) => l !== null).join('\n');
 
+  // content_hash (not just external_id, which some forwarders omit
+  // entirely) so the same message dedupes regardless of channel — see
+  // lib/mail/gmail.ts's comment on the same gap.
   const { documentId, deduped } = await ingestDocument(admin, {
     kind: 'email',
     source: 'forward',
     external_id: body.message_id ?? null,
     raw_text: raw,
+    content_hash: sha256(raw),
   });
   if (deduped || !documentId) {
     return NextResponse.json({ ok: true, deduped: true, documentId });

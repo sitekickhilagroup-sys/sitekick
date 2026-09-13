@@ -3,12 +3,74 @@
 **This is a dated snapshot, not a living guarantee. Refresh it whenever relevant evidence
 changes — see `WORKFLOW.md` for when to update.**
 
-**2026-09-13 (same Claude application session, continued — "Demo Safety Gate," per Rotem's follow-up
-directive: a working demo in ~2 weeks on a $30 Anthropic budget, and nothing may spend from it —
-or ask Rotem to load credit — before this gate shipped, tested, and deployed.** Built on top of
-Cost Controls Release 1 (below) — reuses its `llm_usage_log`, `prompt_version` idempotency,
-extract-comms task-list narrowing, and adds the actual spend ENFORCEMENT that release only
-measured. Zero Anthropic API calls made anywhere while building/testing this.
+**2026-09-13 (same Claude application session, continued — "Demo Safety Gate, round 2 (hardening)."
+Rotem reviewed round 1 live and found four real gaps that would have let the demo spend before the
+$30 load was even safe, plus three more robustness items. All fixed, tested, deployed — zero real
+API calls made while doing it.**
+
+1. **`/api/cron/process-import-queue` — the exact automatic, no-selection processing the whole gate
+   exists to prevent — removed from `vercel.json`'s cron schedule entirely, AND gated in the route
+   itself** (belt-and-suspenders: hitting the URL directly still can't auto-process while manual
+   mode is on). `lib/import-queue.ts`'s code is untouched (still budget-gated via runStructured, in
+   case it's ever needed again) — just nothing schedules or reaches it automatically anymore.
+2. **New `lib/demo-mode.ts`: `isDemoManualMode()`, ON by default** (flip `DEMO_MANUAL_MODE=0` to
+   turn it off — never the reverse; safe-by-default). Wired into the digest cron (buildDigest +
+   runPrioritization, both Sonnet), `triage-issues` cron (Haiku), and `process-import-queue` —
+   every cron that could reach `runStructured` now returns `{skipped: 'demo_manual_mode'}` BEFORE
+   calling the model, not after. `zimas-sync`, `poll-gmail`/`poll-outlook` (store-only since round
+   1), and `triage` (100% deterministic, confirmed zero Anthropic calls) needed no gate.
+3. **Budget verification is now fail-CLOSED, not fail-open.** `runStructured`
+   (`lib/claude.ts`) previously let a call through if it couldn't determine current spend (a
+   transient DB error, or the admin client failing to resolve) — now a NEW `BudgetUnverifiableError`
+   blocks the call instead, logged the same way `BudgetExceededError` is. The only exception:
+   under Vitest with no injected `usageLogClient`, both budget checks stay skipped (a test
+   scenario with no real spend to protect — otherwise every existing agent test would need to
+   start injecting budget mocks for an unrelated reason).
+4. **The pilot's $2 cap is now REAL enforcement against the actual payload, not a `raw_text.length`
+   guess.** New `BudgetScope` (`lib/claude.ts`): a `{capUsd, spentUsd}` object threaded through
+   `processDocument` → `extractComms`/`parseInvoice` → `runStructured` (via `ExtractContext`/
+   `InvoiceContext`/`processDocument`'s `budgetScope` field, all additive). `runStructured` checks
+   it against the REAL system+task-list+document payload before every attempt (including a
+   validation retry) and accumulates the REAL post-call cost into it afterward — as soon as a call
+   is attempted, not only on success, so a call that fails after a real billed request still counts.
+   `lib/data-inbox.ts`'s `processSelectedDocuments` now creates exactly one `BudgetScope` per pilot
+   run and passes the SAME object to every document/retry in that run; the old separate
+   pre-estimate loop is gone entirely — there is only one enforcement path now, so it can't drift
+   out of sync with what's actually billed.
+5. **`processSelectedDocuments` re-runs preflight server-side and independently checks for
+   duplicates**, rejecting a `do_not_process`-group or duplicate document even if its id is passed
+   directly rather than through the UI's own (already-filtered, already-disabled) checkboxes — never
+   trusts the caller.
+6. **Duplicate detection made explicit** (`lib/preflight.ts`'s new `findBatchDuplicates` +
+   `'duplicate'` reason). Root cause fixed first: `lib/mail/gmail.ts`, `lib/mail/outlook.ts`,
+   `app/api/ingest-email/route.ts` (forward intake), and the `.jsonl`/`.zip` per-email branches in
+   `app/api/upload/route.ts` never set `content_hash` — only `.eml` did — so the SAME email
+   arriving via two different channels could create two separate rows that `ingestDocument`'s own
+   dedup couldn't catch (and, for `ingest-email` specifically, a message with no `message_id` never
+   deduped at all — a second real bug this closes). All five now hash the raw text, closing the
+   gap at the source. A defensive layer also catches anything already in the table without a
+   content_hash: `getDataInboxTriage` and `processSelectedDocuments` both check for content-hash
+   collisions and flag the newer of any two matches as a duplicate of the older, shown in the UI
+   with a "duplicate of document `<id>`" note.
+7. **The Data Inbox 200-document page is no longer a silent cap.** `getDataInboxTriage` now takes
+   an `offset`, returns a real `totalUnprocessed` (head-count query) alongside `shown`/`offset`, and
+   the UI shows "Showing N of TOTAL" plus a "Load N more" button that appends the next page — a
+   backlog bigger than one page is reachable, never invisible.
+8. **Verification:** 1130/1130 tests pass (18 new/changed this round: `BudgetScope` accumulation
+   and retry-blocking in `lib/claude.test.ts`, real orchestration tests for the do-not-process/
+   duplicate/budget-scope rejections in `lib/data-inbox.test.ts`, `findBatchDuplicates` in
+   `lib/preflight.test.ts`), `tsc --noEmit` clean, `eslint` clean (same pre-existing unrelated
+   errors, untouched), a real `npm run build` succeeds.
+9. **Live-verified before reporting back to Rotem:** cron cannot reach the model while manual mode
+   is on; the budget check fails closed; selecting a `do_not_process` document's id directly
+   (bypassing the UI) is rejected server-side. See the exact commands/results in the handoff message
+   — not restated here since this file is a snapshot, not a session transcript.
+
+This round is built directly on the Demo Safety Gate round 1 entry below it, which is itself built
+on Cost Controls Release 1 further below (`llm_usage_log`, `prompt_version` idempotency,
+extract-comms task-list narrowing) — round 1 measured spend; this round adds the actual
+ENFORCEMENT (fail-closed verification, real-payload scoped budget, cron gating) that was still
+missing. Zero Anthropic API calls made anywhere while building/testing either round.
 
 - **Upload never auto-processes, anywhere.** Previously `app/api/upload/route.ts`,
   `app/api/ingest-email/route.ts` (the forward-address intake), and both `lib/mail/gmail.ts` /

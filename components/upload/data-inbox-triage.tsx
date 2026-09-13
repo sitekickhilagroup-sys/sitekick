@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { processSelectedDocuments, type DataInboxTriage, type PilotRunResult, type TriageDocument } from '@/app/actions/data-inbox';
+import { processSelectedDocuments, getDataInboxTriage, type DataInboxTriage, type PilotRunResult, type TriageDocument } from '@/app/actions/data-inbox';
 import type { PreflightReason } from '@/lib/preflight';
 import { fmtDate } from '@/lib/format';
 
@@ -26,6 +26,10 @@ export interface TriageLabels {
   outcomeBudgetBlocked: string;
   budgetNote: string; // "Demo budget: pilot cap ${pilot}, total demo cap ${total}"
   errorSave: string;
+  duplicateOf: string; // "Duplicate of document {id}"
+  showingCount: string; // "Showing {shown} of {total} unprocessed documents"
+  loadMore: string; // "Load {n} more"
+  loading: string;
 }
 
 interface Props {
@@ -34,13 +38,15 @@ interface Props {
   pilotMaxDocs: number;
   pilotBudgetUsd: number;
   demoBudgetUsd: number;
+  triagePageSize: number;
 }
 
 function Group({
-  title, description, docs, selectable, selected, onToggle, reasonLabels,
+  title, description, docs, selectable, selected, onToggle, reasonLabels, duplicateOfLabel,
 }: {
   title: string; description: string; docs: TriageDocument[]; selectable: boolean;
   selected: Set<string>; onToggle: (id: string) => void; reasonLabels: Record<PreflightReason, string>;
+  duplicateOfLabel: string;
 }) {
   if (docs.length === 0) return null;
   return (
@@ -74,6 +80,11 @@ function Group({
                   </span>
                 ))}
               </div>
+              {doc.duplicateOfId && (
+                <p className="mt-1 text-[9px] text-sk-muted">
+                  {duplicateOfLabel.replace('{id}', doc.duplicateOfId)}
+                </p>
+              )}
             </div>
           </li>
         ))}
@@ -82,12 +93,13 @@ function Group({
   );
 }
 
-export function DataInboxTriagePanel({ initialTriage, labels, pilotMaxDocs, pilotBudgetUsd, demoBudgetUsd }: Props) {
+export function DataInboxTriagePanel({ initialTriage, labels, pilotMaxDocs, pilotBudgetUsd, demoBudgetUsd, triagePageSize }: Props) {
   const [triage, setTriage] = useState(initialTriage);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<PilotRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [loadingMore, startLoadMore] = useTransition();
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -110,6 +122,7 @@ export function DataInboxTriagePanel({ initialTriage, labels, pilotMaxDocs, pilo
       // full reload; budget_blocked/failed ones stay, selectable again.
       const doneIds = new Set(res.perDocument.filter((d) => d.outcome === 'succeeded').map((d) => d.documentId));
       setTriage((prev) => ({
+        ...prev,
         do_not_process: prev.do_not_process.filter((d) => !doneIds.has(d.id)),
         needs_selection: prev.needs_selection.filter((d) => !doneIds.has(d.id)),
         candidate: prev.candidate.filter((d) => !doneIds.has(d.id)),
@@ -120,7 +133,29 @@ export function DataInboxTriagePanel({ initialTriage, labels, pilotMaxDocs, pilo
     }
   });
 
+  // Demo Safety Gate hardening: TRIAGE_PAGE_SIZE (200) is a page size, not a
+  // silent cap — a backlog bigger than that must stay reachable, not
+  // invisible. Appends the next page's groups onto the current ones rather
+  // than replacing them.
+  const loadMore = () => startLoadMore(async () => {
+    setError(null);
+    try {
+      const next = await getDataInboxTriage(triage.offset + triage.shown);
+      setTriage((prev) => ({
+        do_not_process: [...prev.do_not_process, ...next.do_not_process],
+        needs_selection: [...prev.needs_selection, ...next.needs_selection],
+        candidate: [...prev.candidate, ...next.candidate],
+        totalUnprocessed: next.totalUnprocessed,
+        shown: prev.shown + next.shown,
+        offset: prev.offset,
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : labels.errorSave);
+    }
+  });
+
   const total = triage.do_not_process.length + triage.needs_selection.length + triage.candidate.length;
+  const remaining = triage.totalUnprocessed - triage.shown;
 
   return (
     <section className="rounded-[15px] border border-line bg-sk-surface p-5 shadow-card">
@@ -133,16 +168,34 @@ export function DataInboxTriagePanel({ initialTriage, labels, pilotMaxDocs, pilo
         <div className="mt-3 space-y-3">
           <Group
             title={labels.groupCandidate} description={labels.groupCandidateD}
-            docs={triage.candidate} selectable selected={selected} onToggle={toggle} reasonLabels={labels.reasons}
+            docs={triage.candidate} selectable selected={selected} onToggle={toggle} reasonLabels={labels.reasons} duplicateOfLabel={labels.duplicateOf}
           />
           <Group
             title={labels.groupNeedsSelection} description={labels.groupNeedsSelectionD}
-            docs={triage.needs_selection} selectable selected={selected} onToggle={toggle} reasonLabels={labels.reasons}
+            docs={triage.needs_selection} selectable selected={selected} onToggle={toggle} reasonLabels={labels.reasons} duplicateOfLabel={labels.duplicateOf}
           />
           <Group
             title={labels.groupDoNotProcess} description={labels.groupDoNotProcessD}
-            docs={triage.do_not_process} selectable={false} selected={selected} onToggle={toggle} reasonLabels={labels.reasons}
+            docs={triage.do_not_process} selectable={false} selected={selected} onToggle={toggle} reasonLabels={labels.reasons} duplicateOfLabel={labels.duplicateOf}
           />
+        </div>
+      )}
+
+      {triage.totalUnprocessed > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <p className="font-mono text-[9px] text-sk-muted">
+            {labels.showingCount.replace('{shown}', String(triage.shown)).replace('{total}', String(triage.totalUnprocessed))}
+          </p>
+          {remaining > 0 && (
+            <button
+              type="button"
+              disabled={loadingMore}
+              onClick={loadMore}
+              className="min-h-9 cursor-pointer rounded-full border border-line2 px-2.5 py-1 text-[10px] font-semibold text-sk-ink hover:bg-sk-surface-soft disabled:opacity-50"
+            >
+              {loadingMore ? labels.loading : labels.loadMore.replace('{n}', String(Math.min(remaining, triagePageSize)))}
+            </button>
+          )}
         </div>
       )}
 

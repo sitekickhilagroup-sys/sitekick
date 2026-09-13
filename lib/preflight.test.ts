@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   classifyPreflight, computeHasText, computeIsTooLarge, senderFromRawText, runPreflight,
-  MIN_TEXT_CHARS, PREFLIGHT_MAX_CHARS,
+  findBatchDuplicates, MIN_TEXT_CHARS, PREFLIGHT_MAX_CHARS,
 } from './preflight';
 
 const projects = [
@@ -117,5 +117,56 @@ describe('runPreflight (end-to-end, no DB/model access)', () => {
     const r = runPreflight(doc, projects);
     expect(r.group).toBe('needs_selection');
     expect(r.matchedProjectIds.sort()).toEqual(['p1', 'p2']);
+  });
+});
+
+describe('findBatchDuplicates (Demo Safety Gate hardening — explicit duplicate detection)', () => {
+  it('finds no duplicates when every content_hash is unique', () => {
+    const docs = [
+      { id: 'd1', content_hash: 'h1' },
+      { id: 'd2', content_hash: 'h2' },
+    ];
+    expect(findBatchDuplicates(docs).size).toBe(0);
+  });
+
+  it('ignores documents with a null content_hash (nothing to compare)', () => {
+    const docs = [{ id: 'd1', content_hash: null }, { id: 'd2', content_hash: null }];
+    expect(findBatchDuplicates(docs).size).toBe(0);
+  });
+
+  it('marks the NEWER of two same-hash documents as a duplicate of the OLDER one (input is newest-first)', () => {
+    // Caller passes newest-first (matches getDataInboxTriage's own query order).
+    const docs = [
+      { id: 'newer', content_hash: 'same' },
+      { id: 'older', content_hash: 'same' },
+    ];
+    const dup = findBatchDuplicates(docs);
+    expect(dup.get('newer')).toBe('older');
+    expect(dup.has('older')).toBe(false); // the original is never marked a duplicate of itself
+  });
+
+  it('handles three-or-more documents sharing one hash — all but the oldest point at it', () => {
+    const docs = [
+      { id: 'd3', content_hash: 'same' }, // newest
+      { id: 'd2', content_hash: 'same' },
+      { id: 'd1', content_hash: 'same' }, // oldest -> the original
+    ];
+    const dup = findBatchDuplicates(docs);
+    expect(dup.get('d3')).toBe('d1');
+    expect(dup.get('d2')).toBe('d1');
+    expect(dup.has('d1')).toBe(false);
+  });
+
+  it('does not confuse documents with different hashes even if some share no hash at all', () => {
+    const docs = [
+      { id: 'd1', content_hash: 'a' },
+      { id: 'd2', content_hash: null },
+      { id: 'd3', content_hash: 'a' },
+      { id: 'd4', content_hash: 'b' },
+    ];
+    const dup = findBatchDuplicates(docs);
+    expect(dup.get('d1')).toBe('d3'); // d1 is newer than d3 in this (newest-first) list
+    expect(dup.has('d2')).toBe(false);
+    expect(dup.has('d4')).toBe(false);
   });
 });

@@ -4,12 +4,17 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { buildDigest } from '@/agents/daily-digest';
 import { runPrioritization } from '@/agents/prioritize-tasks';
 import { laToday } from '@/lib/date';
+import { isDemoManualMode, DEMO_MANUAL_MODE_SKIP } from '@/lib/demo-mode';
 
 export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   const denied = assertCron(req);
   if (denied) return denied;
+  // Demo Safety Gate hardening: both buildDigest (job:'digest', Sonnet) and
+  // runPrioritization (job:'digest', Sonnet) reach runStructured — skip
+  // BEFORE either is called, not after, while manual mode is on.
+  if (isDemoManualMode()) return NextResponse.json({ ok: true, skipped: DEMO_MANUAL_MODE_SKIP });
   try {
     const laDate = laToday();
     const admin = supabaseAdmin();

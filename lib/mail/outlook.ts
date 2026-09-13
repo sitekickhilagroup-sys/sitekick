@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ingestDocument } from '../ingest.ts';
+
+const sha256 = (data: string) => `sha256:${createHash('sha256').update(data).digest('hex')}`;
 
 // Outlook / Microsoft 365 poll via Graph API (client-credentials app).
 // Activates when all MSGRAPH_* env vars are present.
@@ -73,10 +76,12 @@ export async function run(admin: SupabaseClient): Promise<{ stored: number } | {
       : (msg.body?.content ?? msg.bodyPreview ?? '')).slice(0, 30000);
     const raw = `From: ${msg.from?.emailAddress?.name ?? ''} <${msg.from?.emailAddress?.address ?? ''}>\nDate: ${msg.receivedDateTime ?? ''}\nSubject: ${msg.subject ?? ''}\n\n${bodyText}`;
 
+    // content_hash (not just external_id) so the SAME message polled via a
+    // different channel still dedupes — see lib/mail/gmail.ts's comment.
     const { documentId, deduped } = await ingestDocument(admin, {
       kind: 'email', source: 'outlook',
       external_id: `outlook:${msg.internetMessageId ?? msg.id}`,
-      raw_text: raw,
+      raw_text: raw, content_hash: sha256(raw),
     });
     if (!deduped && documentId) stored++;
   }

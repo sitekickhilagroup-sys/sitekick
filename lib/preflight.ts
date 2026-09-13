@@ -17,9 +17,37 @@ export const PREFLIGHT_MAX_CHARS = 60_000;
 export type PreflightGroup = 'do_not_process' | 'needs_selection' | 'candidate';
 
 export type PreflightReason =
-  | 'no_extractable_text' | 'too_large'
+  | 'duplicate' | 'no_extractable_text' | 'too_large'
   | 'project_ambiguous' | 'source_ambiguous' | 'no_project_signal'
   | 'project_identified';
+
+/** Cross-document duplicate detection (Demo Safety Gate hardening, Rotem,
+ *  2026-09-13, round 2). A TRUE duplicate normally never reaches this at all
+ *  — ingestDocument's own external_id/content_hash dedup returns the
+ *  existing row instead of inserting a second one. This exists as a
+ *  defensive layer for content that slipped past that (e.g. data ingested
+ *  before every email path set content_hash) — within the batch of
+ *  documents actually being rendered, any two sharing a non-null
+ *  content_hash are flagged; the OLDEST (by received_at) is "the original,"
+ *  every newer one is marked a duplicate of it. This must be applied BEFORE
+ *  classifyPreflight (it overrides every other signal — a duplicate is
+ *  never a candidate, however clean its project match looks).
+ */
+export function findBatchDuplicates<T extends { id: string; content_hash: string | null }>(
+  docsNewestFirst: T[],
+): Map<string, string> {
+  const duplicateOf = new Map<string, string>();
+  const originalIdByHash = new Map<string, string>();
+  // Walk oldest-first (the input is newest-first) so the first doc seen for
+  // a given hash is genuinely the earliest — "the original."
+  for (const doc of [...docsNewestFirst].reverse()) {
+    if (!doc.content_hash) continue;
+    const existingOriginal = originalIdByHash.get(doc.content_hash);
+    if (existingOriginal) duplicateOf.set(doc.id, existingOriginal);
+    else originalIdByHash.set(doc.content_hash, doc.id);
+  }
+  return duplicateOf;
+}
 
 export interface PreflightDocInput {
   kind: DocKind;

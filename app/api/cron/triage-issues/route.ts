@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { assertCron } from '@/lib/cron';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { runIssueTriage } from '@/agents/triage-issues';
+import { isDemoManualMode, DEMO_MANUAL_MODE_SKIP } from '@/lib/demo-mode';
 
 export const maxDuration = 120;
 
@@ -15,6 +16,9 @@ export const maxDuration = 120;
 export async function GET(req: NextRequest) {
   const denied = assertCron(req);
   if (denied) return denied;
+  // Demo Safety Gate hardening: runIssueTriage reaches runStructured
+  // (job:'triage', Haiku) — skip before it's called, not after.
+  if (isDemoManualMode()) return NextResponse.json({ ok: true, skipped: DEMO_MANUAL_MODE_SKIP });
   try {
     const admin = supabaseAdmin();
     const result = await runIssueTriage(admin);
