@@ -3,24 +3,14 @@
 import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
+import { isAdminEmail } from '@/lib/admin';
 import { randomBytes } from 'node:crypto';
 
-// User management is admin-only once ADMIN_EMAILS is set (comma-separated).
-// Unset = POC fallback: every signed-in user may manage users — set it in
-// Vercel env before giving logins to anyone outside the founding team.
-// Exported so other admin-only surfaces (e.g. app/actions/llm-usage.ts) reuse
-// the SAME gate instead of a second copy of the ADMIN_EMAILS check.
-export function isAdminEmail(email: string | null): boolean {
-  const raw = process.env.ADMIN_EMAILS;
-  if (!raw) return true;
-  if (!email) return false;
-  return raw
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean)
-    .includes(email.toLowerCase());
-}
-
+// requireAdmin is exported (and async, so it's a valid Server Action) so
+// other admin-only surfaces (e.g. app/actions/llm-usage.ts) reuse the SAME
+// gate instead of a second copy — isAdminEmail itself now lives in
+// lib/admin.ts (a synchronous export here would fail the build: "Server
+// Actions must be async functions").
 export async function requireAdmin() {
   const user = await requireUser();
   if (!isAdminEmail(user.email)) throw new Error('forbidden');

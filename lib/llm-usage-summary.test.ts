@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { summarizeLlmUsage, type LlmUsageRow } from './llm-usage';
+import { summarizeLlmUsage, type LlmUsageRow } from './llm-usage-summary';
 
 const now = new Date('2026-09-13T12:00:00Z');
 
