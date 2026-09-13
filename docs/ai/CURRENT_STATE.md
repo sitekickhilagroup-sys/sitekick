@@ -72,6 +72,18 @@ Anthropic API calls made anywhere in this round**; every agent test uses a fake/
 - **Not done in this round (explicitly out of scope per the directive):** the extraction model
   itself was NOT changed off Sonnet; no cron was run; no backlog was processed; the still-open
   Anthropic API credit incident (see the 09-12 entry below) is unrelated and untouched.
+- **Deployed and verified live.** First push (`f0d5675`) applied all 3 migrations cleanly but
+  **failed the Vercel build**: `isAdminEmail` and `summarizeLlmUsage` were exported as synchronous
+  functions from `'use server'` files, which `tsc`/`vitest`/`eslint` all accept but Next.js's build
+  rejects ("Server Actions must be async functions") — a real gap in this round's own verification
+  discipline, caught only by actually running `next build`. Fixed (`7258d55`) by moving both into
+  plain modules (`lib/admin.ts`, `lib/llm-usage-summary.ts`); re-verified with a real local
+  `npm run build` before pushing again. Second push deployed clean. Confirmed live: the Settings
+  page's new "AI cost" card renders correctly (zero-state, since nothing has called the model
+  since deploy), and a direct read-only query confirmed `documents.prompt_version`/`.extract_model`,
+  `priority_runs.input_hash`/`.ranked`, and `llm_usage_log` all exist in production. **Lesson for
+  next time:** `tsc --noEmit` does not catch every Next.js-specific constraint — run `next build`
+  itself before treating a Server Action change as verified, not just typecheck+lint+vitest.
 
 **2026-09-12 (same Claude application session, continued — Track 3 completed, F-7 shipped, a live
 production incident found and reported):** Directly continues the 09-11 entry below — nothing in
