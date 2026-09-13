@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { extractComms, applyExtractResult } from './extract-comms';
+import { extractComms, applyExtractResult, identifyDeterministicProject } from './extract-comms';
 import { ExtractResultSchema } from './schemas';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -32,6 +32,22 @@ function fakeAnthropicWith(input: unknown): Anthropic {
       }),
     },
   } as unknown as Anthropic;
+}
+
+// Captures the actual request params sent to the model — used to verify the
+// OPEN TASKS list extractComms builds (Cost Controls Release 1, step 3),
+// without needing a real Anthropic call.
+function fakeAnthropicCapturing(input: unknown): { client: Anthropic; lastParams: () => Anthropic.MessageCreateParamsNonStreaming } {
+  let captured: Anthropic.MessageCreateParamsNonStreaming | undefined;
+  const client = {
+    messages: {
+      create: async (params: Anthropic.MessageCreateParamsNonStreaming) => {
+        captured = params;
+        return { content: [{ type: 'tool_use', id: 'tu1', name: 'report_extraction', input }] };
+      },
+    },
+  } as unknown as Anthropic;
+  return { client, lastParams: () => captured! };
 }
 
 // Chainable capturing fake for the supabase admin client.
@@ -77,6 +93,94 @@ describe('extractComms', () => {
     );
     expect(result.project_name).toBe('2361-2367 San Marco');
     expect(result.tasks).toHaveLength(2);
+  });
+});
+
+describe('identifyDeterministicProject (Cost Controls Release 1, step 3)', () => {
+  const projects = [
+    { id: 'p1', name: '2361-2367 San Marco', city_case: 'ENV-2024-0011', address: '2361 San Marco Ave' },
+    { id: 'p2', name: '2650 Rinconia', city_case: 'ENV-2024-0022', address: '2650 Rinconia Dr' },
+  ];
+
+  it('matches by city case number', () => {
+    expect(identifyDeterministicProject('Re: case ENV-2024-0011, corrections list attached', projects)).toBe('p1');
+  });
+
+  it('matches by address', () => {
+    expect(identifyDeterministicProject('Notes for 2650 Rinconia Dr, framing bids in', projects)).toBe('p2');
+  });
+
+  it('matches by the short colloquial name (address prefix stripped from the full name)', () => {
+    // Real transcripts say "San Marco first", never the full DB name.
+    expect(identifyDeterministicProject("OK let's run through San Marco first. Plan check status?", projects)).toBe('p1');
+  });
+
+  it('matches by the full project name', () => {
+    expect(identifyDeterministicProject('Status for 2650 Rinconia this week', projects)).toBe('p2');
+  });
+
+  it('falls back to null (ambiguous) when more than one project matches', () => {
+    expect(identifyDeterministicProject('San Marco and Rinconia both need updates this week', projects)).toBeNull();
+  });
+
+  it('falls back to null when no project matches', () => {
+    expect(identifyDeterministicProject('General admin: renew the corporate insurance policy', projects)).toBeNull();
+  });
+
+  it('ignores signals shorter than 3 characters (avoids trivial false positives)', () => {
+    const short = [{ id: 'p3', name: 'AB', city_case: null, address: null }];
+    expect(identifyDeterministicProject('ab initio review of the ab file', short)).toBeNull();
+  });
+});
+
+describe('extractComms task-list narrowing (Cost Controls Release 1, step 3)', () => {
+  const projects = [
+    { id: 'p1', name: '2361-2367 San Marco', city_case: null, address: null },
+    { id: 'p2', name: '2650 Rinconia', city_case: null, address: null },
+  ];
+  const openTasks = [
+    { id: 't1', project_id: 'p1', title: 'San Marco task', status: 'open', stage_key: null } as Task,
+    { id: 't2', project_id: 'p2', title: 'Rinconia task', status: 'open', stage_key: null } as Task,
+    { id: 't3', project_id: null, title: 'Unattributed task', status: 'open', stage_key: null } as Task,
+  ];
+
+  it('sends only the identified project\'s tasks plus no-project tasks when identification is unambiguous', async () => {
+    const { client, lastParams } = fakeAnthropicCapturing(canned);
+    await extractComms(
+      { id: 'doc1', raw_text: "Let's run through San Marco first." },
+      { projects, openTasks, client },
+    );
+    const messages = lastParams().messages as Anthropic.MessageParam[];
+    const text = messages[0].content as string;
+    expect(text).toContain('[t1]');
+    expect(text).toContain('[t3]');
+    expect(text).not.toContain('[t2]');
+  });
+
+  it('falls back to the FULL task list when the document is ambiguous (mentions two projects)', async () => {
+    const { client, lastParams } = fakeAnthropicCapturing(canned);
+    await extractComms(
+      { id: 'doc1', raw_text: 'San Marco and Rinconia both had updates in this weekly digest.' },
+      { projects, openTasks, client },
+    );
+    const messages = lastParams().messages as Anthropic.MessageParam[];
+    const text = messages[0].content as string;
+    expect(text).toContain('[t1]');
+    expect(text).toContain('[t2]');
+    expect(text).toContain('[t3]');
+  });
+
+  it('falls back to the FULL task list when no project is identified', async () => {
+    const { client, lastParams } = fakeAnthropicCapturing(canned);
+    await extractComms(
+      { id: 'doc1', raw_text: 'General admin: renew the corporate insurance policy.' },
+      { projects, openTasks, client },
+    );
+    const messages = lastParams().messages as Anthropic.MessageParam[];
+    const text = messages[0].content as string;
+    expect(text).toContain('[t1]');
+    expect(text).toContain('[t2]');
+    expect(text).toContain('[t3]');
   });
 });
 

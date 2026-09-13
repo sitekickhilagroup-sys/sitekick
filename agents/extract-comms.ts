@@ -1,12 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type Anthropic from '@anthropic-ai/sdk';
-import { runStructured } from '../lib/claude.ts';
+import { runStructured, MODELS } from '../lib/claude.ts';
 import { laDate, laToday } from '../lib/date.ts';
 import type { AgentProposal, Project, Task } from '../lib/types.ts';
 import { ExtractResultSchema, type ExtractResult } from './schemas.ts';
 import { routeExtractResult, filterDuplicateProposals, type ProposalIdentity } from '../lib/proposals.ts';
 import { logActivity } from '../lib/state-writer.ts';
 import { loadTriageContext, matchAttribution, runAutoTriage } from '../lib/auto-triage.ts';
+
+// Bump whenever SYSTEM changes materially — lib/ingest.ts's processDocument
+// compares this (+ the current MODELS.extract) against a document's stamped
+// values to decide whether it already succeeded under today's extractor
+// (Cost Controls Release 1, step 2 — idempotency, no silent resend).
+export const EXTRACT_COMMS_PROMPT_VERSION = '2026-09-13';
 
 const SYSTEM = `You are the operations chief-of-staff for Hilla Group, an LA real-estate developer.
 You read one communication (email or meeting transcript) and extract operational state.
@@ -167,11 +173,48 @@ Rules:
   evidences; when a claim is surprising (e.g. a disputed item suddenly "approved"),
   prefer emitting nothing over guessing.`;
 
+// Deterministic (non-model) project identification — Cost Controls Release 1,
+// step 3. Runs in plain JS before any Anthropic call, purely to decide how
+// much of the OPEN TASKS list to send: a literal case-number/address/name
+// match against the raw text. Ambiguous (0 or >1 project matched) is NOT an
+// error — it's the safe fallback signal that keeps the full task list, same
+// as today, for genuine multi-project documents. This never changes what
+// gets extracted or attributed — only what context the model is shown.
+export interface DeterministicProjectCandidate {
+  id: string;
+  name: string;
+  city_case?: string | null;
+  address?: string | null;
+}
+
+export function identifyDeterministicProject(
+  rawText: string,
+  projects: DeterministicProjectCandidate[],
+): string | null {
+  const text = rawText.toLowerCase();
+  const matched = new Set<string>();
+  for (const p of projects) {
+    // Project names in this codebase are address-led ("2361-2367 San
+    // Marco"), but a communication usually names the property by its short,
+    // colloquial label alone ("San Marco first", "Oakdell — framing bids?").
+    // Stripping a leading street-number prefix gives that label as an extra
+    // literal signal, alongside the full name, case number, and address.
+    const shortName = p.name.replace(/^[\d][\d\s\-–—/]*/, '').trim();
+    const signals = [p.city_case, p.address, p.name, shortName]
+      .filter((s): s is string => !!s && s.trim().length >= 3);
+    if (signals.some((s) => text.includes(s.toLowerCase()))) {
+      matched.add(p.id);
+    }
+  }
+  return matched.size === 1 ? [...matched][0] : null;
+}
+
 export interface ExtractContext {
-  /** city_case rides along when the caller has it (lib/ingest.ts does) — a
-   *  case number in an email subject is often the ONLY property evidence, and
-   *  the attribution rules above need it in the project list. */
-  projects: (Pick<Project, 'id' | 'name'> & { city_case?: string | null })[];
+  /** city_case (and now address) ride along when the caller has them
+   *  (lib/ingest.ts does) — a case number or address fragment in an email is
+   *  often the ONLY property evidence, and both the attribution rules above
+   *  and identifyDeterministicProject need them in the project list. */
+  projects: (Pick<Project, 'id' | 'name'> & { city_case?: string | null; address?: string | null })[];
   openTasks: Task[];
   /** Learning at the source: suggestion titles the TEAM (humans, never
    *  agents) rejected or dismissed — the extractor is told not to re-assert
@@ -202,7 +245,16 @@ export async function extractComms(
   const projectList = ctx.projects
     .map((p) => `- ${p.name}${p.city_case ? ` (case ${p.city_case})` : ''}`)
     .join('\n');
-  const taskList = ctx.openTasks
+  // Narrow the OPEN TASKS list to the identified project (+ no-project tasks,
+  // which the dedup rule already treats as needing review regardless of
+  // project) — the biggest single cost driver per COST_MAP_2026-09-13.md:
+  // this list runs ~130+ rows unfiltered on every document otherwise.
+  // Ambiguous/no-match keeps today's behavior (the full list) exactly.
+  const identifiedProjectId = identifyDeterministicProject(doc.raw_text, ctx.projects);
+  const relevantTasks = identifiedProjectId
+    ? ctx.openTasks.filter((t) => t.project_id === identifiedProjectId || t.project_id == null)
+    : ctx.openTasks;
+  const taskList = relevantTasks
     .map((t) => `- [${t.id}] (${t.project_id}) ${t.title}${t.waiting_for ? ` — waiting: ${t.waiting_for}` : ''}${t.due ? ` — due ${t.due}` : ''}`)
     .join('\n');
   const rejected = (ctx.rejectedPatterns ?? []).length
@@ -408,9 +460,14 @@ export async function applyExtractResult(
 
   // Always stamped: the agent ran to completion. project_id stays null for a
   // multi-project document — its items carry their own projects.
+  // prompt_version/extract_model record what this run actually used, so a
+  // later call can tell "already succeeded under today's extractor" from
+  // "succeeded under an older prompt/model" (see processDocument's guard).
   await admin.from('documents').update({
     processed_at: new Date().toISOString(),
     project_id: docProjectId,
+    prompt_version: EXTRACT_COMMS_PROMPT_VERSION,
+    extract_model: MODELS.extract,
   }).eq('id', docId);
 
   return summary;

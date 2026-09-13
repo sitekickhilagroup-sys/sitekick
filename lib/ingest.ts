@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { extractComms, applyExtractResult } from '../agents/extract-comms.ts';
+import { extractComms, applyExtractResult, EXTRACT_COMMS_PROMPT_VERSION } from '../agents/extract-comms.ts';
 import { parseInvoice, applyInvoiceParse } from '../agents/parse-invoice.ts';
 import { loadRejectedPatterns } from './auto-triage.ts';
 import {
   loadVerifiedNotes, loadMatchDecisions, renderVerifiedNotes, renderMatchDecisions,
 } from './feedback-context.ts';
 import { selectOpenTasksExcludingTest } from './open-tasks.ts';
+import { MODELS } from './claude.ts';
 import type { DocKind, DocSource, Project, Task, Vendor } from './types.ts';
 
 export interface IngestInput {
@@ -80,16 +81,40 @@ export async function processDocument(
      *  being processed for the first time, right after creation) fall back
      *  to the real current date, which is correct for them too. */
     received_at?: string;
+    /** Explicit reason to resend a document to the model even though it
+     *  already succeeded under the current prompt_version + model (Cost
+     *  Controls Release 1, step 2). Every current caller processes a
+     *  document exactly once, right after creation, so this guard is a
+     *  no-op for them today — it exists for a future deliberate reprocess
+     *  action, which must set this rather than silently resending. */
+    force?: boolean;
   },
 ): Promise<unknown> {
+  if (doc.kind !== 'invoice_pdf' && !doc.force) {
+    const { data: existing } = await admin
+      .from('documents')
+      .select('processed_at, prompt_version, extract_model')
+      .eq('id', doc.id)
+      .maybeSingle();
+    if (
+      existing?.processed_at
+      && existing.prompt_version === EXTRACT_COMMS_PROMPT_VERSION
+      && existing.extract_model === MODELS.extract
+    ) {
+      return { skipped: true, reason: 'already succeeded under current prompt_version and model' };
+    }
+  }
+
   const [projectsQ, tasksQ, vendorsQ] = await Promise.all([
-    // city_case rides along for extract-comms' project-attribution rules —
-    // a case number in an email subject is often the only property evidence.
-    admin.from('projects').select('id,name,city_case'),
+    // city_case and address ride along for extract-comms' project-attribution
+    // rules AND its deterministic project identification (Cost Controls
+    // Release 1, step 3) — a case number or address fragment in an email is
+    // often the only property evidence.
+    admin.from('projects').select('id,name,city_case,address'),
     selectOpenTasksExcludingTest(admin),
     admin.from('vendors').select('id,name'),
   ]);
-  const projects = (projectsQ.data ?? []) as (Pick<Project, 'id' | 'name'> & { city_case?: string | null })[];
+  const projects = (projectsQ.data ?? []) as (Pick<Project, 'id' | 'name'> & { city_case?: string | null; address?: string | null })[];
   const openTasks = (tasksQ.data ?? []) as Task[];
   const vendors = (vendorsQ.data ?? []) as Pick<Vendor, 'id' | 'name'>[];
 

@@ -71,11 +71,34 @@ function describeAnswer(label: string, a: PhaseInference): string {
   return `${label}:\nphase_key: ${a.phase_key}\nconfidence: ${a.confidence}\nevidence: "${a.evidence}"\nreasoning: ${a.reasoning}`;
 }
 
-async function runPass(dataMessage: string, client?: Anthropic): Promise<PhaseInference> {
+// Cost Controls Release 1, step 4: passes 1-2 are a read + an adversarial
+// self-check — ambiguity/judgment work, not the "explicit, rare, high-stakes
+// action" the rule reserves Opus for. Only pass 3 (fires solely when 1 and 2
+// disagree) is that kind of adjudication and stays on Opus.
+//
+// dataMessage (up to 25 docs x 1500 chars + the open-task list) is IDENTICAL
+// across every pass in one invocation — the clearest prompt-caching case in
+// the codebase. It's split into its own cache_control-marked block so pass 1
+// writes it to cache and passes 2/3 read it back instead of re-billing full
+// price for a payload that hasn't changed.
+function dataBlock(dataMessage: string): Anthropic.TextBlockParam {
+  return { type: 'text', text: dataMessage, cache_control: { type: 'ephemeral' } };
+}
+
+async function runPass(
+  dataMessage: string,
+  appendText: string | null,
+  job: 'digest' | 'analyze',
+  actionType: string,
+  client?: Anthropic,
+): Promise<PhaseInference> {
+  const content: Anthropic.TextBlockParam[] = [dataBlock(dataMessage)];
+  if (appendText) content.push({ type: 'text', text: appendText });
   return runStructured({
-    job: 'analyze',
+    job,
+    actionType,
     system: SYSTEM,
-    messages: [{ role: 'user', content: dataMessage }],
+    messages: [{ role: 'user', content }],
     schema: PhaseInferenceSchema,
     toolName: 'report_phase',
     toolDescription: 'Report the inferred current project phase with quoted evidence.',
@@ -110,38 +133,25 @@ export async function inferProjectPhase(
   const templates = (templatesQ.data ?? []) as SubstageTemplate[];
   const dataMessage = buildDataMessage(project, tasks, docs, phases, templates);
 
-  // Pass 1: initial read.
-  const pass1 = await runPass(dataMessage, client);
+  // Pass 1: initial read. Sonnet.
+  const pass1 = await runPass(dataMessage, null, 'digest', 'infer-phase-pass1', client);
 
-  // Pass 2: adversarial re-examination of pass 1's own answer.
-  const pass2 = await runStructured({
-    job: 'analyze',
-    system: SYSTEM,
-    messages: [{
-      role: 'user',
-      content: `${dataMessage}\n\n${describeAnswer('PASS 1 ANSWER', pass1)}\n\nAdversarially re-examine: quote the strongest evidence AGAINST this phase, then confirm or revise.`,
-    }],
-    schema: PhaseInferenceSchema,
-    toolName: 'report_phase',
-    toolDescription: 'Report the inferred current project phase with quoted evidence.',
-    client,
-  });
+  // Pass 2: adversarial re-examination of pass 1's own answer. Sonnet.
+  const pass2 = await runPass(
+    dataMessage,
+    `${describeAnswer('PASS 1 ANSWER', pass1)}\n\nAdversarially re-examine: quote the strongest evidence AGAINST this phase, then confirm or revise.`,
+    'digest', 'infer-phase-pass2', client,
+  );
 
   let final = pass2;
-  // Pass 3 only fires when pass 2 revised the phase — a genuine disagreement to rule on.
+  // Pass 3 only fires when pass 2 revised the phase — a genuine disagreement
+  // to rule on, and the only pass that stays on Opus.
   if (pass2.phase_key !== pass1.phase_key) {
-    final = await runStructured({
-      job: 'analyze',
-      system: SYSTEM,
-      messages: [{
-        role: 'user',
-        content: `${dataMessage}\n\n${describeAnswer('PASS 1 ANSWER', pass1)}\n\n${describeAnswer('PASS 2 ANSWER (adversarial re-examination)', pass2)}\n\nThe two passes disagree. Weigh both sets of evidence and give your FINAL ruling on the project's current phase.`,
-      }],
-      schema: PhaseInferenceSchema,
-      toolName: 'report_phase',
-      toolDescription: 'Report the inferred current project phase with quoted evidence.',
-      client,
-    });
+    final = await runPass(
+      dataMessage,
+      `${describeAnswer('PASS 1 ANSWER', pass1)}\n\n${describeAnswer('PASS 2 ANSWER (adversarial re-examination)', pass2)}\n\nThe two passes disagree. Weigh both sets of evidence and give your FINAL ruling on the project's current phase.`,
+      'analyze', 'infer-phase-pass3', client,
+    );
   }
 
   return { phase_key: final.phase_key, confidence: final.confidence, evidence: final.evidence };

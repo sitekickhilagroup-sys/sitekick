@@ -15,11 +15,16 @@ export async function refreshPriorities(): Promise<{ ok: true; ranked: number } 
   const admin = supabaseAdmin();
   const summary = await runPrioritization(admin, laToday());
   if ('error' in summary) return summary;
-  await logActivity(admin, {
-    entity_type: 'priority_run', entity_id: summary.run_id,
-    actor: user.email ?? user.id, action: 'prioritize',
-    after: { ranked: summary.ranked, missing: summary.missing, unknown: summary.unknown },
-  });
+  // Cost Controls Release 1, step 5: a skip means no relevant business data
+  // changed since the last run — the existing ranking is reused as-is, so
+  // there's nothing new to log (no agent call happened this time).
+  if (!('skipped' in summary)) {
+    await logActivity(admin, {
+      entity_type: 'priority_run', entity_id: summary.run_id,
+      actor: user.email ?? user.id, action: 'prioritize',
+      after: { ranked: summary.ranked, missing: summary.missing, unknown: summary.unknown },
+    });
+  }
   revalidatePath('/'); revalidatePath('/work');
   return { ok: true, ranked: summary.ranked };
 }

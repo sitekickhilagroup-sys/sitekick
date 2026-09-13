@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type Anthropic from '@anthropic-ai/sdk';
 import { runStructured, MODELS } from '../lib/claude.ts';
@@ -126,6 +127,39 @@ export interface PrioritizeRunSummary {
   unknown: number;
 }
 
+export interface PrioritizeSkipped {
+  skipped: true;
+  run_id: string;
+  ranked: number;
+  reason: string;
+}
+
+// Cost Controls Release 1, step 5: exactly the fields that feed scoring (see
+// SYSTEM's ranking factors + taskLine above), hashed so runPrioritization can
+// tell "nothing relevant changed" from "something did" without re-running the
+// model. Sorted by id first so row order from the DB never affects the hash.
+// blockers is expected post-withEffectiveDaysStuck — days_stuck here is
+// `today`-relative (stable within one calendar day, changes once per day as
+// real elapsed time does), so re-clicking "Refresh" in one sitting hashes
+// identically while an actual day boundary correctly invalidates it.
+export function computePrioritizationInputHash(
+  tasks: Pick<Task, 'id' | 'due' | 'due_provenance' | 'priority' | 'status' | 'waiting_for' | 'manual_priority' | 'process_impact'>[],
+  blockers: Pick<Blocker, 'project_id' | 'days_stuck' | 'kind'>[],
+): string {
+  const taskPart = [...tasks]
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map((t) => [
+      t.id, t.due ?? '', t.due_provenance ?? '', t.priority, t.status,
+      t.waiting_for ?? '', t.manual_priority ?? '', t.process_impact ?? '',
+    ].join('|'))
+    .join('\n');
+  const blockerPart = [...blockers]
+    .sort((a, b) => (a.project_id < b.project_id ? -1 : a.project_id > b.project_id ? 1 : (a.days_stuck - b.days_stuck)))
+    .map((b) => [b.project_id, b.days_stuck, b.kind].join('|'))
+    .join('\n');
+  return createHash('sha256').update(`${taskPart}\n---\n${blockerPart}`).digest('hex');
+}
+
 const COMMITMENT_WORD = /\b(committed|confirmed|guarantee[d]?|promise[ds]?)\b/gi;
 // A negation within this many characters BEFORE the word means the sentence
 // is already correctly hedged ("not yet confirmed", "never confirmed") —
@@ -172,7 +206,7 @@ export function sanitizeReason(reason: string, dueProvenance: Task['due_provenan
 export async function applyPrioritization(
   admin: SupabaseClient,
   result: PrioritizeResult,
-  ctx: { tasks: Task[]; today: string },
+  ctx: { tasks: Task[]; today: string; inputHash: string },
 ): Promise<PrioritizeRunSummary | { error: string }> {
   const taskById = new Map(ctx.tasks.map((t) => [t.id, t]));
   const seen = new Set<string>();
@@ -199,7 +233,10 @@ export async function applyPrioritization(
   });
 
   const { data: run, error: runErr } = await admin.from('priority_runs')
-    .insert({ model: MODELS.digest, scope: 'all', note: `${ordered.length} tasks ranked` })
+    .insert({
+      model: MODELS.digest, scope: 'all', note: `${ordered.length} tasks ranked`,
+      input_hash: ctx.inputHash, ranked: ordered.length,
+    })
     .select('id').single();
   if (runErr || !run) return { error: `priority run insert failed: ${runErr?.message}` };
 
@@ -235,12 +272,19 @@ export async function applyPrioritization(
 }
 
 /** Full run: fetch → agent → persist. Shared by the My Work refresh action
- *  and the daily digest cron. */
+ *  and the daily digest cron.
+ *
+ *  Cost Controls Release 1, step 5: before calling the model, hash the fields
+ *  that actually feed scoring and compare against the most recent run. A
+ *  match means nothing relevant changed since a valid ranking already exists
+ *  — skip the call and let callers reuse that run. `force: true` (an explicit
+ *  reason, e.g. a deliberate re-rank action) bypasses the check. */
 export async function runPrioritization(
   admin: SupabaseClient,
   today: string,
   client?: Anthropic,
-): Promise<PrioritizeRunSummary | { error: string }> {
+  opts?: { force?: boolean },
+): Promise<PrioritizeRunSummary | PrioritizeSkipped | { error: string }> {
   const [tasksQ, projectsQ, blockersQ, pinsQ] = await Promise.all([
     selectOpenTasksExcludingTest(admin),
     admin.from('projects').select('id,name,current_phase_key,business_rank'),
@@ -251,6 +295,28 @@ export async function runPrioritization(
   ]);
   const tasks = (tasksQ.data ?? []) as Task[];
   if (!tasks.length) return { error: 'no open tasks to rank' };
+  // F-8: days_stuck as stored is a stale creation-time snapshot — without
+  // this, the model would be told a blocker is "9d" stuck when it's
+  // actually been 31, understating exactly the risk this ranking exists to
+  // surface. See lib/blockers.ts's effectiveDaysStuck. The corrected value is
+  // also what the idempotency hash below is computed from.
+  const blockers = withEffectiveDaysStuck((blockersQ.data ?? []) as PrioritizeContext['blockers'], today);
+  const inputHash = computePrioritizationInputHash(tasks, blockers);
+
+  if (!opts?.force) {
+    const { data: lastRun } = await admin.from('priority_runs')
+      .select('id, input_hash, ranked')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastRun?.input_hash && lastRun.input_hash === inputHash) {
+      return {
+        skipped: true, run_id: lastRun.id as string, ranked: (lastRun.ranked as number | null) ?? 0,
+        reason: 'no relevant business data changed since the last run',
+      };
+    }
+  }
+
   // Feedback in use (kill-switched): Noa's confirmed facts/corrections ride into
   // the ranker's context so a corrected fact (e.g. an invented deadline she
   // disowned) is present when it scores. Empty when FEEDBACK_USE is off.
@@ -258,15 +324,11 @@ export async function runPrioritization(
   const result = await prioritizeTasks({
     projects: (projectsQ.data ?? []) as PrioritizeContext['projects'],
     tasks,
-    // F-8: days_stuck as stored is a stale creation-time snapshot — without
-    // this, the model would be told a blocker is "9d" stuck when it's
-    // actually been 31, understating exactly the risk this ranking exists to
-    // surface. See lib/blockers.ts's effectiveDaysStuck.
-    blockers: withEffectiveDaysStuck((blockersQ.data ?? []) as PrioritizeContext['blockers'], today),
+    blockers,
     today,
     pinned: (pinsQ.data ?? []) as { title: string; manual_priority: number }[],
     verifiedNotesBlock: renderVerifiedNotes(verifiedNotes),
     client,
   });
-  return applyPrioritization(admin, result, { tasks, today });
+  return applyPrioritization(admin, result, { tasks, today, inputHash });
 }

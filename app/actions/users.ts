@@ -8,7 +8,9 @@ import { randomBytes } from 'node:crypto';
 // User management is admin-only once ADMIN_EMAILS is set (comma-separated).
 // Unset = POC fallback: every signed-in user may manage users — set it in
 // Vercel env before giving logins to anyone outside the founding team.
-function isAdminEmail(email: string | null): boolean {
+// Exported so other admin-only surfaces (e.g. app/actions/llm-usage.ts) reuse
+// the SAME gate instead of a second copy of the ADMIN_EMAILS check.
+export function isAdminEmail(email: string | null): boolean {
   const raw = process.env.ADMIN_EMAILS;
   if (!raw) return true;
   if (!email) return false;
@@ -19,7 +21,7 @@ function isAdminEmail(email: string | null): boolean {
     .includes(email.toLowerCase());
 }
 
-async function requireAdmin() {
+export async function requireAdmin() {
   const user = await requireUser();
   if (!isAdminEmail(user.email)) throw new Error('forbidden');
   return user;

@@ -3,6 +3,76 @@
 **This is a dated snapshot, not a living guarantee. Refresh it whenever relevant evidence
 changes — see `WORKFLOW.md` for when to update.**
 
+**2026-09-13 (same Claude application session, continued — "Cost Controls Release 1," per Rotem's
+explicit product-requirement directive: cost optimization is now a product requirement, split
+into dev-session cost (Claude Code) vs. runtime cost (Anthropic API), with a binding 5-step order
+and hard rules — no API calls, no cron, no backlog processing, focused tests per step, one
+typecheck+lint pass at the end, full suite before deploy, real read-only cost measurement before
+publishing, and no publish without a viewing method for the pilot.** Read-only audit first
+(`docs/ai/handoffs/COST_MAP_2026-09-13.md`, commit `097436c`), then all 5 steps built — **zero
+Anthropic API calls made anywhere in this round**; every agent test uses a fake/injectable client.
+
+- **Step 1 — central usage measurement.** `runStructured` (`lib/claude.ts`) now reads
+  `response.usage` on every attempt (never discarded) and logs job/action_type/model/attempt/
+  success/tokens/estimated_cost_usd/document_id/run_id to a new `llm_usage_log` table
+  (`supabase/migrations/0029_llm_usage_log.sql`, additive — new table only). The Supabase client
+  used for logging is injectable (`usageLogClient`) and, absent that, is skipped entirely under
+  `process.env.VITEST` — so no existing or new agent test writes to the real project. Pricing
+  table (Opus 5 $5/$25, Sonnet 5 $2/$10, Haiku 4.5 $1/$5 per MTok, plus a few older models) lives
+  in `lib/claude.ts`; an unpriced model logs with `estimated_cost_usd: null` rather than guessing.
+- **Step 2 — `prompt_version` + idempotency.** `documents.prompt_version` / `.extract_model`
+  (`0030_document_prompt_version.sql`, additive). `agents/extract-comms.ts` exports
+  `EXTRACT_COMMS_PROMPT_VERSION` and stamps both columns on every successful `applyExtractResult`.
+  `lib/ingest.ts`'s `processDocument` now checks, before calling the model (invoice_pdf excluded —
+  parse-invoice has no prompt_version yet), whether the document already succeeded under the
+  *current* prompt_version + model; if so it skips and returns `{skipped: true, reason}`. A new
+  `force?: boolean` field bypasses it for a deliberate reprocess. Every current caller processes a
+  document exactly once, right after creation, so this is a no-op in practice today (nothing
+  reprocesses automatically) — it's there for whenever something does.
+- **Step 3 — `extract-comms.ts` deterministic project narrowing (the biggest single lever).** New
+  exported pure function `identifyDeterministicProject(rawText, projects)`: matches city_case,
+  address, full project name, or an address-prefix-stripped "short name" (real transcripts say
+  "San Marco", never the DB's full "2361-2367 San Marco") as literal substrings. Exactly one match
+  → the OPEN TASKS list sent to the model is filtered to that project's tasks + no-project tasks;
+  zero or more than one match → unchanged behavior, the full list (safe fallback, never a
+  correctness risk). **Measured against 56 real recent non-QA documents (read-only SQL, no
+  writes):** 20 (36%) identified a single project; for those the task list drops from 134 to ~65
+  rows on average (~51% smaller); the remaining 64% fall back to the full list exactly as today.
+  Lower than the "majority case" the cost-map audit hoped for, reported as measured, not rounded up.
+- **Step 4 — `infer-phase.ts` model tiering + prompt caching.** Passes 1 and 2 (always run) moved
+  from Opus to Sonnet (`job: 'digest'`); pass 3 (Opus, `job: 'analyze'`) fires only when passes 1
+  and 2 disagree, same as before. The shared `dataMessage` payload (up to 25 docs × 1500 chars +
+  open tasks) is now its own `cache_control: {type: 'ephemeral'}` text block, byte-identical across
+  passes within one invocation — pass 1 writes it to cache, passes 2/3 read it back.
+- **Step 5 — `prioritize-tasks.ts` run idempotency.** New `computePrioritizationInputHash(tasks,
+  blockers)` — a sha256 over exactly the fields that feed scoring (per task: due/due_provenance/
+  priority/status/waiting_for/manual_priority/process_impact; per blocker, post-F-8-correction:
+  project_id/days_stuck/kind), sorted by id so DB row order never matters. `priority_runs` gained
+  `input_hash`/`ranked` columns (`0031_priority_run_idempotency.sql`, additive). `runPrioritization`
+  compares the freshly-computed hash against the most recent run and skips the model call (both the
+  manual "Refresh priorities" button and the daily digest cron reuse this) when nothing relevant
+  changed, unless `force: true`. `days_stuck` is `today`-relative so it's stable within one calendar
+  day (repeated clicks in one sitting hash identically) and correctly changes once a day boundary
+  passes (a real elapsed-time signal, not staleness).
+- **Admin cost view, added on Rotem's follow-up request (same round):** a new read-only card on
+  Settings (`app/(dash)/(standard)/settings/page.tsx`), gated by the *same* existing `ADMIN_EMAILS`
+  check as the Users card (`requireAdmin`/`isAdminEmail`, now exported from `app/actions/users.ts`
+  — no new permission model). Shows cost today/7d/30d, input/output tokens, calls/successes/
+  failures, a by-job/model breakdown, the last 20 logged actions, and the last-run timestamp.
+  Aggregation is plain JS over a 30-day row fetch (`app/actions/llm-usage.ts`'s
+  `summarizeLlmUsage`, unit-tested pure function), not a raw-SQL RPC — matches "no new complex
+  filters." A documented SQL alternative (day-bucketed cost, job/model breakdown, last-20 query)
+  sits in a `<details>` block on the same card for anyone who'd rather query Supabase directly.
+- **Verification:** 1067/1067 tests pass (vitest), `tsc --noEmit` clean, `eslint` clean (the only
+  lint findings anywhere in the repo are pre-existing `react-hooks/set-state-in-effect` errors in
+  `components/inbox/notification-bell.tsx` and `components/nav-links.tsx`, untouched by this round).
+  Local dev-server browser verification wasn't possible (no `.env.local` in this environment) —
+  verification here is unit tests + a real read-only Supabase query for the narrowing measurement,
+  not a live click-through; the live page should still be checked once deployed.
+- **Not done in this round (explicitly out of scope per the directive):** the extraction model
+  itself was NOT changed off Sonnet; no cron was run; no backlog was processed; the still-open
+  Anthropic API credit incident (see the 09-12 entry below) is unrelated and untouched.
+
 **2026-09-12 (same Claude application session, continued — Track 3 completed, F-7 shipped, a live
 production incident found and reported):** Directly continues the 09-11 entry below — nothing in
 it is superseded, this adds on top. Commit range `ad72ded..2bdd121`, every commit pushed to `main`
