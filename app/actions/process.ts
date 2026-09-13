@@ -8,6 +8,7 @@ import { type PhaseKey, type ProjectSubstageStatus } from '@/lib/types';
 import { logActivity } from '@/lib/state-writer';
 import { computeSubstageMove, substageUndoRestore } from '@/lib/process';
 import { inferProjectPhase } from '@/agents/infer-phase';
+import { BudgetExceededError } from '@/lib/claude';
 import type { ProjectSubstage, SubstageTemplate } from '@/lib/types';
 
 const VALID_PHASES: PhaseKey[] = ['planning', 'plan_check', 'bidding', 'financing', 'construction'];
@@ -347,7 +348,16 @@ export async function inferPhases(projectId: string) {
     .maybeSingle();
   if (pending) return { error: 'inference already pending review' };
 
-  const result = await inferProjectPhase(admin, projectId);
+  // Demo Safety Gate (item 7): a thrown BudgetExceededError must surface as
+  // a clear, catchable {error} — never an unhandled exception that would
+  // break the Project Process page.
+  let result;
+  try {
+    result = await inferProjectPhase(admin, projectId);
+  } catch (e) {
+    if (e instanceof BudgetExceededError) return { error: `Demo budget reached — phase inference is paused (${e.message})` };
+    throw e;
+  }
   if ('skipped' in result) return { error: result.skipped };
 
   const { data: project } = await admin.from('projects').select('current_phase_key').eq('id', projectId).maybeSingle();

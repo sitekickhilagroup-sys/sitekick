@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { requireUser } from '@/lib/auth';
-import { ingestDocument, processDocument } from '@/lib/ingest';
+import { ingestDocument } from '@/lib/ingest';
 import { bundleCommunication, isBundleableName } from '@/lib/bundle';
 import { docxToText } from '@/lib/docx';
 import { pdfToText } from '@/lib/pdf';
@@ -11,20 +11,31 @@ import { parseEml } from '@/lib/parse/eml';
 import { parseEmailsJsonl, dumpEmailToRaw } from '@/lib/parse/emails-jsonl';
 import { extractEmailsFromArchive } from '@/lib/parse/archive';
 import { applyInvoiceRows, applyTaskRows } from '@/lib/import/tracker';
-import type { Project, Task } from '@/lib/types';
+import { runPreflight, type PreflightResult } from '@/lib/preflight';
+import type { ProjectMatchCandidate } from '@/lib/project-match';
+import type { DocKind, Project, Task } from '@/lib/types';
 import { laToday } from '@/lib/date';
 
 export const maxDuration = 300;
 
 // Drop zone, manual-first POC:
-//   .pdf            -> invoice agent (native PDF)
+//   .pdf            -> stored, preflight only; the invoice agent runs when a
+//                       human selects it (Data Inbox)
 //   .mp4            -> weekly review recording: store + link only (no transcription yet)
-//   .txt / .docx    -> transcript/email -> comms agent
-//   .eml            -> parsed email -> comms agent
-//   .xlsx / .xls    -> tracker importers (invoices / tasks) or CSV-text -> comms agent
-//   .jsonl          -> email dump: store all, agent-process the newest few
-//   .zip / .olm     -> email archive (Outlook export): store all, agent-process the newest few
-//   .csv            -> text -> comms agent
+//   .txt / .docx    -> stored, preflight only; comms agent runs on selection
+//   .eml            -> parsed email, stored, preflight only
+//   .xlsx / .xls    -> tracker importers (invoices / tasks, applied immediately —
+//                       deterministic, not an LLM call) or CSV-text, stored + preflight only
+//   .jsonl          -> email dump: store all, preflight all — nothing auto-processes
+//   .zip / .olm     -> email archive (Outlook export): store all, preflight all
+//   .csv            -> text, stored + preflight only
+//
+// Demo Safety Gate (Rotem, 2026-09-13): uploading a document NEVER calls the
+// model. Every new document is stored first and gets a free, deterministic
+// preflight (lib/preflight.ts) — duplicate/size/text/project-match signals
+// only, never a business decision. Processing happens ONLY when a human
+// selects specific documents in Data Inbox (app/actions/data-inbox.ts),
+// which is itself budget-gated (lib/claude.ts's Demo Safety Gate).
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // zip-based formats can inflate — cap the input
 
 /** Content identity: the same bytes (or same extracted text) under a new
@@ -43,6 +54,20 @@ function emailTime(date: string | null | undefined): number {
   if (!date) return 0;
   const t = Date.parse(date);
   return Number.isNaN(t) ? 0 : t;
+}
+
+/** Preflight needs the same city_case/address-bearing project list
+ *  identifyDeterministicProject/matchingProjectIds use elsewhere — one query
+ *  per upload request, shared across every document it stores. */
+async function loadProjectsForPreflight(admin: ReturnType<typeof supabaseAdmin>): Promise<ProjectMatchCandidate[]> {
+  const { data } = await admin.from('projects').select('id,name,city_case,address');
+  return (data ?? []) as ProjectMatchCandidate[];
+}
+
+function preflightFor(
+  kind: DocKind, rawText: string | null, storagePath: string | null, projects: ProjectMatchCandidate[],
+): PreflightResult {
+  return runPreflight({ kind, raw_text: rawText, storage_path: storagePath }, projects);
 }
 
 export async function POST(req: NextRequest) {
@@ -81,13 +106,15 @@ export async function POST(req: NextRequest) {
     if (buffer.length > MAX_UPLOAD_BYTES) {
       return NextResponse.json({ error: 'file too large (max 20MB)' }, { status: 413 });
     }
-    return processUploadedFile(admin, { name: body.fileName, buffer }, body.project ?? null);
+    return processUploadedFile(admin, { name: body.fileName, buffer });
   }
 
   const form = await req.formData();
   const allFiles = form.getAll('file').filter((f): f is File => f instanceof File);
   const file = allFiles[0];
-  const projectHint = (form.get('project') as string | null) || null;
+  // form.get('project') (a project hint) is still sent by the dropzone but
+  // no longer consumed here — nothing downstream of storage+preflight runs
+  // at upload time to use it (Demo Safety Gate: upload never processes).
   if (!file) {
     return NextResponse.json({ error: 'file missing' }, { status: 400 });
   }
@@ -101,8 +128,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Summary + raw transcript of the SAME meeting, uploaded together — one
-  // communication, one agent pass. Both files must be text-like; anything
-  // else (a PDF next to a transcript) is two unrelated uploads, not a pair.
+  // communication, stored as one document. Both files must be text-like;
+  // anything else (a PDF next to a transcript) is two unrelated uploads, not
+  // a pair.
   if (allFiles.length === 2) {
     const [a, b] = allFiles;
     if (!isBundleableName(a.name) || !isBundleableName(b.name)) {
@@ -132,28 +160,32 @@ export async function POST(req: NextRequest) {
           type: processed ? 'transcript_bundle' : 'stored_unprocessed',
         });
       }
-      const summary = await processDocument(admin, {
-        id: documentId, kind: 'transcript', raw_text: merged, project_hint: projectHint,
-      });
-      return NextResponse.json({ ok: true, type: 'transcript_bundle', documentId, summary });
+      const projects = await loadProjectsForPreflight(admin);
+      const preflight = preflightFor('transcript', merged, null, projects);
+      return NextResponse.json({ ok: true, type: 'stored_unprocessed', documentId, preflight });
     } catch (e) {
       return NextResponse.json({ ok: false, error: String(e) }, { status: 200 });
     }
   }
   const buffer = Buffer.from(await file.arrayBuffer());
-  return processUploadedFile(admin, { name: file.name, buffer }, projectHint);
+  return processUploadedFile(admin, { name: file.name, buffer });
 }
 
 /**
- * The single-file processing that used to be the tail of POST() directly —
- * pulled out so both the ordinary multipart path above and the staged
- * (direct-to-storage) path can share it verbatim. Takes bytes already in
- * hand; does not care where they came from.
+ * The single-file storage+preflight path that used to be the tail of POST()
+ * directly — pulled out so both the ordinary multipart path above and the
+ * staged (direct-to-storage) path can share it verbatim. Takes bytes already
+ * in hand; does not care where they came from. Never calls the model —
+ * see the Demo Safety Gate note at the top of this file.
+ *
+ * The project hint (form field / staged-upload body) is still READ by the
+ * caller but no longer passed in here: nothing downstream of storage+
+ * preflight runs at upload time to use it. It stays meaningful for a future
+ * manual "process selected" action to accept explicitly, not for storage.
  */
 async function processUploadedFile(
   admin: ReturnType<typeof supabaseAdmin>,
   input: { name: string; buffer: Buffer },
-  projectHint: string | null,
 ): Promise<NextResponse> {
   const buffer = input.buffer;
   const name = input.name.toLowerCase();
@@ -171,22 +203,17 @@ async function processUploadedFile(
       });
       if (!documentId) return NextResponse.json({ ok: true, deduped: true });
       if (deduped) {
-        // A prior attempt can have stored this file and then died before
-        // processDocument finished — don't claim Processed for that case, and
-        // don't silently re-run it either: applyExtractResult's writes (new
-        // tasks, proposals, drafts, vendor hours) are plain inserts with no
-        // dedup guard of their own, so re-processing here risks creating the
-        // exact duplicates this dedup path exists to prevent. Same pattern in
-        // every branch below.
+        // A prior attempt (from before this gate shipped) can have already
+        // processed this file — don't claim "not processed" for that case;
+        // otherwise, stay stored+preflight-only like every fresh upload.
         return NextResponse.json({
           ok: true, documentId, deduped: true,
           type: processed ? 'invoice_pdf' : 'stored_unprocessed',
         });
       }
-      const summary = await processDocument(admin, {
-        id: documentId, kind: 'invoice_pdf', pdf_base64: buffer.toString('base64'), project_hint: projectHint,
-      });
-      return NextResponse.json({ ok: true, type: 'invoice_pdf', documentId, summary });
+      const projects = await loadProjectsForPreflight(admin);
+      const preflight = preflightFor('invoice_pdf', null, path, projects);
+      return NextResponse.json({ ok: true, type: 'stored_unprocessed', documentId, preflight });
     }
 
     if (name.endsWith('.mp4')) {
@@ -218,51 +245,44 @@ async function processUploadedFile(
           type: processed ? 'sheet' : 'stored_unprocessed',
         });
       }
-      const { data: projects } = await admin.from('projects').select('id,name');
-      const projectList = (projects ?? []) as Pick<Project, 'id' | 'name'>[];
 
+      // Tracker rows are a deterministic, non-LLM import (applyInvoiceRows/
+      // applyTaskRows parse the workbook directly) — never gated by the Demo
+      // Safety Gate, since no model call happens here either way.
       if (parsed.kind === 'invoices') {
-        const result = await applyInvoiceRows(admin, documentId, parsed.rows, projectList);
+        const { data: projectRows } = await admin.from('projects').select('id,name');
+        const result = await applyInvoiceRows(admin, documentId, parsed.rows, (projectRows ?? []) as Pick<Project, 'id' | 'name'>[]);
         await admin.from('documents').update({ processed_at: new Date().toISOString() }).eq('id', documentId);
         return NextResponse.json({ ok: true, type: 'invoice_tracker', ...result, rows: parsed.rows.length });
       }
       if (parsed.kind === 'tasks') {
+        const { data: projectRows } = await admin.from('projects').select('id,name');
         const { data: openTasks } = await admin.from('tasks').select('*').eq('status', 'open');
         const today = laToday();
-        const result = await applyTaskRows(admin, documentId, parsed.rows, projectList, (openTasks ?? []) as Task[], today);
+        const result = await applyTaskRows(admin, documentId, parsed.rows, (projectRows ?? []) as Pick<Project, 'id' | 'name'>[], (openTasks ?? []) as Task[], today);
         await admin.from('documents').update({ processed_at: new Date().toISOString() }).eq('id', documentId);
         return NextResponse.json({ ok: true, type: 'task_tracker', ...result, rows: parsed.rows.length });
       }
-      const summary = await processDocument(admin, {
-        id: documentId, kind: 'transcript', raw_text: parsed.text, project_hint: projectHint,
-      });
-      return NextResponse.json({ ok: true, type: 'sheet_text', documentId, summary });
+      const projects = await loadProjectsForPreflight(admin);
+      const preflight = preflightFor('sheet', parsed.text, null, projects);
+      return NextResponse.json({ ok: true, type: 'stored_unprocessed', documentId, preflight });
     }
 
     if (name.endsWith('.jsonl')) {
       const emails = parseEmailsJsonl(buffer.toString('utf8'));
-      let stored = 0, deduped = 0, processed = 0;
-      const PROCESS_CAP = 10;
-      // newest first so the cap spends agent budget on recent mail
+      let stored = 0, deduped = 0;
       const sorted = [...emails].sort((a, b) => emailTime(b.date) - emailTime(a.date));
       for (const email of sorted) {
-        const { documentId, deduped: dup } = await ingestDocument(admin, {
-          kind: 'email', source: 'upload', external_id: email.externalId,
-          raw_text: dumpEmailToRaw(email),
+        const raw = dumpEmailToRaw(email);
+        const { deduped: dup } = await ingestDocument(admin, {
+          kind: 'email', source: 'upload', external_id: email.externalId, raw_text: raw,
         });
         if (dup) { deduped++; continue; }
         stored++;
-        if (processed < PROCESS_CAP && documentId) {
-          try {
-            await processDocument(admin, { id: documentId, kind: 'email', raw_text: dumpEmailToRaw(email), project_hint: projectHint });
-            processed++;
-          } catch { /* keep storing even if one extraction fails */ }
-        }
       }
       return NextResponse.json({
-        ok: true, type: 'email_dump',
-        stored, deduped, processed,
-        note: stored > processed ? `stored ${stored}, agent-processed newest ${processed}` : undefined,
+        ok: true, type: 'email_dump', stored, deduped,
+        note: stored ? `stored ${stored} — select in Data Inbox to process` : undefined,
       });
     }
 
@@ -280,32 +300,28 @@ async function processUploadedFile(
           type: processed ? 'email' : 'stored_unprocessed',
         });
       }
-      const summary = await processDocument(admin, { id: documentId, kind: 'email', raw_text: raw, project_hint: projectHint });
-      return NextResponse.json({ ok: true, type: 'email', documentId, summary });
+      const projects = await loadProjectsForPreflight(admin);
+      const preflight = preflightFor('email', raw, null, projects);
+      return NextResponse.json({ ok: true, type: 'stored_unprocessed', documentId, preflight });
     }
 
     if (name.endsWith('.zip') || name.endsWith('.olm')) {
       const emails = await extractEmailsFromArchive(buffer, name.endsWith('.olm') ? 'olm' : 'zip');
-      let stored = 0, deduped = 0, processed = 0;
-      const PROCESS_CAP = 10;
-      // newest first so the cap spends agent budget on recent mail (same as .jsonl branch)
+      let stored = 0, deduped = 0;
       const sorted = [...emails].sort((a, b) => emailTime(b.date) - emailTime(a.date));
       for (let i = 0; i < sorted.length; i++) {
         const email = sorted[i];
-        const { documentId, deduped: dup } = await ingestDocument(admin, {
+        const { deduped: dup } = await ingestDocument(admin, {
           kind: 'email', source: 'upload', external_id: email.external_id ?? `${dedupKey}:${i}`,
           raw_text: email.raw,
         });
         if (dup) { deduped++; continue; }
         stored++;
-        if (processed < PROCESS_CAP && documentId) {
-          try {
-            await processDocument(admin, { id: documentId, kind: 'email', raw_text: email.raw, project_hint: projectHint });
-            processed++;
-          } catch { /* keep storing even if one extraction fails */ }
-        }
       }
-      return NextResponse.json({ ok: true, type: 'email_archive', stored, deduped, processed });
+      return NextResponse.json({
+        ok: true, type: 'email_archive', stored, deduped,
+        note: stored ? `stored ${stored} — select in Data Inbox to process` : undefined,
+      });
     }
 
     // .txt / .docx / .csv -> transcript text. Cap before it becomes an LLM
@@ -328,10 +344,9 @@ async function processUploadedFile(
         type: processed ? 'transcript' : 'stored_unprocessed',
       });
     }
-    const summary = await processDocument(admin, {
-      id: documentId, kind: 'transcript', raw_text: text, project_hint: projectHint,
-    });
-    return NextResponse.json({ ok: true, type: 'transcript', documentId, summary });
+    const projects = await loadProjectsForPreflight(admin);
+    const preflight = preflightFor('transcript', text, null, projects);
+    return NextResponse.json({ ok: true, type: 'stored_unprocessed', documentId, preflight });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 200 });
   }

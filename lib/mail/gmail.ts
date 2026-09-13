@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ingestDocument, processDocument } from '../ingest.ts';
+import { ingestDocument } from '../ingest.ts';
 
 // Gmail read-only poll via REST (no googleapis dependency).
 // Activates when all GMAIL_* env vars are present.
@@ -38,7 +38,11 @@ function findPlainText(part: GmailPart): string | null {
   return null;
 }
 
-export async function run(admin: SupabaseClient): Promise<{ processed: number } | { skipped: string }> {
+// Demo Safety Gate (Rotem, 2026-09-13): polling stores documents only — it
+// never calls the model. Every polled email lands in Data Inbox's triage
+// view (lib/preflight.ts) exactly like an upload, and is only ever
+// processed via an explicit human selection (app/actions/data-inbox.ts).
+export async function run(admin: SupabaseClient): Promise<{ stored: number } | { skipped: string }> {
   if (!isConfigured()) return { skipped: 'not_configured' };
   const token = await accessToken();
   const auth = { authorization: `Bearer ${token}` };
@@ -50,7 +54,7 @@ export async function run(admin: SupabaseClient): Promise<{ processed: number } 
   if (!listRes.ok) throw new Error(`gmail list: ${listRes.status}`);
   const list = (await listRes.json()) as { messages?: { id: string }[] };
 
-  let processed = 0;
+  let stored = 0;
   for (const m of list.messages ?? []) {
     const msgRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,
@@ -59,18 +63,16 @@ export async function run(admin: SupabaseClient): Promise<{ processed: number } 
     if (!msgRes.ok) continue;
     const msg = (await msgRes.json()) as { id: string; payload: GmailPart & { headers: GmailHeader[] } };
     const h = (name: string) => msg.payload.headers.find((x) => x.name.toLowerCase() === name)?.value ?? '';
-    // Cap untrusted body length before it becomes an LLM prompt (same 30k as
-    // lib/parse/eml.ts; the poller feeds processDocument uncapped otherwise).
+    // Cap before it could ever become an LLM prompt (same 30k as
+    // lib/parse/eml.ts) — kept even though nothing here calls the model, so
+    // a later manual selection doesn't send an unbounded body either.
     const text = (findPlainText(msg.payload) ?? '').slice(0, 30000);
     const raw = `From: ${h('from')}\nTo: ${h('to')}\nDate: ${h('date')}\nSubject: ${h('subject')}\n\n${text}`;
 
     const { documentId, deduped } = await ingestDocument(admin, {
       kind: 'email', source: 'gmail', external_id: `gmail:${msg.id}`, raw_text: raw,
     });
-    if (!deduped && documentId) {
-      await processDocument(admin, { id: documentId, kind: 'email', raw_text: raw });
-      processed++;
-    }
+    if (!deduped && documentId) stored++;
   }
-  return { processed };
+  return { stored };
 }

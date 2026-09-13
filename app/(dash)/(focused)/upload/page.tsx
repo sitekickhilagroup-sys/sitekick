@@ -1,12 +1,14 @@
-import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { LOCALE_COOKIE, getT, type Locale } from '@/lib/i18n';
 import { supabaseServer } from '@/lib/supabase/server';
-import { fmtDate } from '@/lib/format';
 import { IntakePanel, type IntakeTab } from '@/components/upload/intake-panel';
 import { ImportQueuePanel } from '@/components/upload/import-queue-panel';
+import { DataInboxTriagePanel } from '@/components/upload/data-inbox-triage';
 import { getImportQueueStats } from '@/lib/import-queue';
-import type { DocumentRow, Project } from '@/lib/types';
+import { getDataInboxTriage } from '@/app/actions/data-inbox';
+import { PILOT_MAX_DOCS, PILOT_BUDGET_USD } from '@/lib/data-inbox';
+import { DEMO_BUDGET_USD } from '@/lib/claude';
+import type { Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 // Next.js Server Actions inherit their timeout from the PAGE they're
@@ -27,25 +29,20 @@ export default async function UploadPage() {
   const locale = (store.get(LOCALE_COOKIE)?.value === 'he' ? 'he' : 'en') as Locale;
   const t = getT(locale);
   const supabase = await supabaseServer();
-  const [projectsQ, docsQ, pendingQ, importStats] = await Promise.all([
+  const [projectsQ, importStats, triage] = await Promise.all([
     supabase.from('projects').select('id,name').order('name'),
-    supabase.from('documents').select('id,kind,source,storage_path,received_at,processed_at')
-      .order('received_at', { ascending: false }).limit(8),
-    // Additive query, no migration: lets the queue show a real "Ready for
-    // review" state instead of labelling everything Processed.
-    supabase.from('agent_proposals').select('document_id').eq('state', 'pending'),
     // Real aggregate counts (stored/processed/waiting/failed) — the old
     // "133 waiting" figure quoted earlier tonight was stale; this always
     // reflects the live table, never a remembered number.
     getImportQueueStats(supabase),
+    // Demo Safety Gate (Rotem, 2026-09-13): the three-group triage view is
+    // now the primary surface for unprocessed documents — replaces the old
+    // flat "recent imports" list. Already-processed documents pending human
+    // review live on /inbox, not here; this page is about the decision of
+    // WHETHER to process at all.
+    getDataInboxTriage(),
   ]);
   const projects = (projectsQ.data ?? []) as Pick<Project, 'id' | 'name'>[];
-  const docs = (docsQ.data ?? []) as (Pick<DocumentRow, 'id' | 'kind' | 'source' | 'received_at' | 'processed_at'>
-    & { storage_path: string | null })[];
-  const readyIds = new Set(
-    ((pendingQ.data ?? []) as { document_id: string | null }[])
-      .map((p) => p.document_id).filter(Boolean) as string[],
-  );
 
   // Formats mirror the real branches in app/api/upload/route.ts. MBOX and MSG
   // appear in the spec's example but have no branch here, so they are not
@@ -170,79 +167,46 @@ export default async function UploadPage() {
             processed: t('upload.queue_stat_processed'),
             waiting: t('upload.queue_stat_waiting'),
             failed: t('upload.queue_stat_failed'),
-            runBatch: t('upload.run_batch'),
-            running: t('upload.running_batch'),
-            result: t('upload.batch_result'),
-            more: t('upload.batch_more'),
-            errorSave: t('common.error_save'),
-            processAll: t('upload.process_all'),
-            runningAll: t('upload.processing_all'),
-            allResult: t('upload.all_result'),
-            allMore: t('upload.all_more'),
           }}
         />
 
-        {/* Queue — spec §14-§15. Rendered unconditionally so zero documents
-            shows an empty state rather than the section vanishing. */}
-        <section aria-labelledby="queue-h" className="rounded-[15px] border border-line bg-sk-surface p-5 shadow-card">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{t('upload.queue_recent')}</p>
-            <h2 id="queue-h" className="sr-only">{t('upload.queue')}</h2>
-          </div>
-
-          {docs.length === 0 ? (
-            <div className="py-11 text-center">
-              <strong className="block text-[13px] font-[650] text-sk-ink">{t('upload.empty_t')}</strong>
-              <p className="mt-1 text-[11px] leading-[1.5] text-sk-muted">{t('upload.empty_d')}</p>
-            </div>
-          ) : (
-            <ul className="mt-3 divide-y divide-line2">
-              {docs.map((doc) => {
-                const ready = readyIds.has(doc.id);
-                // `documents` has no filename column and the spec forbids a
-                // migration here, so the name is recovered from storage_path
-                // where the branch stored one; otherwise the source is shown.
-                const name = doc.storage_path?.split('/').pop() ?? doc.source;
-                return (
-                  <li key={doc.id} className="grid grid-cols-[48px_minmax(0,1.2fr)_auto_auto] items-center gap-2.5 py-3 sm:grid-cols-[48px_minmax(200px,1.5fr)_auto_minmax(180px,1fr)_auto] sm:gap-3.5">
-                    <span className="rounded-[6px] bg-sk-surface-soft px-1.5 py-1 text-center font-mono text-[9px] uppercase text-sk-muted">
-                      {doc.kind}
-                    </span>
-                    <span className="min-w-0 truncate text-[11px] text-sk-ink"><bdi>{name}</bdi></span>
-                    {/* Status was `hidden sm:inline` — invisible entirely below
-                        the sm breakpoint (~640px), which a real narrow window
-                        or panel routinely is. That's Noa's exact complaint:
-                        an import row reading only "EMAIL upload" with no state
-                        at all. Status is the critical piece — always shown now,
-                        reordered ahead of the (still secondary) date so it
-                        never gets crowded out on a narrow screen. */}
-                    <span className={`justify-self-start rounded-full px-2 py-1 text-[9px] font-[650] uppercase tracking-[0.06em] sm:order-3 ${
-                      ready ? 'bg-sk-amber-halo text-sk-amber'
-                      : doc.processed_at ? 'bg-sk-green-soft-strong text-sk-green'
-                      : 'bg-sk-blue-soft text-sk-blue'
-                    }`}>
-                      {ready ? t('upload.st_ready') : doc.processed_at ? t('upload.st_processed') : t('upload.st_uploaded')}
-                    </span>
-                    <span className="hidden font-mono text-[9px] text-sk-muted sm:order-2 sm:inline"><bdi>{fmtDate(doc.received_at)}</bdi></span>
-                    {ready ? (
-                      // I8: used to be a literal href="/inbox" — one .zip can
-                      // drop 30-60 pending rows behind a per-document label
-                      // reading "Review THIS when ready", but every document
-                      // opened the exact same unscoped inbox. doc.id was
-                      // right there and unused; inbox/page.tsx now reads and
-                      // validates ?doc= (I2's companion fix).
-                      <Link href={`/inbox?doc=${doc.id}`} className="justify-self-end whitespace-nowrap text-[10px] font-[650] text-sk-green hover:underline">
-                        {t('upload.review_ready')} <span aria-hidden="true" className="inline-block rtl:-scale-x-100">→</span>
-                      </Link>
-                    ) : (
-                      <span />
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+        {/* Demo Safety Gate (Rotem, 2026-09-13): every stored-but-unprocessed
+            document is triaged into exactly three groups, purely from
+            deterministic signals — this is the ONLY surface that can trigger
+            processing, capped at PILOT_MAX_DOCS per run and budget-gated. */}
+        <DataInboxTriagePanel
+          initialTriage={triage}
+          pilotMaxDocs={PILOT_MAX_DOCS}
+          pilotBudgetUsd={PILOT_BUDGET_USD}
+          demoBudgetUsd={DEMO_BUDGET_USD}
+          labels={{
+            help: t('inbox_triage.help'),
+            groupCandidate: t('inbox_triage.group_candidate'),
+            groupCandidateD: t('inbox_triage.group_candidate_d'),
+            groupNeedsSelection: t('inbox_triage.group_needs_selection'),
+            groupNeedsSelectionD: t('inbox_triage.group_needs_selection_d'),
+            groupDoNotProcess: t('inbox_triage.group_do_not_process'),
+            groupDoNotProcessD: t('inbox_triage.group_do_not_process_d'),
+            empty: t('inbox_triage.empty'),
+            reasons: {
+              no_extractable_text: t('inbox_triage.reason_no_extractable_text'),
+              too_large: t('inbox_triage.reason_too_large'),
+              project_ambiguous: t('inbox_triage.reason_project_ambiguous'),
+              source_ambiguous: t('inbox_triage.reason_source_ambiguous'),
+              no_project_signal: t('inbox_triage.reason_no_project_signal'),
+              project_identified: t('inbox_triage.reason_project_identified'),
+            },
+            selectedCount: t('inbox_triage.selected_count'),
+            processSelected: t('inbox_triage.process_selected'),
+            processing: t('inbox_triage.processing'),
+            resultTitle: t('inbox_triage.result_title'),
+            outcomeSucceeded: t('inbox_triage.outcome_succeeded'),
+            outcomeFailed: t('inbox_triage.outcome_failed'),
+            outcomeBudgetBlocked: t('inbox_triage.outcome_budget_blocked'),
+            budgetNote: t('inbox_triage.budget_note'),
+            errorSave: t('inbox_triage.error_save'),
+          }}
+        />
       </div>
     </>
   );

@@ -44,9 +44,13 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
   }, [open]);
 
   const moreActive = (more ?? []).some((l) => isActive(l.href, pathname));
-  // A badge hidden inside a closed dropdown is no badge at all — the More
-  // trigger carries the sum (today: the review-inbox pending count).
-  const moreBadge = (more ?? []).reduce((n, l) => n + (l.badge ?? 0), 0);
+  // Demo Safety Gate item 8 (Rotem, 2026-09-13): this used to sum EVERY
+  // badge inside the dropdown (review-inbox pending count + Notes Center
+  // count needing review — two unrelated things) onto the generic "More"
+  // trigger. That number had no single destination that explains it — the
+  // exact "unexplained header counter" complaint. Each item's OWN badge
+  // (below, inside the open dropdown) still shows and still links
+  // somewhere that explains it; only the meaningless sum is gone.
 
   return (
     // Centered like her demo's top bar.
@@ -87,11 +91,6 @@ export function NavLinks({ links, more, moreLabel }: { links: NavLink[]; more?: 
             }`}
           >
             {moreLabel}
-            {moreBadge > 0 && (
-              <span className={`rounded-full px-1.5 font-mono text-[10px] ${
-                moreActive ? 'bg-sage text-white' : 'bg-card2 text-ink3'
-              }`}>{moreBadge}</span>
-            )}
             <span aria-hidden="true" className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
           </button>
           {open && (

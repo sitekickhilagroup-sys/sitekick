@@ -3,6 +3,71 @@
 **This is a dated snapshot, not a living guarantee. Refresh it whenever relevant evidence
 changes — see `WORKFLOW.md` for when to update.**
 
+**2026-09-13 (same Claude application session, continued — "Demo Safety Gate," per Rotem's follow-up
+directive: a working demo in ~2 weeks on a $30 Anthropic budget, and nothing may spend from it —
+or ask Rotem to load credit — before this gate shipped, tested, and deployed.** Built on top of
+Cost Controls Release 1 (below) — reuses its `llm_usage_log`, `prompt_version` idempotency,
+extract-comms task-list narrowing, and adds the actual spend ENFORCEMENT that release only
+measured. Zero Anthropic API calls made anywhere while building/testing this.
+
+- **Upload never auto-processes, anywhere.** Previously `app/api/upload/route.ts`,
+  `app/api/ingest-email/route.ts` (the forward-address intake), and both `lib/mail/gmail.ts` /
+  `lib/mail/outlook.ts` (poll crons) all called `processDocument` immediately after storing a
+  document — three separate automatic-processing entry points, not just the obvious upload button.
+  All four now store + preflight only; nothing calls the model until a human selects specific
+  documents in Data Inbox.
+- **Deterministic preflight (`lib/preflight.ts`, `lib/project-match.ts` — no migration, no model
+  call).** Every unprocessed document is classified into exactly three groups from signals alone
+  (duplicate handled at ingest already; extractable text; size; deterministic project match via the
+  same matcher `extract-comms.ts` uses for task-list narrowing, refactored into a shared module):
+  **candidate** (single project identified), **needs selection** (project/source ambiguous, or no
+  signal either way), **do not process** (no extractable text, or unusually large) — the last group
+  is not selectable. Framed explicitly as filtering, never as "understanding" the content.
+- **Data Inbox redesigned** (`app/(dash)/(focused)/upload/page.tsx`,
+  `components/upload/data-inbox-triage.tsx`): the old FIFO "Run batch (15)" / "Process all now"
+  buttons are gone from the UI (the underlying `lib/import-queue.ts` code stays — still
+  budget-gated, in case it's ever needed again, just not wired to a button). The only way to
+  process anything now is checking specific documents and clicking "Process selected," hard-capped
+  at 5 per run (`PILOT_MAX_DOCS`, `lib/data-inbox.ts`).
+- **Enforced budget, not just measured.** `runStructured` (`lib/claude.ts`) now checks, BEFORE every
+  model call (including a validation retry), whether current all-time spend
+  (`sum(llm_usage_log.estimated_cost_usd)`) plus a pre-call worst-case estimate
+  (`estimateCallCostUsd` — chars/4 as input-token proxy, `max_tokens` as the output ceiling, so it
+  can only overstate cost) would exceed `DEMO_BUDGET_USD` (default $20, leaving $10 margin under
+  the real $30). If so it throws `BudgetExceededError` and logs an audit row
+  (`error_message` prefixed `budget_exceeded:`) instead of calling the model — this is the ONE
+  chokepoint every agent goes through, so cron, retry, and "Process all now" cannot bypass it by
+  construction. On top of that, `app/actions/data-inbox.ts` / `lib/data-inbox.ts`'s pilot action
+  tracks its OWN running estimate across one invocation and stops at `PILOT_BUDGET_USD` (default
+  $2) — counted as soon as a call is attempted, not only on success, so a partial failure after a
+  real billed call still counts against it. Every stop (either cap) is a distinct, visible
+  `budget_blocked` outcome per document, never a silent skip.
+- **Graceful degradation audited across all six primary screens** (Overview, My Work, Project
+  Process, Data Inbox, Invoices, Weekly Review). None calls an agent at render time (confirmed by
+  grep — only button-triggered server actions do). Three of those actions were NOT catching a
+  thrown `BudgetExceededError` before this round — `refreshPriorities` (My Work),
+  `inferPhases` (Project Process), `generateDigest` (Weekly Review, which also had literally no
+  error handling of any kind, client or server, before this) — all three now return a clear
+  `{error}` the existing (or, for the digest button, newly added) client-side UI already displays,
+  never an unhandled exception.
+- **Unexplained header counter removed.** The nav's "More" dropdown trigger showed a summed badge
+  (pending review-inbox proposals + Notes Center items needing review — two unrelated counts) with
+  no single destination that explains it — confirmed as the actual source of the "111"-style
+  number Rotem flagged. Removed; each item's own badge inside the dropdown (which DOES lead
+  somewhere that explains it) is untouched. The bell's "108 agent suggestions" badge already
+  explains itself (own panel + `/inbox` link) and was left as-is.
+- **Verification:** 1112/1112 tests pass, `tsc --noEmit` clean, `eslint` clean (same pre-existing
+  unrelated errors as Cost Controls Release 1, untouched), a real local `npm run build` succeeds
+  (the exact check that would have caught Cost Controls Release 1's first failed deploy sooner —
+  now run before every push in this round, not just after a failure).
+- **Not done in this round (explicit scope decisions, not oversights):** no new Haiku-based
+  ambiguity-resolution call was built for "needs selection" documents — preflight stays 100%
+  deterministic per Rotem's own step 1, and nothing in steps 1-4 asked for an active model call
+  there; item 6's "Haiku only after preflight" reads as a guardrail on a future feature, not a
+  build instruction, and building one now would spend budget for no immediately-requested benefit.
+  No Opus anywhere in the ingest/demo path (unchanged — extract-comms/parse-invoice were already
+  Sonnet-only).
+
 **2026-09-13 (same Claude application session, continued — "Cost Controls Release 1," per Rotem's
 explicit product-requirement directive: cost optimization is now a product requirement, split
 into dev-session cost (Claude Code) vs. runtime cost (Anthropic API), with a binding 5-step order

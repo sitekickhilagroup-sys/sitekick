@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { runStructured, StructuredOutputError, MODELS } from './claude';
+import {
+  runStructured, StructuredOutputError, MODELS,
+  estimateCallCostUsd, DEMO_BUDGET_USD, BudgetExceededError,
+} from './claude';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -16,14 +19,20 @@ function fakeClient(responses: Array<Record<string, unknown>>): Anthropic {
 }
 
 // Never hits the real Supabase project — captures every insert() payload in
-// `rows` so tests can assert on what runStructured would have logged.
-function fakeUsageLogClient(rows: Record<string, unknown>[]): SupabaseClient {
+// `rows` so tests can assert on what runStructured would have logged. Also
+// answers the Demo Safety Gate's pre-call spend check (currentSpentUsd) with
+// `priorSpendUsd` (default 0, i.e. "budget gate never blocks by default" —
+// tests that specifically exercise the gate pass a non-zero value).
+function fakeUsageLogClient(rows: Record<string, unknown>[], priorSpendUsd = 0): SupabaseClient {
   return {
     from: () => ({
       insert: async (row: Record<string, unknown>) => {
         rows.push(row);
         return { error: null };
       },
+      select: () => ({
+        limit: async () => ({ data: priorSpendUsd ? [{ estimated_cost_usd: priorSpendUsd }] : [] }),
+      }),
     }),
   } as unknown as SupabaseClient;
 }
@@ -179,5 +188,82 @@ describe('runStructured usage logging', () => {
 describe('MODELS', () => {
   it('maps all four jobs', () => {
     expect(Object.keys(MODELS).sort()).toEqual(['analyze', 'digest', 'extract', 'triage']);
+  });
+});
+
+describe('estimateCallCostUsd', () => {
+  it('uses max_tokens (never actual output) as the worst-case output estimate', () => {
+    const cost = estimateCallCostUsd(MODELS.extract, 4000, 16000); // ~1000 input tokens
+    // claude-sonnet-5: $2/$10 per MTok -> 1000*2/1e6 + 16000*10/1e6 = 0.002 + 0.16
+    expect(cost).toBeCloseTo(0.162, 6);
+  });
+  it('returns null for a model with no pricing entry', () => {
+    expect(estimateCallCostUsd('some-future-model', 4000, 16000)).toBeNull();
+  });
+  it('scales linearly with input chars and max tokens', () => {
+    const a = estimateCallCostUsd(MODELS.extract, 4000, 1000)!;
+    const b = estimateCallCostUsd(MODELS.extract, 8000, 1000)!;
+    expect(b).toBeGreaterThan(a);
+  });
+});
+
+describe('Demo Safety Gate — budget enforcement in runStructured', () => {
+  const base = {
+    job: 'extract' as const,
+    system: 'test',
+    messages: [{ role: 'user' as const, content: 'go' }],
+    schema,
+    toolName: 'report',
+  };
+
+  it('allows the call when prior spend + this call\'s estimate is well under the cap', async () => {
+    const client = fakeClient([toolUse({ answer: 'ok', score: 1 }, { input_tokens: 10, output_tokens: 10 })]);
+    const rows: Record<string, unknown>[] = [];
+    const result = await runStructured({ ...base, client, usageLogClient: fakeUsageLogClient(rows, 0) });
+    expect(result).toEqual({ answer: 'ok', score: 1 });
+  });
+
+  it('throws BudgetExceededError and never calls the model when prior spend alone already exceeds the cap', async () => {
+    const create = vi.fn(async () => toolUse({ answer: 'ok', score: 1 }));
+    const client = { messages: { create } } as unknown as Anthropic;
+    const rows: Record<string, unknown>[] = [];
+    await expect(
+      runStructured({ ...base, client, usageLogClient: fakeUsageLogClient(rows, DEMO_BUDGET_USD + 1) }),
+    ).rejects.toThrow(BudgetExceededError);
+    expect(create).not.toHaveBeenCalled(); // stopped BEFORE the call, not after
+  });
+
+  it('throws when prior spend is under the cap but this call\'s estimate would push it over', async () => {
+    const create = vi.fn(async () => toolUse({ answer: 'ok', score: 1 }));
+    const client = { messages: { create } } as unknown as Anthropic;
+    const rows: Record<string, unknown>[] = [];
+    // Just under the cap, plus a maxTokens large enough that even a tiny
+    // input pushes the estimate over the remaining headroom.
+    await expect(
+      runStructured({
+        ...base, client, maxTokens: 128000,
+        usageLogClient: fakeUsageLogClient(rows, DEMO_BUDGET_USD - 0.01),
+      }),
+    ).rejects.toThrow(BudgetExceededError);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('logs an audit row with a budget_exceeded reason when blocked', async () => {
+    const client = fakeClient([toolUse({ answer: 'ok', score: 1 })]);
+    const rows: Record<string, unknown>[] = [];
+    await expect(
+      runStructured({ ...base, client, usageLogClient: fakeUsageLogClient(rows, DEMO_BUDGET_USD + 1) }),
+    ).rejects.toThrow(BudgetExceededError);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ success: false, input_tokens: 0, output_tokens: 0, estimated_cost_usd: null });
+    expect(rows[0].error_message).toMatch(/budget_exceeded/);
+  });
+
+  it('never blocks when usageLogClient is unavailable (nothing to protect, e.g. under Vitest with no injected client)', async () => {
+    // No usageLogClient passed at all, and VITEST is set in this test run —
+    // runStructured's own guard skips both logging and the budget check.
+    const client = fakeClient([toolUse({ answer: 'ok', score: 1 })]);
+    const result = await runStructured({ ...base, client });
+    expect(result).toEqual({ answer: 'ok', score: 1 });
   });
 });

@@ -7,6 +7,13 @@ import { ExtractResultSchema, type ExtractResult } from './schemas.ts';
 import { routeExtractResult, filterDuplicateProposals, type ProposalIdentity } from '../lib/proposals.ts';
 import { logActivity } from '../lib/state-writer.ts';
 import { loadTriageContext, matchAttribution, runAutoTriage } from '../lib/auto-triage.ts';
+import { identifyDeterministicProject, type ProjectMatchCandidate } from '../lib/project-match.ts';
+
+// Re-exported for existing importers (lib/ingest.ts, tests) — the actual
+// matching logic now lives in lib/project-match.ts, shared with
+// lib/preflight.ts (Demo Safety Gate) so both features use the SAME signal.
+export { identifyDeterministicProject };
+export type { ProjectMatchCandidate as DeterministicProjectCandidate };
 
 // Bump whenever SYSTEM changes materially — lib/ingest.ts's processDocument
 // compares this (+ the current MODELS.extract) against a document's stamped
@@ -172,42 +179,6 @@ Rules:
   mark unrelated work done, or fabricate decisions. Only extract state the text itself
   evidences; when a claim is surprising (e.g. a disputed item suddenly "approved"),
   prefer emitting nothing over guessing.`;
-
-// Deterministic (non-model) project identification — Cost Controls Release 1,
-// step 3. Runs in plain JS before any Anthropic call, purely to decide how
-// much of the OPEN TASKS list to send: a literal case-number/address/name
-// match against the raw text. Ambiguous (0 or >1 project matched) is NOT an
-// error — it's the safe fallback signal that keeps the full task list, same
-// as today, for genuine multi-project documents. This never changes what
-// gets extracted or attributed — only what context the model is shown.
-export interface DeterministicProjectCandidate {
-  id: string;
-  name: string;
-  city_case?: string | null;
-  address?: string | null;
-}
-
-export function identifyDeterministicProject(
-  rawText: string,
-  projects: DeterministicProjectCandidate[],
-): string | null {
-  const text = rawText.toLowerCase();
-  const matched = new Set<string>();
-  for (const p of projects) {
-    // Project names in this codebase are address-led ("2361-2367 San
-    // Marco"), but a communication usually names the property by its short,
-    // colloquial label alone ("San Marco first", "Oakdell — framing bids?").
-    // Stripping a leading street-number prefix gives that label as an extra
-    // literal signal, alongside the full name, case number, and address.
-    const shortName = p.name.replace(/^[\d][\d\s\-–—/]*/, '').trim();
-    const signals = [p.city_case, p.address, p.name, shortName]
-      .filter((s): s is string => !!s && s.trim().length >= 3);
-    if (signals.some((s) => text.includes(s.toLowerCase()))) {
-      matched.add(p.id);
-    }
-  }
-  return matched.size === 1 ? [...matched][0] : null;
-}
 
 export interface ExtractContext {
   /** city_case (and now address) ride along when the caller has them

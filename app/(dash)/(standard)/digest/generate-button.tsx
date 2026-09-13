@@ -1,19 +1,27 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { generateDigest } from '@/app/actions/digest';
 
 export function GenerateButton({ label }: { label: string }) {
   const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   return (
-    <button
-      type="button"
-      disabled={pending}
-      aria-busy={pending}
-      onClick={() => start(async () => { await generateDigest(); })}
-      className="min-h-11 cursor-pointer rounded-full bg-sage px-4 py-1.5 text-sm text-white transition-transform active:scale-[0.98] disabled:opacity-60 sm:min-h-0"
-    >
-      {pending ? '…' : label}
-    </button>
+    <div>
+      <button
+        type="button"
+        disabled={pending}
+        aria-busy={pending}
+        onClick={() => start(async () => {
+          setError(null);
+          const res = await generateDigest();
+          if ('error' in res) setError(res.error);
+        })}
+        className="min-h-11 cursor-pointer rounded-full bg-sage px-4 py-1.5 text-sm text-white transition-transform active:scale-[0.98] disabled:opacity-60 sm:min-h-0"
+      >
+        {pending ? '…' : label}
+      </button>
+      {error && <p role="alert" className="mt-2 text-xs font-semibold text-coral">{error}</p>}
+    </div>
   );
 }

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { ingestDocument, processDocument } from '@/lib/ingest';
+import { ingestDocument } from '@/lib/ingest';
 import { safeEqual } from '@/lib/cron';
+import { runPreflight } from '@/lib/preflight';
+import type { ProjectMatchCandidate } from '@/lib/project-match';
 
 export const maxDuration = 300;
 
@@ -52,12 +54,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, deduped: true, documentId });
   }
 
-  try {
-    const summary = await processDocument(admin, {
-      id: documentId, kind: 'email', raw_text: raw, project_hint: body.project_hint ?? null,
-    });
-    return NextResponse.json({ ok: true, documentId, summary });
-  } catch (e) {
-    return NextResponse.json({ ok: false, documentId, error: String(e) }, { status: 200 });
-  }
+  // Demo Safety Gate (Rotem, 2026-09-13): a forwarded email is stored +
+  // preflighted only, same as a manual upload — it never auto-processes.
+  // It lands in Data Inbox's triage view and is only processed via an
+  // explicit human selection (app/actions/data-inbox.ts).
+  const { data: projectRows } = await admin.from('projects').select('id,name,city_case,address');
+  const preflight = runPreflight({ kind: 'email', raw_text: raw, storage_path: null }, (projectRows ?? []) as ProjectMatchCandidate[]);
+  return NextResponse.json({ ok: true, type: 'stored_unprocessed', documentId, preflight });
 }

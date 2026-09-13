@@ -1,7 +1,3 @@
-'use client';
-
-import { useState, useTransition } from 'react';
-import { fetchImportQueueStats, runImportBatch, processAllPending } from '@/app/actions/import-queue';
 import type { ImportQueueStats } from '@/lib/import-queue';
 
 interface Labels {
@@ -10,17 +6,6 @@ interface Labels {
   processed: string;
   waiting: string;
   failed: string;
-  runBatch: string;
-  running: string;
-  /** "{succeeded} processed, {failed} failed" */
-  result: string;
-  more: string;
-  errorSave: string;
-  processAll: string;
-  runningAll: string;
-  /** "{succeeded} processed, {failed} failed, over {batches} batches" */
-  allResult: string;
-  allMore: string;
 }
 
 interface Props {
@@ -29,78 +14,22 @@ interface Props {
 }
 
 /**
- * Manual trigger for the same batch app/api/cron/process-import-queue runs
- * on a schedule — drains the documents backlog (lib/import-queue.ts) on
- * demand instead of only whenever the cron next fires, and gives a real
- * click-and-verify surface for the batch/resume/retry mechanism.
+ * Read-only queue stats. Demo Safety Gate (Rotem, 2026-09-13): this used to
+ * also carry "Run batch (15)" / "Process all now" buttons — a FIFO batch
+ * over "the next N unprocessed documents," with no per-document selection.
+ * That's exactly the auto-processing shape the gate exists to remove:
+ * uploading (or clicking a queue-drain button) must never spend the demo
+ * budget without a human choosing which documents. Processing now only
+ * happens through DataInboxTriagePanel's manual selection, capped and
+ * budget-gated. lib/import-queue.ts's processImportBatch/drainPending still
+ * exist (still budget-gated via runStructured, so they're safe if ever
+ * called) but are no longer wired to a button here.
  */
 export function ImportQueuePanel({ initialStats, labels }: Props) {
-  const [stats, setStats] = useState(initialStats);
-  const [result, setResult] = useState<{ succeeded: number; failed: number; more: boolean } | null>(null);
-  const [allResult, setAllResult] = useState<{ succeeded: number; failed: number; batches: number; timedOut: boolean } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-  const [pendingAll, startAll] = useTransition();
-
-  const runBatch = () => start(async () => {
-    setError(null);
-    setResult(null);
-    setAllResult(null);
-    try {
-      const res = await runImportBatch(15);
-      setResult({ succeeded: res.succeeded, failed: res.failed, more: res.more });
-      // Live-caught bug: `res.failed` counts attempts that failed THIS
-      // batch — not the same thing as stats.failed (documents that hit
-      // MAX_ATTEMPTS and stopped being retried). A doc's first failure
-      // should still show up under Waiting, not Failed; approximating that
-      // split client-side without knowing each document's running failure
-      // count got it wrong. Refetching the real, server-computed stats
-      // (same getImportQueueStats the page itself renders from) is the
-      // only way to keep this correct — cheap enough to always do.
-      const fresh = await fetchImportQueueStats();
-      setStats(fresh);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : labels.errorSave);
-    }
-  });
-
-  // "Process all now" can run for minutes on a large backlog (up to
-  // /upload's own 300s function budget) — the button stays disabled and
-  // labeled `runningAll` the whole time; there's nothing to poll mid-run
-  // since drainPending only returns once at the very end.
-  const runAll = () => startAll(async () => {
-    setError(null);
-    setResult(null);
-    setAllResult(null);
-    try {
-      const res = await processAllPending();
-      setAllResult({ succeeded: res.succeeded, failed: res.failed, batches: res.batches, timedOut: res.timedOut });
-      const fresh = await fetchImportQueueStats();
-      setStats(fresh);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : labels.errorSave);
-    }
-  });
-
+  const stats = initialStats;
   return (
     <section className="rounded-[15px] border border-line bg-sk-surface p-5 shadow-card">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.title}</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button" disabled={pending || pendingAll} onClick={runBatch}
-            className="min-h-11 cursor-pointer rounded-full bg-sage px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-          >
-            {pending ? labels.running : labels.runBatch}
-          </button>
-          <button
-            type="button" disabled={pending || pendingAll} onClick={runAll}
-            className="min-h-11 cursor-pointer rounded-full border border-sage-line px-3 py-1.5 text-xs font-semibold text-sage disabled:opacity-50"
-          >
-            {pendingAll ? labels.runningAll : labels.processAll}
-          </button>
-        </div>
-      </div>
+      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-sk-muted">{labels.title}</p>
       <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {([
           [labels.stored, stats.stored],
@@ -114,22 +43,6 @@ export function ImportQueuePanel({ initialStats, labels }: Props) {
           </div>
         ))}
       </dl>
-      {result && (
-        <p role="status" className="mt-3 text-[11px] text-sk-muted">
-          {labels.result.replace('{succeeded}', String(result.succeeded)).replace('{failed}', String(result.failed))}
-          {result.more && ` ${labels.more}`}
-        </p>
-      )}
-      {allResult && (
-        <p role="status" className="mt-3 text-[11px] text-sk-muted">
-          {labels.allResult
-            .replace('{succeeded}', String(allResult.succeeded))
-            .replace('{failed}', String(allResult.failed))
-            .replace('{batches}', String(allResult.batches))}
-          {allResult.timedOut && ` ${labels.allMore}`}
-        </p>
-      )}
-      {error && <p role="alert" className="mt-3 text-[11px] font-semibold text-coral">{error}</p>}
     </section>
   );
 }

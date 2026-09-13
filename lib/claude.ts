@@ -47,6 +47,58 @@ function estimateCostUsd(model: string, usage: {
   );
 }
 
+// Demo Safety Gate: a PRE-call, worst-case cost estimate — no tokenizer call
+// (that would itself cost money/a request), just chars/4 as the standard
+// rough proxy for input tokens, and the request's own max_tokens as the
+// output ceiling (the model provably cannot emit more than that, so using it
+// as the estimate can only overstate cost, never understate it — the
+// conservative direction for a budget gate). Exported so callers that want
+// their OWN tighter, scoped budget (e.g. the Data Inbox pilot batch) can use
+// the exact same estimator runStructured's global gate uses below.
+export function estimateCallCostUsd(model: string, inputChars: number, maxOutputTokens: number): number | null {
+  const price = PRICING_PER_MTOK[model];
+  if (!price) return null;
+  const estInputTokens = inputChars / 4;
+  return (estInputTokens * price.input + maxOutputTokens * price.output) / 1_000_000;
+}
+
+function estimateInputChars(system: string, messages: Anthropic.MessageParam[]): number {
+  return system.length + messages.reduce((sum, m) => {
+    const c = m.content;
+    return sum + (typeof c === 'string' ? c.length : JSON.stringify(c).length);
+  }, 0);
+}
+
+// Demo Safety Gate: a hard, unconditional cumulative cap on total Anthropic
+// spend, enforced HERE — the single chokepoint every agent (extract-comms,
+// parse-invoice, infer-phase, prioritize-tasks, digest, triage) already goes
+// through — so no caller, cron, retry, or "Process all now" can bypass it by
+// construction. $20 leaves a $10 margin under the demo's real $30 account
+// budget. Measured as the all-time sum of llm_usage_log.estimated_cost_usd
+// (that table starts at zero rows, so the sum starts counting from exactly
+// when this gate shipped).
+export const DEMO_BUDGET_USD = Number(process.env.DEMO_BUDGET_USD ?? 20);
+
+export class BudgetExceededError extends Error {
+  constructor(
+    readonly spentUsd: number,
+    readonly estimatedCallUsd: number,
+    readonly capUsd: number,
+  ) {
+    super(`Demo budget: $${spentUsd.toFixed(4)} already spent + ~$${estimatedCallUsd.toFixed(4)} estimated for this call > $${capUsd} cap — call blocked before it was made.`);
+    this.name = 'BudgetExceededError';
+  }
+}
+
+/** Real, current all-time spend — client-side sum over llm_usage_log rather
+ *  than a DB-side aggregate, so this needs no new SQL function and stays
+ *  simple to fake in tests. Fine at demo scale (dozens-hundreds of rows over
+ *  two weeks); the 20000 cap is just a sanity ceiling, not an expected size. */
+async function currentSpentUsd(admin: SupabaseClient): Promise<number> {
+  const { data } = await admin.from('llm_usage_log').select('estimated_cost_usd').limit(20000);
+  return (data ?? []).reduce((sum: number, r: { estimated_cost_usd: number | null }) => sum + (r.estimated_cost_usd ?? 0), 0);
+}
+
 interface UsageLogInput {
   job: JobName;
   actionType: string;
@@ -176,6 +228,32 @@ export async function runStructured<T>(opts: RunStructuredOptions<T>): Promise<T
       tools: [tool],
       tool_choice: { type: 'tool', name: opts.toolName },
     };
+    // Demo Safety Gate: stop BEFORE a call expected to push total spend past
+    // the cap — never after. Re-checked on the validation retry too (attempt
+    // 1), since that is also a real, separately-billed call. Skipped when
+    // usageLogClient itself is unavailable (Vitest with no injected client —
+    // see above: there's no real spend to protect there) or when the spend
+    // query itself fails (fail-open, same philosophy as logUsage's own
+    // best-effort contract — a transient DB error must not brick every
+    // agent in the app; it's logged, not silently ignored).
+    if (usageLogClient) {
+      let spent: number | null = null;
+      try {
+        spent = await currentSpentUsd(usageLogClient);
+      } catch (e) {
+        console.error('[demo-budget] spend check failed (non-fatal, call proceeds)', e);
+      }
+      if (spent !== null) {
+        const estThisCall = estimateCallCostUsd(model, estimateInputChars(opts.system, messages), opts.maxTokens ?? 16000) ?? 0;
+        if (spent + estThisCall > DEMO_BUDGET_USD) {
+          await logAttempt(
+            attempt, false, undefined,
+            `budget_exceeded: spent $${spent.toFixed(4)} + est $${estThisCall.toFixed(4)} > cap $${DEMO_BUDGET_USD}`,
+          );
+          throw new BudgetExceededError(spent, estThisCall, DEMO_BUDGET_USD);
+        }
+      }
+    }
     // Large max_tokens budgets make the SDK refuse non-streaming calls
     // ("Streaming is required for operations that may take longer than 10
     // minutes" — this silently killed the first prioritization cron run).

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ingestDocument, processDocument } from '../ingest.ts';
+import { ingestDocument } from '../ingest.ts';
 
 // Outlook / Microsoft 365 poll via Graph API (client-credentials app).
 // Activates when all MSGRAPH_* env vars are present.
@@ -48,7 +48,11 @@ interface GraphMessage {
   bodyPreview?: string;
 }
 
-export async function run(admin: SupabaseClient): Promise<{ processed: number } | { skipped: string }> {
+// Demo Safety Gate (Rotem, 2026-09-13): polling stores documents only — it
+// never calls the model. Every polled email lands in Data Inbox's triage
+// view (lib/preflight.ts) exactly like an upload, and is only ever
+// processed via an explicit human selection (app/actions/data-inbox.ts).
+export async function run(admin: SupabaseClient): Promise<{ stored: number } | { skipped: string }> {
   if (!isConfigured()) return { skipped: 'not_configured' };
   const token = await accessToken();
 
@@ -59,10 +63,11 @@ export async function run(admin: SupabaseClient): Promise<{ processed: number } 
   if (!res.ok) throw new Error(`graph list: ${res.status}`);
   const list = (await res.json()) as { value: GraphMessage[] };
 
-  let processed = 0;
+  let stored = 0;
   for (const msg of list.value ?? []) {
-    // Cap untrusted body length before it becomes an LLM prompt (same 30k as
-    // lib/parse/eml.ts; the poller feeds processDocument uncapped otherwise).
+    // Cap before it could ever become an LLM prompt (same 30k as
+    // lib/parse/eml.ts) — kept even though nothing here calls the model, so
+    // a later manual selection doesn't send an unbounded body either.
     const bodyText = (msg.body?.contentType === 'html'
       ? stripHtml(msg.body.content ?? '')
       : (msg.body?.content ?? msg.bodyPreview ?? '')).slice(0, 30000);
@@ -73,10 +78,7 @@ export async function run(admin: SupabaseClient): Promise<{ processed: number } 
       external_id: `outlook:${msg.internetMessageId ?? msg.id}`,
       raw_text: raw,
     });
-    if (!deduped && documentId) {
-      await processDocument(admin, { id: documentId, kind: 'email', raw_text: raw });
-      processed++;
-    }
+    if (!deduped && documentId) stored++;
   }
-  return { processed };
+  return { stored };
 }
