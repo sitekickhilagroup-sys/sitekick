@@ -3,6 +3,29 @@
 **This is a dated snapshot, not a living guarantee. Refresh it whenever relevant evidence
 changes — see `WORKFLOW.md` for when to update.**
 
+**2026-09-16 (new Claude application session — closing a stale open item found during handoff
+review, not new development):** Re-checked the older backlog list carried in session handoffs
+(F-5/F-7/F-8/F-10, date-provenance) against this file and `docs/ai/handoffs/LIVE_FUNCTIONAL_QA_HANDOFF.md`
+directly — all of those were already shipped and verified as of 2026-09-11/12; the "still open"
+phrasing some handoffs kept repeating was stale, not a real gap. The one item still genuinely open
+was `docs/ai/handoffs/NOA_CLAUDE_VERIFICATION_2026-09-12.md` Part D's second bullet: the Notes
+Center reinterpretation fix (`5b106cd` — `save()` calling both `retargetComment` and
+`correctCommentIntent` so a changed "We read this as…" interpretation actually persists, not just
+the association) was code-reviewed and type-checked but never live-UI-verified, and still can't
+be — Notes Center deliberately excludes every `is_test` comment/task by design
+(`app/(dash)/(standard)/notes-center/page.tsx`), so there is no QA-safe note reachable through its
+own filters to click-test against, and no real note may be touched without Rotem's authorization.
+**Closed the verification gap at the level that doesn't require touching production data:** added
+`app/actions/comments.test.ts` (the first test file `app/actions/comments.ts` has ever had) —
+reproduces the exact `retargetComment` → `correctCommentIntent` sequence `save()` performs and
+asserts neither write is lost, the precise failure mode `5b106cd` fixed, plus two rejection-path
+cases (unknown target entity, invalid intent). 1141/1141 tests pass (+4), `tsc --noEmit` clean,
+`eslint` clean — test-only change, no application code touched, so no build/deploy/browser
+verification needed. **Still true, stated honestly:** this proves the two writes compose correctly
+against a fake client; it is not a substitute for an actual click-through in the browser against a
+real note, which remains blocked for the reason above unless Rotem authorizes testing against a
+specific real (non-test) note.
+
 **2026-09-13 (same Claude application session, continued — "Demo Safety Gate, round 2 (hardening)."
 Rotem reviewed round 1 live and found four real gaps that would have let the demo spend before the
 $30 load was even safe, plus three more robustness items. All fixed, tested, deployed — zero real
