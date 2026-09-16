@@ -49,3 +49,6 @@ supabase/.temp/
 
 # playwright-mcp session artifacts (snapshots, console logs, screenshots)
 .playwright-mcp/
+
+# Claude Code personal/local overrides — .mcp.json (project-level, shared) stays committed
+.claude/settings.local.json
